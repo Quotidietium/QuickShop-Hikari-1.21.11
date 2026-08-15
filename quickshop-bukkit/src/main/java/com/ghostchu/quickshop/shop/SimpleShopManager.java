@@ -1245,6 +1245,20 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
   }
 
 
+  /**
+   * Parses a chat-supplied trade amount. Chat input is untrusted: a digits-only string can still
+   * exceed Integer.MAX_VALUE, which would throw an uncaught NumberFormatException on the region
+   * thread. Returns -1 for anything that is not a valid positive amount.
+   */
+  private int parseTradeAmount(@NotNull final String message) {
+
+    try {
+      return Integer.parseInt(message);
+    } catch(final NumberFormatException ignored) {
+      return -1;
+    }
+  }
+
   private int buyingShopAllCalc(@NotNull final EconomyProvider eco, @NotNull final Shop shop, @NotNull final Player p) {
 
     int amount;
@@ -1398,7 +1412,11 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     }
     if(shop.isBuying()) {
       if(CommonUtil.isNumeric(message)) {
-        amount = Integer.parseInt(message);
+        amount = parseTradeAmount(message);
+        if(amount <= 0) {
+          plugin.text().of(p, "not-a-integer", message).send();
+          return;
+        }
       } else {
         if(message.equalsIgnoreCase(tradeAllKeyword)) {
           amount = buyingShopAllCalc(eco, shop, p);
@@ -1413,7 +1431,11 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       actionBuying(p, new BukkitInventoryWrapper(p.getInventory()), eco, info, shop, amount);
     } else if(shop.isSelling()) {
       if(CommonUtil.isNumeric(message)) {
-        amount = Integer.parseInt(message);
+        amount = parseTradeAmount(message);
+        if(amount <= 0) {
+          plugin.text().of(p, "not-a-integer", message).send();
+          return;
+        }
       } else {
         if(message.equalsIgnoreCase(tradeAllKeyword)) {
           amount = sellingShopAllCalc(eco, shop, p);
