@@ -32,6 +32,7 @@ import com.ghostchu.quickshop.util.Util;
 import org.bukkit.Location;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
 
@@ -68,6 +69,11 @@ public class SimpleTradeService implements TradeService {
                                                  final int amount,
                                                  @NotNull final TradeOptions options) {
     Util.ensureThread(false);
+
+    final TradeResult invalid = validateTradeAmount(shop, amount, TradeType.BUY_FROM_SHOP);
+    if(invalid != null) {
+      return invalid;
+    }
 
     final int normalizedAmount = normalizeAmount(shop, amount);
     if(normalizedAmount < 0) {
@@ -171,6 +177,11 @@ public class SimpleTradeService implements TradeService {
                                                 @NotNull final TradeOptions options) {
     Util.ensureThread(false);
 
+    final TradeResult invalid = validateTradeAmount(shop, amount, TradeType.SELL_TO_SHOP);
+    if(invalid != null) {
+      return invalid;
+    }
+
     final int normalizedAmount = normalizeAmount(shop, amount);
     if(normalizedAmount < 0) {
       return executeBuyFromShop(shop, seller, sellerInventory, dropLocation, -amount, options);
@@ -263,6 +274,10 @@ public class SimpleTradeService implements TradeService {
     if(amount <= 0) {
       return previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Amount must be > 0.");
     }
+    final int previewUnitSize = shop.getItem().getAmount();
+    if(previewUnitSize <= 0 || (long)previewUnitSize * amount > Integer.MAX_VALUE) {
+      return previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Invalid shop item unit size or amount overflow.");
+    }
     if(!shop.isValid()) {
       return previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.SHOP_INVALID, "Shop is invalid.");
     }
@@ -327,6 +342,10 @@ public class SimpleTradeService implements TradeService {
                                                  final int amount) {
     if(amount <= 0) {
       return previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Amount must be > 0.");
+    }
+    final int previewUnitSize = shop.getItem().getAmount();
+    if(previewUnitSize <= 0 || (long)previewUnitSize * amount > Integer.MAX_VALUE) {
+      return previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Invalid shop item unit size or amount overflow.");
     }
     if(!shop.isValid()) {
       return previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.SHOP_INVALID, "Shop is invalid.");
@@ -407,6 +426,30 @@ public class SimpleTradeService implements TradeService {
 
   private int normalizeAmount(@NotNull final Shop shop, final int tradeAmount) {
     return shop.getItem().getAmount() * tradeAmount;
+  }
+
+  /**
+   * Validates that a trade request can be safely normalized into an item count. A shop item whose
+   * unit size is <= 0, or an amount whose normalized count would overflow int, must never reach
+   * the inventory transaction: a zero or overflowed count moves no items while the economy side
+   * still transfers the full price, paying out money for nothing.
+   *
+   * @return a failed TradeResult when the trade must be refused, null when it may proceed
+   */
+  @Nullable
+  private TradeResult validateTradeAmount(@NotNull final Shop shop, final int amount, @NotNull final TradeType type) {
+
+    if(amount == 0) {
+      return failedResult(type, amount, 0, unitPrice(shop), totalPrice(shop, 0), TradeFailureReason.INVALID_AMOUNT, "Amount must be > 0.");
+    }
+    final int unitSize = shop.getItem().getAmount();
+    if(unitSize <= 0) {
+      return failedResult(type, amount, 0, unitPrice(shop), totalPrice(shop, 0), TradeFailureReason.INVALID_AMOUNT, "Shop item unit size must be > 0.");
+    }
+    if((long)unitSize * Math.abs((long)amount) > Integer.MAX_VALUE) {
+      return failedResult(type, amount, 0, unitPrice(shop), totalPrice(shop, 0), TradeFailureReason.INVALID_AMOUNT, "Trade amount too large (integer overflow).");
+    }
+    return null;
   }
 
   @SuppressWarnings("unchecked")
