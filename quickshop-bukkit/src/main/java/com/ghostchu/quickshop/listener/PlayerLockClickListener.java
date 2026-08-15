@@ -78,6 +78,9 @@ public class PlayerLockClickListener extends AbstractProtectionListener {
       }
       plugin.text().of(p, "that-is-locked").send();
       e.setCancelled(true);
+      //a cancelled interact never opens an inventory, so no InventoryCloseEvent would
+      //ever clear the UUID again - it must not enter the inShop tracking queue
+      return;
     }
 
     QuickShop.inShop.add(p.getUniqueId());
