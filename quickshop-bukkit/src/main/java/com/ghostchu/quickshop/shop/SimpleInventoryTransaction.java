@@ -71,6 +71,7 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
     Log.transaction("Transaction begin: Regular Commit --> " + from + " => " + to + "; Amount: " + amount + " Item: " + Util.serialize(item));
     if(!callback.onCommit(this)) {
       this.lastError = "Plugin cancelled this transaction.";
+      callback.onFailed(this);
       return false;
     }
     if(from != null && !this.executeOperation(new RemoveItemOperation(item, amount, from))) {
