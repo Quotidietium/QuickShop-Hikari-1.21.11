@@ -65,7 +65,12 @@ public class PurchasesPAPI implements PAPISubHandler {
       return null;
     }
     final IShopType shopType = QuickShop.getInstance().getShopManager().shopTypeOrDefault(type.toUpperCase(Locale.ROOT));
-    final int recentDays = Integer.parseInt(days);
+    //placeholder params can be client-controlled via chat-rendering plugins: digits-only
+    //strings longer than 10 digits would throw an uncaught NumberFormatException here
+    final int recentDays = com.ghostchu.quickshop.util.Util.parseIntegerSafely(days, -1);
+    if(recentDays < 0) {
+      return null;
+    }
     final Date startTime = new Date(Instant.now().minus(Duration.ofDays(recentDays)).toEpochMilli());
     final long count = this.query.queryServerPurchaseRecords(startTime, -1, false).stream()
             .filter(record->{
@@ -95,7 +100,12 @@ public class PurchasesPAPI implements PAPISubHandler {
       return null;
     }
     final IShopType shopType = QuickShop.getInstance().getShopManager().shopTypeOrDefault(type.toUpperCase(Locale.ROOT));
-    final int recentDays = Integer.parseInt(days);
+    //placeholder params can be client-controlled via chat-rendering plugins: digits-only
+    //strings longer than 10 digits would throw an uncaught NumberFormatException here
+    final int recentDays = com.ghostchu.quickshop.util.Util.parseIntegerSafely(days, -1);
+    if(recentDays < 0) {
+      return null;
+    }
     final Date startTime = new Date(Instant.now().minus(Duration.ofDays(recentDays)).toEpochMilli());
     final long count = this.query.queryServerPurchaseRecords(startTime, -1, false).stream()
             .filter(record->{
