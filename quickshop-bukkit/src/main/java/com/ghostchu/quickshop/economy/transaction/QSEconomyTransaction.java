@@ -107,7 +107,9 @@ public class QSEconomyTransaction implements EconomyTransaction {
 
     this.fromTax = CalculateUtil.subtract(fromAmount, amount);
 
-    this.totalTax = toTax.add(fromTax);
+    //must sum the converted amount fields, not the rate parameters - depositing the raw
+    //rate sum into the tax account would silently destroy the rest of the collected tax
+    this.totalTax = this.toTax.add(this.fromTax);
 
     if(from == null && to == null) {
       lastError = "From and To cannot be null in same time.";
