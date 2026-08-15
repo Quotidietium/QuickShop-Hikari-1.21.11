@@ -393,6 +393,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
     if(!callback.onCommit(this)) {
 
       this.lastError = "Plugin cancelled this transaction.";
+      callback.onFailed(this);
       return false;
     }
 
@@ -406,6 +407,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
     if(from != null && !this.executeOperation(new EconomyWithdrawOperation(from, fromAmount, world, currency))) {
 
       this.lastError = "Failed to withdraw " + fromAmount.toPlainString() + " from account " + from + "LastError: " + provider.lastError();
+      callback.onFailed(this);
       return false;
     }
 
