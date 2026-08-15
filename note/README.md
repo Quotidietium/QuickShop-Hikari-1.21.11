@@ -27,9 +27,10 @@
 1. **「胖壳+大脑」双阶段引导**：`QuickShopBukkit`（libby 运行时装库 → Paper 平台检测）→ `QuickShop`（40+ 管理器装配）。经济系统刻意延迟 1 tick 装载以等待 Vault 注册（`QuickShop.java:869`），另有 `EconomySetupListener` 监听 PluginEnableEvent 双保险。
 2. **一致性靠补偿而非锁**：经济与库存双栈均采用「快照 + Operation 命令模式 + LIFO 回滚」，业务统一入口 `safeCommit()` / `failSafeCommit()`；SQL 全部跑在 Java 21 虚拟线程（`QuickExecutor.java` newThreadPerTaskExecutor）。
 3. **三表分离持久化 + 数据行去重**：`qs_shop_map`（坐标→店ID）⋈ `qs_shops`（店→data）⋈ `qs_data`（实质数据）；`updateShop` 先按字段查重复用 data 行，多个商店可共享同一行（`SimpleDatabaseHelperV2.java`）。
-4. **⚠ 两处已核实的资金缺陷**（静态分析确认，修复前需评估影响）：
-   - `checkTax` 守卫 `if(totalTax > 0) return` 写反 → **正税额直接返回不入账**，税收从未真正打进税号账户（`QSEconomyTransaction.java:463-465`）；
-   - `commit()` 中插件取消分支（`onCommit` 返回 false）只 return，**未调用 `callback.onFailed`**（`QSEconomyTransaction.java:393-397`）。
+4. **⚠ 曾发现多处资金缺陷，2026-08-16 审计循环已全部修复**（详见 [04-开发速查.md](04-开发速查.md) 修复记录表）：
+   - `checkTax` 守卫写反 → 正税额从不入账（已修 472e773bb）；
+   - 经济/库存 commit 两个失败分支漏调 `onFailed`（已修 e19f7407d/8d71e34ef）；
+   - **交易数量溢出/零单位刷钱漏洞**：unitSize=0 或溢出为 0 时移 0 件物品却全额转账（已修 9c88938d5）。
 5. **零测试基线**：全部质量保障依赖 Qodana 静态扫描 + CodeRabbit AI 审查 + 社区反馈；资金敏感路径无回归网。
 
 ## 笔记目录
