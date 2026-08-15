@@ -235,9 +235,12 @@ public class PlayerListener extends AbstractQSListener {
         shop.setSignText(plugin.text().findRelativeLanguages(e.getPlayer()));
       }
     } catch(final NullPointerException ignored) {
+    } finally {
+      //the early-return workarounds above must not strand the UUID in the queue:
+      //inShop is unbounded and scanned linearly, so stale entries leak memory and
+      //degrade every hopper check while the server keeps running
+      QuickShop.inShop.remove(id);
     }
-
-    QuickShop.inShop.remove(id);
   }
 
   @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
