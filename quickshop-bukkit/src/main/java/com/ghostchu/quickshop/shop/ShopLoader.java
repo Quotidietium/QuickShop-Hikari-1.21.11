@@ -335,7 +335,9 @@ public class ShopLoader implements SubPasteItem {
       this.hologram = dataRecord.isHologram();
       this.taxAccount = null;
       if(dataRecord.getTaxAccount() != null) {
-        this.taxAccount = getTaxAccount();
+        //must read from the data record - the local getter returns the field we just nulled,
+        //which silently dropped every shop's tax account on load and then persisted the loss
+        this.taxAccount = dataRecord.getTaxAccount();
       }
       this.invSymbolLink = dataRecord.getInventorySymbolLink();
       this.invWrapper = dataRecord.getInventoryWrapper();
