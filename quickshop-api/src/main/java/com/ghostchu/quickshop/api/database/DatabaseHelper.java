@@ -37,6 +37,16 @@ public interface DatabaseHelper {
   CompletableFuture<@NotNull Integer> cleanMessageForPlayer(@NotNull UUID player);
 
   /**
+   * Purge transaction messages saved for a player up to (and including) the given timestamp.
+   * Messages stored after the timestamp are kept so concurrent writes are never dropped.
+   *
+   * @param player The player
+   * @param time   Epoch milliseconds cutoff; only messages with time &lt;= cutoff are removed
+   */
+  @NotNull
+  CompletableFuture<@NotNull Integer> cleanMessageForPlayer(@NotNull UUID player, final long time);
+
+  /**
    * Create a shop data record sand save into database
    *
    * @param shop The shop object

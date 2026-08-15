@@ -336,6 +336,15 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
   }
 
   @Override
+  public @NotNull CompletableFuture<@NotNull Integer> cleanMessageForPlayer(@NotNull final UUID player, final long time) {
+
+    return DataTables.MESSAGES.createDelete()
+            .addCondition("receiver", player.toString())
+            .addTimeCondition("time", -1L, time)
+            .build().executeFuture(lines->lines);
+  }
+
+  @Override
   public @NotNull CompletableFuture<@NotNull Long> createData(@NotNull final Shop shop) {
 
     final SimpleDataRecord simpleDataRecord = ((ContainerShop)shop).createDataRecord();

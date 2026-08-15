@@ -285,12 +285,15 @@ public class MsgUtil {
       return false;
     }
     final UUID playerUniqueId = player.getUniqueId();
+    //capture the cutoff before reading: deleting everything for the player would also wipe
+    //messages concurrently stored while we were selecting/sending (e.g. trades at join time)
+    final long flushStart = System.currentTimeMillis();
     PLUGIN.getDatabaseHelper().selectPlayerMessages(playerUniqueId)
             .thenAccept(msgs->{
               for(final String msg : msgs) {
                 PLUGIN.platform().sendMessage(player, GsonComponentSerializer.gson().deserialize(msg));
               }
-              PLUGIN.getDatabaseHelper().cleanMessageForPlayer(playerUniqueId)
+              PLUGIN.getDatabaseHelper().cleanMessageForPlayer(playerUniqueId, flushStart)
                       .exceptionally(error->{
                         PLUGIN.logger().warn("Error on cleaning the purchase messages from the database", error);
                         return 0;
