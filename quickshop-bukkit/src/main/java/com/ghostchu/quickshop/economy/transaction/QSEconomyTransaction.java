@@ -434,6 +434,14 @@ public class QSEconomyTransaction implements EconomyTransaction {
     Log.transaction("Benefit processing per-player...");
     for(final Map.Entry<QUser, BigDecimal> entry : benefitProvider.benefits().entrySet()) {
 
+      //Guard against corrupted/invalid benefit shares: a non-positive share must never be paid out
+      //and must not inflate the owner's remainder, otherwise money could be duplicated.
+      if(entry.getValue() == null || entry.getValue().compareTo(BigDecimal.ZERO) <= 0) {
+
+        QuickShop.getInstance().logger().warn("Skipped invalid benefit share {} -> {} on transaction; share must be > 0", entry.getKey(), entry.getValue());
+        continue;
+      }
+
       Log.transaction("Processing benefit for " + entry.getKey() + ", value: " + entry.getValue().toPlainString());
       if(!this.executeOperation(new EconomyDepositOperation(entry.getKey(), amountAfterTax.multiply(entry.getValue()), world, currency))) {
 
@@ -449,7 +457,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
 
     this.ownerPayment = CalculateUtil.multiply(amountAfterTax, fullAmount.subtract(payout));
     Log.transaction("Benefit for owner remaining: " + ownerPayment.toPlainString());
-    if(ownerPayment.compareTo(BigDecimal.ZERO) > 0 && !this.executeOperation(new EconomyDepositOperation(to, ownerPayment, world, currency))) {
+    if(to != null && ownerPayment.compareTo(BigDecimal.ZERO) > 0 && !this.executeOperation(new EconomyDepositOperation(to, ownerPayment, world, currency))) {
 
       this.lastError = "Failed to deposit " + ownerPayment.toPlainString() + " to account " + to + "LastError: " + provider.lastError();
       callback.onFailed(this);
