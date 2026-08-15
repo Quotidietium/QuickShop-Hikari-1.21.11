@@ -56,7 +56,7 @@ public final class Main extends CompatibilityModule {
       this.questRequiredBuy = false;
     }
 
-    if(this.questRequiredSell && plugin.getLoadedQuests().stream().noneMatch(q -> q.getName().equalsIgnoreCase(this.questBuyShop))) {
+    if(this.questRequiredSell && plugin.getLoadedQuests().stream().noneMatch(q -> q.getName().equalsIgnoreCase(this.questSellShop))) {
 
       Log.debug("Unable to find Quest: " + this.questSellShop + ". Disabling Buy requirement.");
       this.questRequiredSell = false;
