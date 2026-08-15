@@ -122,7 +122,9 @@ public final class Main extends JavaPlugin implements Listener {
        || event.getCalendarTriggerType() == CalendarEvent.CalendarTriggerType.NOTHING_CHANGED) {
       return;
     }
-    Util.asyncThreadRun(()->plugin.getShopManager().getAllShops().forEach(shop->{
+    //mutate shop extra data on the main thread: YamlConfiguration is not thread-safe and the
+    //extra tree is concurrently serialized by database save tasks
+    Util.mainThreadRun(()->plugin.getShopManager().getAllShops().forEach(shop->{
       final ConfigurationSection manager = shop.getExtra(this);
       final int limit = manager.getInt("limit");
       if(limit < 1) {
