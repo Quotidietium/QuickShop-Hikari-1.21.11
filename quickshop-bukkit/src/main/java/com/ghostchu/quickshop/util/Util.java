@@ -642,6 +642,27 @@ public class Util {
     }
   }
 
+  /**
+   * Parses user-supplied integers defensively. A digits-only string can still exceed
+   * Integer.MAX_VALUE, which would throw an uncaught NumberFormatException in command handlers.
+   *
+   * @param input        the raw input, may be null
+   * @param defaultValue fallback when the input is not a parsable int
+   *
+   * @return the parsed value, or defaultValue
+   */
+  public static int parseIntegerSafely(@Nullable final String input, final int defaultValue) {
+
+    if(input == null || input.isEmpty()) {
+      return defaultValue;
+    }
+    try {
+      return Integer.parseInt(input);
+    } catch(final NumberFormatException ignored) {
+      return defaultValue;
+    }
+  }
+
   public static BigDecimal parse(final String input) {
 
     try {

@@ -2,6 +2,7 @@ package com.ghostchu.quickshop.command.subcommand;
 
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.command.CommandHandler;
+import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.api.command.CommandParser;
 import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.common.util.CommonUtil;
@@ -34,7 +35,12 @@ public class SubCommand_Refill implements CommandHandler<Player> {
       return;
     }
     if(CommonUtil.isNumeric(parser.getArgs().getFirst())) {
-      add = Integer.parseInt(parser.getArgs().getFirst());
+      add = Util.parseIntegerSafely(parser.getArgs().getFirst(), -1);
+      if(add < 0) {
+        //digits-only but not a valid int (e.g. longer than 10 digits)
+        plugin.text().of(sender, "not-a-number", parser.getArgs().getFirst()).send();
+        return;
+      }
     } else {
       if(parser.getArgs().getFirst().equals(plugin.getConfig().getString("shop.word-for-trade-all-items"))) {
         add = shop.getRemainingSpace();

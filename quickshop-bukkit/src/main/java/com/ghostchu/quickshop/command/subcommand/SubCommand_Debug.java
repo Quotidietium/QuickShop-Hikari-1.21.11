@@ -152,7 +152,11 @@ public class SubCommand_Debug implements CommandHandler<CommandSender> {
 
   private void handleSetHikariCPCapacity(final CommandSender sender, final List<String> subParams) {
 
-    final int size = Integer.parseInt(subParams.getFirst());
+    final int size = Util.parseIntegerSafely(subParams.getFirst(), -1);
+    if(size < 1 || size > 1024) {
+      plugin.text().of(sender, "not-a-integer", subParams.getFirst()).send();
+      return;
+    }
     final HikariDataSource hikariDataSource = (HikariDataSource)plugin.getSqlManager().getDataSource();
     hikariDataSource.setMaximumPoolSize(size);
     hikariDataSource.setMinimumIdle(size);

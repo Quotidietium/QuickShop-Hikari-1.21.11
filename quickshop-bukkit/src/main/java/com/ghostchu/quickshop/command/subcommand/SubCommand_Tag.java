@@ -2,6 +2,7 @@ package com.ghostchu.quickshop.command.subcommand;
 
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.command.CommandHandler;
+import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.api.command.CommandParser;
 import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.api.shop.tag.TaggingResult;
@@ -187,7 +188,7 @@ public class SubCommand_Tag implements CommandHandler<Player> {
       return;
     }
 
-    final int page = (parser.getArgs().size() >= 2)? Integer.parseInt(parser.getArgs().get(1)) : 1;
+    final int page = (parser.getArgs().size() >= 2)? Util.parseIntegerSafely(parser.getArgs().get(1), 1) : 1;
 
     final int total = count.get(TOTAL_INDEX);
     count.remove(TOTAL_INDEX);
@@ -245,7 +246,7 @@ public class SubCommand_Tag implements CommandHandler<Player> {
       return;
     }
 
-    final int page = (parser.getArgs().size() >= 2)? Integer.parseInt(parser.getArgs().get(1)) : 1;
+    final int page = (parser.getArgs().size() >= 2)? Util.parseIntegerSafely(parser.getArgs().get(1), 1) : 1;
 
     final PaginationOptions<String> options = PaginationOptions
             .builder()
@@ -286,7 +287,7 @@ public class SubCommand_Tag implements CommandHandler<Player> {
       return;
     }
 
-    final int page = (parser.getArgs().size() >= 3)? Integer.parseInt(parser.getArgs().get(2)) : 1;
+    final int page = (parser.getArgs().size() >= 3)? Util.parseIntegerSafely(parser.getArgs().get(2), 1) : 1;
 
     final String normalized = plugin.tagManager().service().normalizeTag(parser.getArgs().get(1), false);
     if(normalized == null) {
