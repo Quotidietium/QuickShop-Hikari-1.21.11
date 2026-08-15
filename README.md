@@ -108,7 +108,8 @@ the [original QuickShop][quickshop-original].
 KaiKikuchi/QuickShop
 └── Ghost-chu/QuickShop-Reremake
     └── PotatoCraft/QuickShop-Reremake
-        └── QuickShop-Community/QuickShop-Hikari # <-- We are here
+        └── QuickShop-Community/QuickShop-Hikari
+            └── hershate/QuickShop-Hikari-1.21.11 # <-- We are here
 ```
 
 </p></details>
@@ -116,6 +117,23 @@ KaiKikuchi/QuickShop
 QuickShop Hikari was originally maintained by Ghost-Chu but has later been given to creatorfromhell and put under the
 QuickShop-Community Organisation.  
 It has the goal to modernize the core content of QuickShop and adapt it to the latest versions of Minecraft.
+
+## About this fork
+
+This repository (`hershate/QuickShop-Hikari-1.21.11`) is an independently maintained fork of
+[QuickShop-Community/QuickShop-Hikari][quickshop-hikari].
+
+It is based on the last upstream revision **before** the upstream project introduced its `EULA.md`
+restricting access and use by AI agents and automated tools (upstream PR
+[QuickShop-Community/QuickShop-Hikari#2351](https://github.com/QuickShop-Community/QuickShop-Hikari/pull/2351)),
+namely commit `e6eb3695a` (2026-06-03). The code in this fork therefore predates — and does not
+contain — those restrictions.
+
+This fork no longer tracks, pulls, or merges updates from the upstream repository, and is not
+affiliated with or endorsed by the QuickShop-Community project.
+
+The code remains under the original license described in [LICENSE](LICENSE) (dual GPLv3/AGPLv3;
+contributions made after June 29th, 2024 follow AGPLv3).
 
 ## Community & Support
 
