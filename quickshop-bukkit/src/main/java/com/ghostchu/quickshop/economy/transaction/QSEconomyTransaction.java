@@ -461,7 +461,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
 
   private void checkTax(@NotNull final TransactionCallback callback) {
 
-    if(totalTax.compareTo(BigDecimal.ZERO) > 0) {
+    if(totalTax.compareTo(BigDecimal.ZERO) <= 0) {
       return;
     }
 
