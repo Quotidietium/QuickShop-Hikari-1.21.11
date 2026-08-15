@@ -32,6 +32,7 @@ import org.dynmap.markers.MarkerAPI;
 import org.dynmap.markers.MarkerIcon;
 import org.dynmap.markers.MarkerSet;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public final class Main extends JavaPlugin implements Listener {
 
@@ -213,13 +214,19 @@ public final class Main extends JavaPlugin implements Listener {
     }
     Marker marker = markerSet.findMarker("quickshop-hikari-shop-" + shop.getShopId());
 
+    //dynmap renders marker names and descriptions as HTML on the web map, and both the
+    //player-set shop name and anvil-renamed item names are arbitrary text - escaping them
+    //prevents stored XSS on the network-exposed map page
+    final String safeShopName = escapeHtml(shopName);
+    final String safeOwnerName = escapeHtml(plain(shop.ownerName()));
+    final String safeItemName = escapeHtml(plain(Util.getItemStackName(shop.getItem())));
 
     final String type = plain(text().of(shop.shopType().translationKey()).forLocale());
 
     final String markerName = plain(text().of("addon.dynmap.marker-name",
-                                              shopName,
-                                              plain(shop.ownerName()),
-                                              plain(Util.getItemStackName(shop.getItem())),
+                                              safeShopName,
+                                              safeOwnerName,
+                                              safeItemName,
                                               plugin.getShopManager().format(shop.getPrice(), shop),
                                               shop.getShopStackingAmount(),
                                               type,
@@ -241,9 +248,9 @@ public final class Main extends JavaPlugin implements Listener {
                          shop.bukkitLocation().getZ());
     }
     final String desc = plain(text().of("addon.dynmap.marker-description",
-                                        shopName,
-                                        plain(shop.ownerName()),
-                                        plain(Util.getItemStackName(shop.getItem())),
+                                        safeShopName,
+                                        safeOwnerName,
+                                        safeItemName,
                                         plugin.getShopManager().format(shop.getPrice(), shop),
                                         shop.getShopStackingAmount(),
                                         plain(text().of(shop.shopType().translationKey()).forLocale()),
@@ -251,6 +258,19 @@ public final class Main extends JavaPlugin implements Listener {
                                         posStr
                                        ).forLocale());
     marker.setDescription(desc.replace("\n", "<br/>"));
+  }
+
+  @NotNull
+  private static String escapeHtml(@Nullable final String input) {
+
+    if(input == null) {
+      return "";
+    }
+    return input.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&#39;");
   }
 
 }
