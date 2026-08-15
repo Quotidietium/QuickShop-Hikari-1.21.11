@@ -397,6 +397,105 @@ class TradeLoadSmokeTest {
     assertTrue(dbWrites.get() >= THREADS, "database writes must have been exercised");
   }
 
+  /**
+   * Soak-level load: 180,000 trades across 12 workers with a mixed database profile
+   * (external-cache updates + offline-message inserts + reads + cutoff cleanups).
+   * Asserts the same money-conservation invariants over a sustained run.
+   */
+  @Test
+  void soakMixedLoadStaysConsistent() throws Exception {
+
+    final int tradesPerThread = 15_000;
+    final QUser taxer = user("soak-taxer");
+    economy.account(taxer).set(0);
+    final QUser[] owners = new QUser[THREADS];
+    final QUser[] buyers = new QUser[THREADS];
+    for(int i = 0; i < THREADS; i++) {
+      owners[i] = user("soak-owner-" + i);
+      buyers[i] = user("soak-buyer-" + i);
+      economy.account(owners[i]).set(1_000_000);
+      economy.account(buyers[i]).set(1_000_000);
+    }
+
+    //global conservation: accounts left over from the earlier smoke test are included on
+    //both sides of the comparison, which keeps the invariant valid without filtering
+    long totalBefore = 0;
+    for(final Map.Entry<UUID, AtomicLong> entry : economy.accounts.entrySet()) {
+      totalBefore += entry.getValue().get();
+    }
+
+    final AtomicInteger completed = new AtomicInteger();
+    final AtomicInteger dbOps = new AtomicInteger();
+    final CountDownLatch latch = new CountDownLatch(THREADS);
+    final AtomicInteger errors = new AtomicInteger();
+
+    for(int t = 0; t < THREADS; t++) {
+      final QUser owner = owners[t];
+      final QUser buyer = buyers[t];
+      final int threadIdx = t;
+      final Thread worker = new Thread(()->{
+        try {
+          final ItemStack item = mock(ItemStack.class);
+          when(item.getAmount()).thenReturn(64);
+          when(item.getType()).thenReturn(Material.DIRT);
+          when(item.clone()).thenReturn(item);
+
+          for(int i = 0; i < tradesPerThread; i++) {
+            final QSEconomyTransaction tx = QSEconomyTransaction.builder()
+                    .from(buyer)
+                    .to(owner)
+                    .taxer(taxer)
+                    .world("world")
+                    .amount(BigDecimal.valueOf(50))
+                    .toTax(new BigDecimal("0.10"))
+                    .fromTax(new BigDecimal("0.02"))
+                    .build();
+            if(!tx.safeCommit()) {
+              errors.incrementAndGet();
+            } else {
+              completed.incrementAndGet();
+            }
+
+            final FakeInventory chest = new FakeInventory(Long.MAX_VALUE / 4, Long.MAX_VALUE / 2);
+            final FakeInventory backpack = new FakeInventory(0, 64);
+            SimpleInventoryTransaction.builder().from(chest).to(backpack).item(item).amount(64).build().failSafeCommit();
+            SimpleInventoryTransaction.builder().from(chest).to(backpack).item(item).amount(64).build().failSafeCommit();
+
+            //mixed database profile: writes every 2nd iteration, read+cleanup every 1000th
+            if(i % 2 == 0) {
+              helper.updateExternalInventoryProfileCache(100 + threadIdx, 7, i).join();
+              helper.saveOfflineTransactionMessage(buyer.getUniqueId(), "{\"text\":\"soak\"}", System.currentTimeMillis()).join();
+              dbOps.incrementAndGet();
+            }
+            if(i % 1000 == 0) {
+              helper.selectPlayerMessages(buyer.getUniqueId()).join();
+              helper.cleanMessageForPlayer(buyer.getUniqueId(), System.currentTimeMillis() - 60_000).join();
+              dbOps.incrementAndGet();
+            }
+          }
+        } catch(final Throwable e) {
+          errors.incrementAndGet();
+        } finally {
+          latch.countDown();
+        }
+      }, "soak-worker-" + t);
+      worker.start();
+    }
+
+    assertTrue(latch.await(300, java.util.concurrent.TimeUnit.SECONDS), "soak loop must finish in time");
+    assertEquals(0, errors.get(), "no worker may throw or fail a commit");
+    assertEquals(THREADS * tradesPerThread, completed.get());
+
+    long totalAfter = 0;
+    for(final Map.Entry<UUID, AtomicLong> entry : economy.accounts.entrySet()) {
+      totalAfter += entry.getValue().get();
+    }
+    assertEquals(totalBefore, totalAfter, "money must stay conserved across the whole soak");
+    //10% toTax + 2% fromTax of amount 50 = 6 collected per trade
+    assertEquals(completed.get() * 6L, economy.account(taxer).get(), "tax account must hold the exact soak tax");
+    assertTrue(dbOps.get() > 80_000, "database must have been exercised heavily, got " + dbOps.get());
+  }
+
   private static QUser user(final String name) {
 
     final QUser qUser = mock(QUser.class);

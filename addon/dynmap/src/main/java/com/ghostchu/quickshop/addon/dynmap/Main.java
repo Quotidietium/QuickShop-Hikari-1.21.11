@@ -261,7 +261,7 @@ public final class Main extends JavaPlugin implements Listener {
   }
 
   @NotNull
-  private static String escapeHtml(@Nullable final String input) {
+  static String escapeHtml(@Nullable final String input) {
 
     if(input == null) {
       return "";
