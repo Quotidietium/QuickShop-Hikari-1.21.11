@@ -49,11 +49,11 @@ public class SubCommand_List implements CommandHandler<Player> {
           quickshop.text().of(sender, "not-a-number", parser.getArgs().get(1)).send();
           return;
         }
-        page = Integer.parseInt(parser.getArgs().get(1));
+        page = Util.parseIntegerSafely(parser.getArgs().get(1), 1);
       }
       lookupOther(sender, parser.getArgs().getFirst(), page);
     } else {
-      page = Integer.parseInt(parser.getArgs().getFirst());
+      page = Util.parseIntegerSafely(parser.getArgs().getFirst(), 1);
       lookupSelf(sender, page);
     }
   }
@@ -88,6 +88,10 @@ public class SubCommand_List implements CommandHandler<Player> {
       return;
     }
     final UUID targetUser = quickshop.getPlayerFinder().name2Uuid(userName);
+    if(targetUser == null) {
+      quickshop.text().of(sender, "unknown-player", userName).send();
+      return;
+    }
     lookup(sender, targetUser, page);
   }
 
