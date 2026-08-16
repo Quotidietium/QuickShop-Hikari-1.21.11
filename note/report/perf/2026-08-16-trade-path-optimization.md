@@ -35,6 +35,7 @@
 | R10 | d928b2ab1 | 交易后木牌渲染 | 交易成功后的 `setSignText`（4 行布局渲染 + 4 向告示牌方块状态写入）改走既有 `SignUpdateWatcher` 批处理（hop路径同款）：每周期（10 tick）至多刷新一次，条目携带交易者 locale（与原立即渲染语言一致）；新增 `shop.immediate-trade-sign-updates` 配置可回退 | 交易连点下渲染次数 N→⌈N/周期⌉（合并语义由 TradeSignSchedulingTest 证明）；mock A/B -3.4%（文本管线/方块写入在基准中被打桩，实际收益被低估） |
 | R11 | ee56e3b39 | 买路径冗余重解析 | ① `executeBuyFromShop` 单次 symbolLink 定位，preview 与提交共享（私有重载，公开 API 不变）② 新增 `ShopMeta#getItemUnitSize` 默认方法：ContainerShop 在零监听器时直接读字段，跳过 getItem() 的克隆+RETRIEVE 事件；SimpleTradeService/Util 的 7 处只读站点改用 | 每笔交易少 1 次定位（Base64 反序列化+BlockState 获取+PerfMonitor 记录）+ 6~7 次克隆事件 |
 | R12 | 49ca8f4e9 | 卖路径对称去重 | `ShopInventory#getRemainingSpace/Stock` 增加带已定位包装器的重载（默认方法回退原语义）；`executeSellToShop` 单次定位共享给空间预检与提交；顺带修复原 `getRemainingSpace` 空检查与计数各定位一次的问题 | 卖路径定位 3 次→1 次；基准新增 trade/tradeServiceSell 用例使卖方向可量化 |
+| R14 | 03a21f743 | 点击路径方块访问（非商店点击，全服最高频事件之一） | `PlayerListener.searchShop`：① 双箱分支前置箱子族材料预检（仅 CHEST/TRAPPED_CHEST 可能双箱），普通方块点击不再执行 `getBlockData()` ② 容器分类 `getState()`→`getState(false)`（Paper 免快照，分类结果同）③ `shop.ignore-cancelled-interact-event` 配置读取改构造器快照 + reloadModule 刷新（init 模式，与 BlockListener 既有约定一致） | 每次普通方块点击严格少一次方块数据获取与一次全量快照 BlockState 构造、预取消点击少一次 BoostedYAML 导航；mock A/B 增量低于噪声底（交替测量 cycle2 持平、无回归），结构证明由 PlayerListenerSearchShopTest（verify never getBlockData）承担 |
 
 基准配套：91495d014 新增 trade 套件（迭代对照/扫描/事务/买卖全链路）。
 
@@ -74,8 +75,13 @@
   （Remove/AddItemOperation 的 createSnapshot）完整保留。
 - **并发**：SignUpdateWatcher 队列仍为 ConcurrentLinkedQueue（区域线程入队/异步定时线程出队的
   既有设计）；去重扫描 O(队列长度) 与原 `contains` 同阶。
-- **测试**：quickshop-bukkit **67 用例全绿**（56→67：ContainerShopMatchesTest×4、
-  InventoryWrapperIteratorTest×5、TradeSignSchedulingTest×2；SignUpdateWatcherTest 适配新队列结构）。
+- **测试**：quickshop-bukkit **70 用例全绿**（56→70：ContainerShopMatchesTest×4、
+  InventoryWrapperIteratorTest×5、TradeSignSchedulingTest×2、PlayerListenerSearchShopTest×3；
+  SignUpdateWatcherTest 适配新队列结构）。
+- **R14 兼容性说明**：`searchShop` 的容器分类从 `getState()` 改为 `getState(false)`——两者对
+  `instanceof Container` 的结果一致（Paper 官方语义：false 仅跳过快照拷贝，本项目 canBeShop 等处
+  已是同款用法）；双箱预检的等价性依据是双箱 BlockData 仅存在于 CHEST/TRAPPED_CHEST 材料；
+  配置快照经 reloadModule 刷新，与 BlockListener 既有 init 模式一致。
 
 ## 已知未优化项（评估后放弃，含本轮新增）
 

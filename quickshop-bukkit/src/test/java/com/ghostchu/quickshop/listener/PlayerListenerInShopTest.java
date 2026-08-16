@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
@@ -38,6 +39,8 @@ class PlayerListenerInShopTest {
 
     final QuickShop plugin = mock(QuickShop.class);
     when(plugin.getReloadManager()).thenReturn(mock(com.ghostchu.simplereloadlib.ReloadManager.class));
+    // PlayerListener's constructor snapshots hot-path config flags
+    lenient().when(plugin.getConfig()).thenReturn(mock(dev.dejvokep.boostedyaml.YamlDocument.class));
     bukkitStatic = mockStatic(Bukkit.class);
     com.ghostchu.quickshop.MockBukkit.install(bukkitStatic, plugin);
     quickShopStatic = mockStatic(QuickShop.class);
