@@ -15,6 +15,12 @@ public interface InventoryWrapperIterator extends Iterator<ItemStack> {
 
   /**
    * Return the default implementation for bukkit inventory
+   * <p>
+   * The storage array is copied once when the iterator is created; every {@link #next()}
+   * previously re-fetched {@code getStorageContents()}, copying the whole array per slot
+   * (quadratic for a full scan). Writes still go through {@link #setCurrent}, which
+   * re-fetches the live contents and therefore behaves exactly as before. The wrapper is
+   * documented as main-thread-only, so no concurrent mutation is supported either way.
    *
    * @param inventory bukkit inventory
    *
@@ -22,14 +28,14 @@ public interface InventoryWrapperIterator extends Iterator<ItemStack> {
    */
   static InventoryWrapperIterator ofBukkitInventory(final Inventory inventory) {
 
-    final int size = inventory.getStorageContents().length;
+    final ItemStack[] contents = inventory.getStorageContents();
     return new InventoryWrapperIterator() {
       int currentIndex = 0;
 
       @Override
       public boolean hasNext() {
 
-        return currentIndex < size;
+        return currentIndex < contents.length;
       }
 
       @Override
@@ -38,7 +44,7 @@ public interface InventoryWrapperIterator extends Iterator<ItemStack> {
         if(!hasNext()) {
           throw new NoSuchElementException();
         }
-        return inventory.getStorageContents()[currentIndex++];
+        return contents[currentIndex++];
       }
 
       @Override
