@@ -85,6 +85,14 @@
 
 ## 已知未优化项（评估后放弃，含本轮新增）
 
+- **闭合扫查记录（R14 后对全部剩余 Bukkit 事件面的一轮核验）**：
+  - `PlayerMoveEvent`（全服最热事件）：普通路径仅一次 `getInteractiveManager().get(uuid)`
+    ConcurrentHashMap 读取，无交互会话即返回——已验证廉价，无需动作；
+  - `InventoryMoveItemEvent`（漏斗服务器高频）：`getShopRedstone` 走 SimpleShopCache，
+    Guava `get(key, loader)` 对 miss 也缓存（BoxedShop(null) 盒）——无缓存穿透，无需动作；
+  - `AsyncPlayerChatEvent` 的配置读取位于 `isCancelled()` 短路之后（取消的聊天罕见）；
+    `BlockBreakEvent` 的 super-tool 配置读取位于 canBeShop+getShop+创造模式+金斧链之后——
+    均非热点，无需动作。
 - **带参文本参数序列化快速路径（R13 尝试，实测无收益后回退）**：曾实现「纯文本参数跳过
   MiniMessage.serialize」（未加样式、无子组件、内容无 `<>{}\\` 特殊字符的 TextComponent 直接返回
   内容，语料等价性已由测试证明），但 forLocaleWithArgs 基准 23.8μs→24.3μs 无变化——
