@@ -56,9 +56,29 @@ public final class QUserImpl implements QUser {
     this.executorService = QuickExecutor.getPrimaryProfileIoExecutor();
   }
 
+  /**
+   * Intern cache for deserialized users, keyed by the serialized form. Shop loading
+   * deserializes owner and tax-account strings for every row while real servers have
+   * few dozen distinct owners across tens of thousands of shops, so repeated parses
+   * (and their asynchronous name lookups) dominate the read path. Entries expire so a
+   * renamed player's display name self-heals; the underlying PlayerFinder caches keep
+   * their own invalidation.
+   */
+  private static final com.google.common.cache.Cache<String, QUserImpl> DESERIALIZED_CACHE =
+          com.google.common.cache.CacheBuilder.newBuilder()
+                  .maximumSize(8192)
+                  .expireAfterWrite(5, java.util.concurrent.TimeUnit.MINUTES)
+                  .build();
+
   public static QUserImpl deserialize(final PlayerFinder finder, final String serialized, final ExecutorService executorService) {
 
-    return new QUserImpl(finder, serialized, executorService);
+    final QUserImpl cached = DESERIALIZED_CACHE.getIfPresent(serialized);
+    if(cached != null) {
+      return cached;
+    }
+    final QUserImpl parsed = new QUserImpl(finder, serialized, executorService);
+    DESERIALIZED_CACHE.put(serialized, parsed);
+    return parsed;
   }
 
   public static CompletableFuture<QUser> createAsync(@NotNull final PlayerFinder finder, @NotNull final String string) {
