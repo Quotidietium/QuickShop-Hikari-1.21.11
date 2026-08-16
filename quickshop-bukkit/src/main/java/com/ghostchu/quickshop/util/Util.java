@@ -549,7 +549,7 @@ public class Util {
           items += iStack.getAmount();
         }
       }
-      return items / shop.getItem().getAmount();
+      return items / shop.getItemUnitSize();
     }
   }
 

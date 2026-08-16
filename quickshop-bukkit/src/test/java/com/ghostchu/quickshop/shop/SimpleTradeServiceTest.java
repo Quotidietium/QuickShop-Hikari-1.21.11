@@ -65,6 +65,7 @@ class SimpleTradeServiceTest {
 
     final Shop shop = mock(Shop.class);
     when(shop.getItem()).thenReturn(shopItem);
+    when(shop.getItemUnitSize()).thenReturn(Math.max(0, unitSize));
     when(shop.price()).thenReturn(10.0d);
     when(shop.isValid()).thenReturn(true);
     when(shop.isFrozen()).thenReturn(frozen);

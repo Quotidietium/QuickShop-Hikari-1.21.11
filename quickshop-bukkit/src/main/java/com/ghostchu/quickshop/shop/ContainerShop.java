@@ -488,6 +488,18 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   }
 
   @Override
+  public int getItemUnitSize() {
+
+    // the RETRIEVE event is a provable no-op with zero listeners (all QuickShop events
+    // share one HandlerList), so the amount can be read without the defensive clone
+    if(!com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      return this.item.getAmount();
+    }
+    // full path mirrors ShopMeta#getItemUnitSize: listeners may rewrite the retrieval
+    return getItem().getAmount();
+  }
+
+  @Override
   public void setItem(@NotNull final ItemStack item) {
 
     Util.ensureThread(false);

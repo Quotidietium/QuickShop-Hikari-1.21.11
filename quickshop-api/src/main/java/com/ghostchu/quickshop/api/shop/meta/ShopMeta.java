@@ -87,6 +87,19 @@ public interface ShopMeta<U> extends ShopPrice<U> {
   ItemStack getItem();
 
   /**
+   * Get shop item's unit size (the stack size one trade unit moves) without cloning the
+   * stack or dispatching retrieval events. Callers that only read the amount should
+   * prefer this; implementations may bypass the defensive copy when no event listener
+   * could observe the difference.
+   *
+   * @return The shop item's amount
+   */
+  default int getItemUnitSize() {
+
+    return getItem().getAmount();
+  }
+
+  /**
    * Set shop item's ItemStack
    *
    * @param item ItemStack to set
