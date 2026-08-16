@@ -92,7 +92,11 @@
     Guava `get(key, loader)` 对 miss 也缓存（BoxedShop(null) 盒）——无缓存穿透，无需动作；
   - `AsyncPlayerChatEvent` 的配置读取位于 `isCancelled()` 短路之后（取消的聊天罕见）；
     `BlockBreakEvent` 的 super-tool 配置读取位于 canBeShop+getShop+创造模式+金斧链之后——
-    均非热点，无需动作。
+    均非热点，无需动作；
+  - `QuickShopInteractionManager.interaction(event, click)`（每次商店点击）：内建 12 个
+    InteractionType 的内存线性扫描，每个 `applies()` 仅 2~3 个枚举/布尔比较——约 36 次廉价
+    比较/点击，无 YAML 导航，无需动作。至此点击链（searchShop→交互解析→行为分发→交易）
+    每一段均有优化或廉价结论。
 - **带参文本参数序列化快速路径（R13 尝试，实测无收益后回退）**：曾实现「纯文本参数跳过
   MiniMessage.serialize」（未加样式、无子组件、内容无 `<>{}\\` 特殊字符的 TextComponent 直接返回
   内容，语料等价性已由测试证明），但 forLocaleWithArgs 基准 23.8μs→24.3μs 无变化——
