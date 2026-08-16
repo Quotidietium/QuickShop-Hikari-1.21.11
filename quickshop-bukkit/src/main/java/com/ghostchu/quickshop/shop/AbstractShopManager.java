@@ -81,6 +81,12 @@ public abstract class AbstractShopManager implements ShopManager {
    * entries.
    */
   protected final Map<QUser, List<Shop>> shopsByOwner = new java.util.concurrent.ConcurrentHashMap<>();
+  /**
+   * Secondary index: runtime random UUID to shop. Lets silent-command lookups resolve
+   * cache misses in O(1); entries only surface when the shop is currently loaded, which
+   * mirrors the previous loaded-set scan semantics.
+   */
+  protected final Map<UUID, Shop> shopRuntimeIdLookup = new java.util.concurrent.ConcurrentHashMap<>();
   @Getter
   protected ShopCache shopCache;
 
@@ -144,6 +150,7 @@ public abstract class AbstractShopManager implements ShopManager {
     this.shopsByOwner
             .computeIfAbsent(shop.getOwner(), key->new java.util.concurrent.CopyOnWriteArrayList<>())
             .add(shop);
+    this.shopRuntimeIdLookup.put(shop.getRuntimeRandomUniqueId(), shop);
   }
 
   /**
@@ -261,10 +268,11 @@ public abstract class AbstractShopManager implements ShopManager {
     shopRuntimeUUIDCaching.invalidate(shop.getRuntimeRandomUniqueId());
   }
 
-  /** Drops a shop from the secondary id/owner indexes (absent entries are a no-op). */
+  /** Drops a shop from the secondary id/owner/runtime indexes (absent entries are a no-op). */
   private void unindexShop(@NotNull final Shop shop) {
 
     this.shopIdLookup.remove(shop.getShopId(), shop);
+    this.shopRuntimeIdLookup.remove(shop.getRuntimeRandomUniqueId(), shop);
     final List<Shop> owned = this.shopsByOwner.get(shop.getOwner());
     if(owned != null) {
       owned.remove(shop);
@@ -480,13 +488,15 @@ public abstract class AbstractShopManager implements ShopManager {
   public Shop getShopFromRuntimeRandomUniqueId(
           @NotNull final UUID runtimeRandomUniqueId, final boolean includeInvalid) {
 
-    final Shop shop = shopRuntimeUUIDCaching.getIfPresent(runtimeRandomUniqueId);
+    Shop shop = shopRuntimeIdLookup.get(runtimeRandomUniqueId);
     if(shop == null) {
-      for(final Shop shopWithoutCache : this.getLoadedShops()) {
-        if(shopWithoutCache.getRuntimeRandomUniqueId().equals(runtimeRandomUniqueId)) {
-          return shopWithoutCache;
-        }
-      }
+      shop = shopRuntimeUUIDCaching.getIfPresent(runtimeRandomUniqueId);
+    }
+    if(shop == null) {
+      return null;
+    }
+    // mirror the old scan over the loaded set: unloaded shops must not resolve
+    if(!this.loadedShops.contains(shop)) {
       return null;
     }
     if(includeInvalid) {

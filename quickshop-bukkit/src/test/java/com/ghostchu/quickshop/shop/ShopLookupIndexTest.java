@@ -57,6 +57,7 @@ class ShopLookupIndexTest {
     lenient().when(config.getString(org.mockito.ArgumentMatchers.anyString())).thenReturn(null);
     lenient().when(config.getString(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(String.class)))
             .thenAnswer(inv -> inv.getArgument(1, String.class));
+    lenient().when(config.getStringList("shop-blocks")).thenReturn(java.util.List.of("CHEST"));
     lenient().when(plugin.getConfig()).thenReturn(config);
     lenient().when(plugin.getPasteManager())
             .thenReturn(mock(com.ghostchu.quickshop.util.paste.PasteManager.class));
@@ -69,13 +70,18 @@ class ShopLookupIndexTest {
 
     manager = new SimpleShopManager(plugin);
     lenient().when(plugin.getShopManager()).thenReturn(manager);
+    // isValid() reaches Util.canBeShop, whose plugin reference is set by initialize()
+    com.ghostchu.quickshop.util.Util.initialize();
 
     world = mock(org.bukkit.World.class);
     when(world.getName()).thenReturn("world");
     final org.bukkit.block.Block block = mock(org.bukkit.block.Block.class);
     when(block.getWorld()).thenReturn(world);
     when(block.getType()).thenReturn(org.bukkit.Material.CHEST);
+    lenient().when(block.getState(false)).thenReturn(mock(org.bukkit.block.BlockState.class,
+            org.mockito.Mockito.withSettings().extraInterfaces(org.bukkit.inventory.InventoryHolder.class)));
     lenient().when(world.getBlockAt(anyInt(), anyInt(), anyInt())).thenReturn(block);
+    lenient().when(world.getBlockAt(org.mockito.ArgumentMatchers.any(org.bukkit.Location.class))).thenReturn(block);
     // setOwner() refreshes sign text; an "unloaded" chunk lets that path return early
     // before it would reach the Folia scheduler, which is unavailable in unit tests
     lenient().when(world.isChunkLoaded(anyInt(), anyInt())).thenReturn(false);
@@ -168,6 +174,25 @@ class ShopLookupIndexTest {
     assertEquals(0, manager.getAllShops(erin).size());
     assertEquals(1, manager.getAllShops(frank).size());
     assertSame(shop, manager.getAllShops(frank).get(0));
+  }
+
+  @Test
+  void runtimeUuidResolvesLoadedShopsOnly() {
+
+    final ContainerShop loaded = shop(601, 80, 80, "iris");
+    final ContainerShop unloaded = shop(602, 81, 81, "jack");
+    manager.registerShop(loaded, false).join();
+    manager.registerShop(unloaded, false).join();
+    manager.getLoadedShops().add(loaded);
+    // "jack" stays registered but unloaded
+
+    assertSame(loaded, manager.getShopFromRuntimeRandomUniqueId(loaded.getRuntimeRandomUniqueId()));
+    assertNull(manager.getShopFromRuntimeRandomUniqueId(unloaded.getRuntimeRandomUniqueId()),
+            "unloaded shops must not resolve, mirroring the loaded-set scan");
+
+    // removal must drop the index entry entirely
+    manager.unregisterShop(loaded, false).join();
+    assertNull(manager.getShopFromRuntimeRandomUniqueId(loaded.getRuntimeRandomUniqueId()));
   }
 
   @Test
