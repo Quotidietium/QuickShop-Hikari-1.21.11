@@ -14,7 +14,8 @@
 | 目标平台 | 仅 Paper（Spigot 直接拒绝启动）；Folia 兼容 |
 | 代码规模 | 663 个 Java 文件：api 177 / bukkit 357 / addon 62 / compat 52 / common 12 / platform 3 |
 | 数据库 | MySQL 或 H2(MODE=MYSQL)，schema 版本 20，EasySQL + HikariCP |
-| 测试 | **0 个测试**（无 src/test、无 @Test、CI 的 Codecov 上传空数据） |
+| 测试 | quickshop-bukkit 56 个用例全绿（回归 + 查找表索引 + DB 写缓存 + 文本缓存 + QUser 驻留 + 事件快路径） |
+| 基准 | `benchmark/` 独立模块：19 用例 × 5 套件（查找表/序列化/经济/文本/H2 数据库），报告见 [report/perf](report/perf/) |
 | 本仓库定位 | 独立 fork（已移除 upstream，不再同步社区上游） |
 
 ## 一句话理解这个项目
@@ -31,7 +32,7 @@
    - `checkTax` 守卫写反 → 正税额从不入账（已修 472e773bb）；
    - 经济/库存 commit 两个失败分支漏调 `onFailed`（已修 e19f7407d/8d71e34ef）；
    - **交易数量溢出/零单位刷钱漏洞**：unitSize=0 或溢出为 0 时移 0 件物品却全额转账（已修 9c88938d5）。
-5. **零测试基线**：全部质量保障依赖 Qodana 静态扫描 + CodeRabbit AI 审查 + 社区反馈；资金敏感路径无回归网。
+5. **测试与性能基线演进**：审计循环建立了回归网（38 用例）；2026-08-16 性能优化循环（7 轮，详见 [report/perf/2026-08-16-performance-optimization.md](report/perf/2026-08-16-performance-optimization.md)）后达 56 用例全绿，并新增 `benchmark/` 基准模块（19 用例 × 5 套件）。核心收益：id/owner 查找 O(n)→O(1)（142μs/282μs→~100ns）、脏店保存不变跳写 -81%、无参消息渲染 -99%、全量读店 -38%、指标定位 SELECT -99.6%。
 
 ## 笔记目录
 
