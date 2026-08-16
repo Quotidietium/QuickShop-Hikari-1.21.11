@@ -48,7 +48,7 @@ public class RemoveItemOperation implements Operation {
     while(remains > 0) {
       final int stackSize = Math.min(remains, itemMaxStackSize);
       item.setAmount(stackSize);
-      Log.debug("Committing remove item operation, remains: " + remains + ", stackSize: " + stackSize + ", target: " + item);
+      Log.debug("Committing remove item operation, remains: " + remains + ", stackSize: " + stackSize + ", target: " + item.getType());
       final Map<Integer, ItemStack> notFit = inv.removeItem(item.clone());
       if(notFit.isEmpty()) {
         remains -= stackSize;

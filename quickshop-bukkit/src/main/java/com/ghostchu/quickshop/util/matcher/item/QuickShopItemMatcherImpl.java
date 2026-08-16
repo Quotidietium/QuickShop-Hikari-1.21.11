@@ -164,11 +164,15 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
       return true;
     }
 
-    final ShopItemMatchEvent shopItemMatchEvent = new ShopItemMatchEvent(requireStack.clone(), givenStack.clone());
-    shopItemMatchEvent.callEvent();
+    // constructing the event clones both stacks; skip it entirely when nobody listens
+    // (every QuickShop event shares one HandlerList, see AbstractQSEvent)
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopItemMatchEvent shopItemMatchEvent = new ShopItemMatchEvent(requireStack.clone(), givenStack.clone());
+      shopItemMatchEvent.callEvent();
 
-    if(shopItemMatchEvent.matches()) {
-      return true;
+      if(shopItemMatchEvent.matches()) {
+        return true;
+      }
     }
 
     final String shopIdOrigin = plugin.platform().getItemShopId(requireStack);

@@ -1390,11 +1390,18 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     if(item == null) {
       return false;
     }
+    final com.ghostchu.quickshop.api.shop.ItemMatcher matcher = plugin.getItemMatcher();
+    if(matcher instanceof final com.ghostchu.quickshop.util.matcher.item.QuickShopItemMatcherImpl builtin) {
+      // the builtin matcher treats both arguments as read-only and normalizes amounts
+      // internally, so the per-slot defensive clones are pure allocation waste
+      return builtin.matches(this.item, item);
+    }
+    // third-party matchers carry no non-mutation contract: keep defensive copies
     final ItemStack givenItem = item.clone();
     givenItem.setAmount(1);
     final ItemStack shopItem = this.item.clone();
     shopItem.setAmount(1);
-    return plugin.getItemMatcher().matches(shopItem, givenItem);
+    return matcher.matches(shopItem, givenItem);
   }
 
   @Override

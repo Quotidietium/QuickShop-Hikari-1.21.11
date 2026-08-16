@@ -80,7 +80,14 @@ public abstract class AbstractQSEvent extends Event {
     return !(this instanceof final org.bukkit.event.Cancellable cancellable && cancellable.isCancelled());
   }
 
-  private static boolean hasListeners() {
+  /**
+   * Whether any listener is registered on the shared QuickShop HandlerList. Hot paths use
+   * this to skip building event objects (which may clone payloads) when dispatch is a
+   * provable no-op.
+   *
+   * @return true when at least one listener could observe QuickShop events
+   */
+  public static boolean hasListeners() {
 
     return getHandlerList().getRegisteredListeners().length > 0;
   }

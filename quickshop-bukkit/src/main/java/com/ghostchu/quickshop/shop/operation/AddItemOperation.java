@@ -49,7 +49,7 @@ public class AddItemOperation implements Operation {
     while(remains > 0) {
       final int stackSize = Math.min(remains, itemMaxStackSize);
       target.setAmount(stackSize);
-      Log.debug("Committing add item operation, remains: " + remains + ", stackSize: " + stackSize + ", target: " + target);
+      Log.debug("Committing add item operation, remains: " + remains + ", stackSize: " + stackSize + ", target: " + target.getType());
       final Map<Integer, ItemStack> notSaved = inv.addItem(target);
       if(notSaved.isEmpty()) {
         remains -= stackSize;

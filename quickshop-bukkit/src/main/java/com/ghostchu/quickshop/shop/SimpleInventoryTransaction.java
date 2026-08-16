@@ -68,7 +68,7 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
   @Override
   public boolean commit(@NotNull final TransactionCallback callback) {
 
-    Log.transaction("Transaction begin: Regular Commit --> " + from + " => " + to + "; Amount: " + amount + " Item: " + Util.serialize(item));
+    Log.transaction("Transaction begin: Regular Commit --> " + describeInv(from) + " => " + describeInv(to) + "; Amount: " + amount + " Item: " + describeItem(item));
     if(!callback.onCommit(this)) {
       this.lastError = "Plugin cancelled this transaction.";
       callback.onFailed(this);
@@ -154,7 +154,7 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
   @Override
   public boolean failSafeCommit() {
 
-    Log.transaction("Transaction begin: FailSafe Commit --> " + from + " => " + to + "; Amount: " + amount + " Item: " + Util.serialize(item));
+    Log.transaction("Transaction begin: FailSafe Commit --> " + describeInv(from) + " => " + describeInv(to) + "; Amount: " + amount + " Item: " + describeItem(item));
     final boolean result = commit();
     if(!result) {
       Log.transaction(Level.WARNING, "Fail-safe commit failed, starting rollback: " + lastError);
@@ -231,6 +231,28 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
       this.lastError = "Failed to execute operation: " + operation;
       return false;
     }
+  }
+
+  /**
+   * Cheap log descriptors: the previous message built InventoryWrapper.toString() (Gson
+   * JSON of the whole inventory) and a full YamlConfiguration item serialization on every
+   * commit — pure instrumentation cost on the trade hot path. Full item detail is kept
+   * for dev mode where it is actually consumed.
+   */
+  private static String describeInv(@Nullable final InventoryWrapper wrapper) {
+
+    if(wrapper == null) {
+      return "null";
+    }
+    return wrapper.getInventoryType() + "@" + Integer.toHexString(System.identityHashCode(wrapper));
+  }
+
+  private static String describeItem(@NotNull final ItemStack item) {
+
+    if(Util.isDevMode()) {
+      return Util.serialize(item);
+    }
+    return item.getType() + " x" + item.getAmount();
   }
 
   public interface SimpleTransactionCallback extends InventoryTransaction.TransactionCallback {
