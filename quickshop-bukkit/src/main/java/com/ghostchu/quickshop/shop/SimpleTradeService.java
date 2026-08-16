@@ -139,7 +139,7 @@ public class SimpleTradeService implements TradeService {
       }
 
       if(options.updateSigns() && !shop.isUnlimited()) {
-        shop.setSignText(plugin.text().findRelativeLanguages(buyer, false));
+        updateTradeSign(shop, plugin.text().findRelativeLanguages(buyer, false));
       }
 
       return successResult(
@@ -246,7 +246,7 @@ public class SimpleTradeService implements TradeService {
       }
 
       if(options.updateSigns()) {
-        shop.setSignText(plugin.text().findRelativeLanguages(seller, false));
+        updateTradeSign(shop, plugin.text().findRelativeLanguages(seller, false));
       }
 
       return successResult(
@@ -426,6 +426,22 @@ public class SimpleTradeService implements TradeService {
 
   private int normalizeAmount(@NotNull final Shop shop, final int tradeAmount) {
     return shop.getItem().getAmount() * tradeAmount;
+  }
+
+  /**
+   * Post-trade sign refresh. Immediate rendering costs a full 4-line layout render plus
+   * sign block writes per trade; hopper-driven stock changes already batch through
+   * SignUpdateWatcher, so trades take the same coalesced path (rapid trading refreshes a
+   * shop's signs at most once per watcher cycle, in the trading player's locale as
+   * before). Set shop.immediate-trade-sign-updates to restore per-trade rendering.
+   */
+  private void updateTradeSign(@NotNull final Shop shop, @NotNull final com.ghostchu.quickshop.api.localization.text.ProxiedLocale locale) {
+
+    if(plugin.getConfig().getBoolean("shop.immediate-trade-sign-updates", false)) {
+      shop.setSignText(locale);
+      return;
+    }
+    plugin.getSignUpdateWatcher().scheduleSignUpdate(shop, locale);
   }
 
   /**

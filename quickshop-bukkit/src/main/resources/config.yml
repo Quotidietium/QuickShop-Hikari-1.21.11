@@ -351,6 +351,12 @@ shop:
   # Can increase load-time work (performance impact).
   update-sign-on-load: false
 
+  # Render trade-updated signs immediately after every trade instead of batching them
+  # through the sign-update watcher (one refresh per watcher cycle). Immediate mode
+  # costs a full sign render plus sign block writes per trade; batched signs lag at
+  # most one cycle (~0.5s) behind the trade.
+  immediate-trade-sign-updates: false
+
   # Skip confirmation prompts for destructive commands (like remove).
   skip-command-confirmation: false
 
