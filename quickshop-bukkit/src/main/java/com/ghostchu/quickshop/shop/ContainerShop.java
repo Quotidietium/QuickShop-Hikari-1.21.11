@@ -559,11 +559,16 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   public void setOwner(@NotNull final QUser owner) {
 
     Util.ensureThread(false);
+    final QUser previousOwner = this.owner;
     if(this.owner.equals(owner)) {
       return;
     }
     this.owner = owner;
     setDirty();
+    // keep the manager's owner index coherent across ownership transfers
+    if(plugin.getShopManager() instanceof final AbstractShopManager manager) {
+      manager.handleShopOwnerChanged(previousOwner, owner, this);
+    }
     setSignText(plugin.getTextManager().findRelativeLanguages(owner, false));
   }
 

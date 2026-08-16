@@ -17,7 +17,6 @@ import com.ghostchu.quickshop.shop.cache.SimpleShopCache;
 import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.economyformatter.EconomyFormatter;
 import com.ghostchu.quickshop.util.logger.Log;
-import com.ghostchu.quickshop.util.performance.PerfMonitor;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.MapMaker;
@@ -61,15 +60,27 @@ public abstract class AbstractShopManager implements ShopManager {
   protected final Cache<UUID, Shop> shopRuntimeUUIDCaching =
           CacheBuilder.newBuilder()
                   .expireAfterAccess(10, TimeUnit.MINUTES)
-                  .maximumSize(50)
+                  .maximumSize(1024)
                   .weakValues()
-                  .initialCapacity(50)
+                  .initialCapacity(64)
                   .build();
   protected final QuickShop plugin;
   protected final TradeService tradeService;
   protected final EconomyFormatter formatter;
   protected final Map<String, Map<ShopChunk, Map<Location, Shop>>> shops = Maps.newConcurrentMap();
   protected final Set<Shop> loadedShops = Sets.newConcurrentHashSet(); // Handle it by collection to reduce
+  /**
+   * Secondary index: shop id to shop. The id is only assigned after the database insert
+   * (or read-back for loaded shops), so shops still carrying the {@code -1} placeholder
+   * are absent from this map by design.
+   */
+  protected final Map<Long, Shop> shopIdLookup = new java.util.concurrent.ConcurrentHashMap<>();
+  /**
+   * Secondary index: owner to shops registered in the lookup table. Lists are
+   * copy-on-write: readers iterate lock-free while the (rare) ownership transfers swap
+   * entries.
+   */
+  protected final Map<QUser, List<Shop>> shopsByOwner = new java.util.concurrent.ConcurrentHashMap<>();
   @Getter
   protected ShopCache shopCache;
 
@@ -115,7 +126,51 @@ public abstract class AbstractShopManager implements ShopManager {
     // Put it in the world
     // Put the shop in its location in the chunk list.
     inChunk.put(shop.bukkitLocation(), shop);
+    indexShop(shop);
     shopCache.invalidate(null, shop.bukkitLocation());
+  }
+
+  /**
+   * Maintains the secondary id/owner indexes for a shop that just entered the lookup
+   * table. Ids are only indexed once assigned (positive); the owner index is rebuilt on
+   * ownership transfer through {@link #handleShopOwnerChanged(QUser, QUser, Shop)}.
+   */
+  private void indexShop(@NotNull final Shop shop) {
+
+    final long shopId = shop.getShopId();
+    if(shopId > 0) {
+      this.shopIdLookup.put(shopId, shop);
+    }
+    this.shopsByOwner
+            .computeIfAbsent(shop.getOwner(), key->new java.util.concurrent.CopyOnWriteArrayList<>())
+            .add(shop);
+  }
+
+  /**
+   * Called by {@link ContainerShop#setOwner(QUser)} so the owner index stays coherent
+   * across ownership transfers. Package-private: only meaningful for registered shops,
+   * which is verified through the location lookup table.
+   */
+  void handleShopOwnerChanged(@Nullable final QUser oldOwner, @Nullable final QUser newOwner, @NotNull final Shop shop) {
+
+    if(Objects.equals(oldOwner, newOwner)) {
+      return;
+    }
+    // only re-index shops that actually live in the lookup table
+    if(getShop(shop.bukkitLocation(), true) != shop) {
+      return;
+    }
+    if(oldOwner != null) {
+      final List<Shop> owned = this.shopsByOwner.get(oldOwner);
+      if(owned != null) {
+        owned.remove(shop);
+      }
+    }
+    if(newOwner != null) {
+      this.shopsByOwner
+              .computeIfAbsent(newOwner, key->new java.util.concurrent.CopyOnWriteArrayList<>())
+              .add(shop);
+    }
   }
 
   @Override
@@ -201,8 +256,19 @@ public abstract class AbstractShopManager implements ShopManager {
       return;
     }
     inChunk.remove(loc);
+    unindexShop(shop);
     shopCache.invalidate(null, shop.bukkitLocation());
     shopRuntimeUUIDCaching.invalidate(shop.getRuntimeRandomUniqueId());
+  }
+
+  /** Drops a shop from the secondary id/owner indexes (absent entries are a no-op). */
+  private void unindexShop(@NotNull final Shop shop) {
+
+    this.shopIdLookup.remove(shop.getShopId(), shop);
+    final List<Shop> owned = this.shopsByOwner.get(shop.getOwner());
+    if(owned != null) {
+      owned.remove(shop);
+    }
   }
 
 
@@ -282,15 +348,13 @@ public abstract class AbstractShopManager implements ShopManager {
   @Override
   public @NotNull List<Shop> getAllShops() {
 
-    try(final PerfMonitor ignored = new PerfMonitor("Getting all shops")) {
-      final List<Shop> shopsCollected = new ArrayList<>();
-      for(final Map<ShopChunk, Map<Location, Shop>> shopMapData : getShops().values()) {
-        for(final Map<Location, Shop> shopData : shopMapData.values()) {
-          shopsCollected.addAll(shopData.values());
-        }
+    final List<Shop> shopsCollected = new ArrayList<>();
+    for(final Map<ShopChunk, Map<Location, Shop>> shopMapData : getShops().values()) {
+      for(final Map<Location, Shop> shopData : shopMapData.values()) {
+        shopsCollected.addAll(shopData.values());
       }
-      return shopsCollected;
     }
+    return shopsCollected;
   }
 
   /**
@@ -316,13 +380,12 @@ public abstract class AbstractShopManager implements ShopManager {
   @Override
   public @NotNull List<Shop> getAllShops(@NotNull final QUser playerUUID) {
 
-    final List<Shop> playerShops = new ArrayList<>(10);
-    for(final Shop shop : getAllShops()) {
-      if(shop.getOwner().equals(playerUUID)) {
-        playerShops.add(shop);
-      }
+    final List<Shop> owned = shopsByOwner.get(playerUUID);
+    if(owned == null || owned.isEmpty()) {
+      return new ArrayList<>(0);
     }
-    return playerShops;
+    // defensive copy keeps the mutable-list contract of the previous implementation
+    return new ArrayList<>(owned);
   }
 
   @Override
@@ -349,12 +412,7 @@ public abstract class AbstractShopManager implements ShopManager {
   @Override
   public @Nullable Shop getShop(final long shopId) {
 
-    for(final Shop shop : getAllShops()) {
-      if(shop.getShopId() == shopId) {
-        return shop;
-      }
-    }
-    return null;
+    return shopIdLookup.get(shopId);
   }
 
   /**
@@ -365,6 +423,15 @@ public abstract class AbstractShopManager implements ShopManager {
    *
    * @return The shop at that location
    */
+  /**
+   * Reusable lookup key for {@link #getShop(Location, boolean)}. Shop locations are
+   * stored normalized to block coordinates, so a probe carrying the normalized values
+   * matches the map key without cloning the caller's location. Thread-local because the
+   * lookup runs on main and region threads.
+   */
+  private static final ThreadLocal<Location> SHOP_LOOKUP_PROBE =
+          ThreadLocal.withInitial(()->new Location(null, 0, 0, 0));
+
   @Override
   public @Nullable Shop getShop(@NotNull Location loc, final boolean skipShopableChecking) {
 
@@ -373,17 +440,32 @@ public abstract class AbstractShopManager implements ShopManager {
     }
     final ShopChunk shopChunk = SimpleShopChunk.fromLocation(loc);
     final Map<Location, Shop> inChunk = getShops(shopChunk);
-    if(inChunk == null) {
+    if(inChunk.isEmpty()) {
       return null;
     }
-    loc = loc.clone();
-    // Fix double chest XYZ issue
-    loc.setX(loc.getBlockX());
-    loc.setY(loc.getBlockY());
-    loc.setZ(loc.getBlockZ());
-    // We can do this because WorldListener updates the world reference so
-    // the world in loc is the same as world in inChunk.get(loc)
-    return inChunk.get(loc);
+    // fast path: a normalized probe hits the stored key directly (no clone allocation)
+    final Location probe = SHOP_LOOKUP_PROBE.get();
+    probe.setWorld(loc.getWorld());
+    probe.setX(loc.getBlockX());
+    probe.setY(loc.getBlockY());
+    probe.setZ(loc.getBlockZ());
+    final Shop direct = inChunk.get(probe);
+    if(direct != null) {
+      return direct;
+    }
+    // fallback: keys stored with non-integral coordinates or rotation need a block-level
+    // coordinate scan; chunk maps hold one to a handful of shops so this stays cheap
+    final World world = loc.getWorld();
+    final int x = loc.getBlockX();
+    final int y = loc.getBlockY();
+    final int z = loc.getBlockZ();
+    for(final Shop shop : inChunk.values()) {
+      final Location shopLoc = shop.bukkitLocation();
+      if(shopLoc.getWorld() == world && shopLoc.getBlockX() == x && shopLoc.getBlockY() == y && shopLoc.getBlockZ() == z) {
+        return shop;
+      }
+    }
+    return null;
   }
 
   @Override
@@ -478,6 +560,9 @@ public abstract class AbstractShopManager implements ShopManager {
             .thenCompose(id->{
               Log.debug("DEBUG: Setting shop id");
               shop.setShopId(id);
+              if(id > 0) {
+                shopIdLookup.put(id, shop);
+              }
               Log.debug("DEBUG: Creating shop map");
               return plugin.getDatabaseHelper().createShopMap(id, shop.bukkitLocation());
             })

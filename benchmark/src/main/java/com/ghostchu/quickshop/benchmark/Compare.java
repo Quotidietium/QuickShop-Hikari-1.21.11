@@ -15,11 +15,11 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Compares benchmark result JSON files and prints a markdown table.
+ * Compares benchmark result directories and prints a markdown table.
  * <p>
- * Usage: {@code mvn exec:java -Dexec.mainClass=...Compare -Dexec.args="<baselineJson> <candidateJson> [<candidateJson2> ...]"}
- * Baseline may point at a directory containing several fork files; they are aggregated by
- * median before comparison. Positive delta % means the candidate is faster.
+ * Usage: {@code java -cp ... Compare <baselineDir> <candidateDir> [...moreDirs]} — each
+ * directory's fork JSON files are aggregated by median-of-medians. Positive delta %
+ * means the candidate is faster.
  */
 public final class Compare {
 
@@ -35,28 +35,28 @@ public final class Compare {
   public static void main(final String[] args) throws IOException {
 
     if(args.length < 2) {
-      System.err.println("usage: Compare <baselineJsonOrDir> <candidateJsonOrDir> [...moreCandidates]");
+      System.err.println("usage: Compare <baselineDir> <candidateDir> [...moreDirs]");
       System.exit(1);
     }
 
     final Map<String, Double> baseline = aggregate(args[0]);
     System.out.println("# Benchmark comparison");
     System.out.println();
-    System.out.println("Baseline: `" + args[0] + "`");
+    System.out.println("Baseline: `" + args[0] + "` (aggregated over forks by median)");
     System.out.println();
 
     final List<String> names = new ArrayList<>();
     final List<Map<String, Double>> candidates = new ArrayList<>();
     for(int i = 1; i < args.length; i++) {
       final Map<String, Double> candidate = aggregate(args[i]);
-      names.add(Path.of(args[i]).getFileName().toString().replaceFirst("\\.json$", "").replaceFirst("-fork\\d+$", ""));
+      names.add(Path.of(args[i]).getFileName().toString());
       candidates.add(candidate);
     }
 
     final StringBuilder header = new StringBuilder("| case | baseline ns/op |");
     final StringBuilder divider = new StringBuilder("|---|---:|");
     for(final String name : names) {
-      header.append(" ").append(name).append(" ns/op | ").append(name).append(" Δ |");
+      header.append(" ").append(name).append(" ns/op | ").append(name).append(" delta |");
       divider.append("---:|---:|");
     }
     System.out.println(header);
@@ -88,7 +88,7 @@ public final class Compare {
           row.append("n/a | n/a | ");
         } else {
           final double delta = (base - value) / base * 100.0d;
-          row.append(String.format("%,.1f | %s%.1f%% | ", value, delta >= 0? "−" : "+", Math.abs(delta)));
+          row.append(String.format("%,.1f | %s%.1f%% | ", value, delta >= 0? "-" : "+", Math.abs(delta)));
         }
       }
       System.out.println(row.toString().replaceFirst(" \\| $", " |"));
