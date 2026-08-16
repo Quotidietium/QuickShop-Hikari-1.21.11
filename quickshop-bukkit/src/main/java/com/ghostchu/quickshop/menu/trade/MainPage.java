@@ -151,7 +151,12 @@ public class MainPage extends QuickShopPage {
                                            try {
                                              final int quantity = Integer.parseInt(message);
 
-                                             if(quantity == 0) {
+                                             //chat input is client-controlled: negatives must be
+                                             //rejected or they pass the stock/multiple checks below
+                                             //(a negative remainder is never > 0) and reach the
+                                             //trade actions with a negative amount
+                                             if(quantity <= 0) {
+                                               player.sendMessage(guiMessage(enterPath, amount));
                                                return true;
                                              }
 
