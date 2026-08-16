@@ -83,6 +83,19 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
   private final LanguageFilesManager languageFilesManager = new LanguageFilesManager();
   private final Set<String> availableLanguages = new LinkedHashSet<>();
   private final ConcurrentHashMap<Locale, NumberFormat> numberFormatCache = new ConcurrentHashMap<>();
+  /**
+   * (locale, path) to raw template string. Sign and chat rendering re-read the same
+   * keys constantly; YAML path walks dominate when uncached.
+   */
+  private final ConcurrentHashMap<String, String> rawTemplateCache = new ConcurrentHashMap<>();
+  /**
+   * (locale, path) to the parsed MiniMessage component for argument-less texts.
+   * Components are immutable, so one instance can be shared by every reader; the
+   * sender-aware post processors still run per call outside this cache.
+   */
+  private final ConcurrentHashMap<String, Component> staticComponentCache = new ConcurrentHashMap<>();
+  /** langCode to resolved ProxiedLocale, avoiding locale parsing on every lookup. */
+  private final ConcurrentHashMap<String, ProxiedLocale> proxiedLocaleCache = new ConcurrentHashMap<>();
   private final Cache<String, String> languagesCache =
           CacheBuilder.newBuilder().expireAfterAccess(30, TimeUnit.MINUTES).recordStats().build();
   private final String crowdinHost;
@@ -243,7 +256,10 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
    */
   private void reset() {
 
-    languagesCache.cleanUp();
+    languagesCache.invalidateAll();
+    rawTemplateCache.clear();
+    staticComponentCache.clear();
+    proxiedLocaleCache.clear();
     languageFilesManager.reset();
     postProcessors.clear();
     availableLanguages.clear();
@@ -445,6 +461,12 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     }
 
 
+    final String resolvedLocale = result;
+    return proxiedLocaleCache.computeIfAbsent(langCode, code->buildProxiedLocale(code, resolvedLocale));
+  }
+
+  private ProxiedLocale buildProxiedLocale(@Nullable final String langCode, final String result) {
+
     final String[] resultCode = result.split("_");
     Locale locale = Locale.ROOT;
     try {
@@ -458,6 +480,42 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     }
 
     return new ProxiedLocale(langCode, result, getCompactNumberInstance(locale), locale);
+  }
+
+  /**
+   * Template read-through cache for the text pipeline: the YAML path walk happens once
+   * per (locale, path); runtime registrations drop the affected locale's entries.
+   */
+  @Nullable
+  public String rawTemplate(@Nullable final FileConfiguration index, @NotNull final String locale,
+                            @NotNull final String path) {
+
+    final String key = locale + ' ' + path;
+    final String cached = rawTemplateCache.get(key);
+    if(cached != null || rawTemplateCache.containsKey(key)) {
+      return cached;
+    }
+    final String raw = index.getString(path);
+    rawTemplateCache.put(key, raw);
+    return raw;
+  }
+
+  /**
+   * Parsed-component cache for argument-less texts. The parse result is immutable;
+   * sender-aware post processing intentionally stays outside.
+   */
+  @NotNull
+  public Component staticComponent(@NotNull final String locale, @NotNull final String path,
+                                   @NotNull final String raw, @NotNull final TagResolver[] tagResolvers) {
+
+    final String key = locale + ' ' + path;
+    final Component cached = staticComponentCache.get(key);
+    if(cached != null) {
+      return cached;
+    }
+    final Component parsed = plugin.platform().miniMessage().deserialize(raw, tagResolvers);
+    staticComponentCache.put(key, parsed);
+    return parsed;
   }
 
   private NumberFormat getCompactNumberInstance(@NotNull final Locale locale) {
@@ -525,6 +583,10 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     }
     configuration.set(path, text);
     languageFilesManager.deploy(locale, configuration);
+    // the runtime registration replaces this locale's template; drop its cached entries
+    final String prefix = locale + ' ';
+    rawTemplateCache.keySet().removeIf(key->key.startsWith(prefix));
+    staticComponentCache.keySet().removeIf(key->key.startsWith(prefix));
   }
 
   @Override
@@ -974,7 +1036,8 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     @NotNull
     public Component forLocale(@NotNull final String locale) {
 
-      final FileConfiguration index = mapping.get(manager.findRelativeLanguages(locale).getLocale());
+      final String resolved = manager.findRelativeLanguages(locale).getLocale();
+      final FileConfiguration index = mapping.get(resolved);
       if(index == null) {
         Log.debug("Index for " + locale + " is null");
         Log.debug("Fallback " + locale + " to default game-language locale caused by QuickShop doesn't support this locale");
@@ -985,7 +1048,7 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
           return forLocale(MsgUtil.getDefaultGameLanguageCode());
         }
       } else {
-        final String str = index.getString(path);
+        final String str = manager.rawTemplate(index, resolved, path);
         if(str == null) {
           Log.debug("The value about index " + index + " is null");
           Log.debug("Missing Language Key: " + path + ", report to QuickShop!");
@@ -998,8 +1061,14 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
           return LegacyComponentSerializer.legacySection().deserialize(path);
         }
 
-        final String filled = MiniMessageFiller.fillRaw(str, args);
-        final Component component = manager.plugin.platform().miniMessage().deserialize(filled, tagResolvers);
+        final Component component;
+        if(args == null || args.length == 0) {
+          // argument-less texts parse to an immutable component that can be shared;
+          // the sender-aware post processors still run per call outside the cache
+          component = manager.staticComponent(resolved, path, str, tagResolvers);
+        } else {
+          component = manager.plugin.platform().miniMessage().deserialize(MiniMessageFiller.fillRaw(str, args), tagResolvers);
+        }
         return postProcess(component);
       }
     }
