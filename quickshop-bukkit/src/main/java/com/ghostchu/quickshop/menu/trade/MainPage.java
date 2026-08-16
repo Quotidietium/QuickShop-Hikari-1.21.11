@@ -60,6 +60,25 @@ public class MainPage extends QuickShopPage {
     setOpen(this::handle);
   }
 
+  /**
+   * Validates a chat-supplied trade quantity for the menu. Chat input is client-controlled:
+   * non-positive values must be rejected outright (a negative quantity passes neither the
+   * stock upper bound nor the positive-remainder multiple check) and would otherwise reach
+   * the trade actions with a negative amount.
+   *
+   * @return true when the quantity may be traded
+   */
+  static boolean isQuantityAcceptable(final int quantity, final int unitAmount, final int stock, final boolean unlimited) {
+
+    if(quantity <= 0) {
+      return false;
+    }
+    if(!unlimited && quantity > stock && stock > -1) {
+      return false;
+    }
+    return quantity % unitAmount <= 0;
+  }
+
   public void handle(final PageOpenCallback open) {
 
     open.getPage().getIcons().clear();
@@ -160,13 +179,12 @@ public class MainPage extends QuickShopPage {
                                                return true;
                                              }
 
-                                             if(!shop.get().isUnlimited() && quantity > stock && stock > -1) {
-                                               player.sendMessage(guiMessage("trade.invalid-stock"));
-                                               return true;
-                                             }
-
-                                             if((quantity % amount) > 0) {
-                                               player.sendMessage(guiMessage("trade.invalid-multiple", amount));
+                                             if(!isQuantityAcceptable(quantity, amount, stock, shop.get().isUnlimited())) {
+                                               if(!shop.get().isUnlimited() && quantity > stock && stock > -1) {
+                                                 player.sendMessage(guiMessage("trade.invalid-stock"));
+                                               } else {
+                                                 player.sendMessage(guiMessage("trade.invalid-multiple", amount));
+                                               }
                                                return true;
                                              }
                                              if(shop.get().isBuying()) {
