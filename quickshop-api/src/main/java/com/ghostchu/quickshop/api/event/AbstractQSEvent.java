@@ -53,12 +53,36 @@ public abstract class AbstractQSEvent extends Event {
    */
   public boolean callCancellableEvent() {
 
-    Bukkit.getPluginManager().callEvent(this);
-    if(this instanceof final Cancellable cancellable) {
+    if(hasListeners()) {
+      Bukkit.getPluginManager().callEvent(this);
+      if(this instanceof final Cancellable cancellable) {
 
-      return cancellable.isCancelled();
+        return cancellable.isCancelled();
+      }
     }
     return false;
+  }
+
+  /**
+   * Dispatches through Bukkit only when at least one listener is registered. Every
+   * QuickShop event shares this HandlerList, so hot paths (sign renders, economy
+   * commits, data-record saves) fire events constantly; with no listeners the
+   * dispatch outcome is provably identical (nothing can cancel or observe the event).
+   */
+  @Override
+  public boolean callEvent() {
+
+    if(hasListeners()) {
+      return super.callEvent();
+    }
+    // nobody listens, so nothing could have cancelled: mirror the uncancelled state
+    // (the platform contract returns true when the event may proceed)
+    return !(this instanceof final org.bukkit.event.Cancellable cancellable && cancellable.isCancelled());
+  }
+
+  private static boolean hasListeners() {
+
+    return getHandlerList().getRegisteredListeners().length > 0;
   }
 
   @NotNull
