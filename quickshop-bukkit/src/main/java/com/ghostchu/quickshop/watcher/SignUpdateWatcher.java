@@ -7,12 +7,14 @@ import com.tcoded.folialib.wrapper.task.WrappedTask;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.Instant;
-import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class SignUpdateWatcher implements Runnable {
 
-  private final Queue<Shop> signUpdateQueue = new LinkedList<>();
+  //scheduleSignUpdate is called from region threads (hopper events, chunk loads) while
+  //run() polls on the async timer thread - a plain LinkedList would corrupt under that
+  private final Queue<Shop> signUpdateQueue = new ConcurrentLinkedQueue<>();
 
   private WrappedTask task = null;
 
