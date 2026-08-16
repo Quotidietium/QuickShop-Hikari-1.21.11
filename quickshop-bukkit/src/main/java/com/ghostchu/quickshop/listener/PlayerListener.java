@@ -55,9 +55,18 @@ public class PlayerListener extends AbstractQSListener {
   private final ExpiringSet<UUID> adventureWorkaround = new ExpiringSet<>(1, TimeUnit.SECONDS);
   private final ExpiringSet<UUID> rateLimit = new ExpiringSet<>(125, TimeUnit.MILLISECONDS);
 
+  // hot-path snapshot of config.yml flags (read on every interact event); refreshed on reload
+  private boolean ignoreCancelledInteractEvent;
+
   public PlayerListener(final QuickShop plugin) {
 
     super(plugin);
+    init();
+  }
+
+  private void init() {
+
+    this.ignoreCancelledInteractEvent = plugin.getConfig().getBoolean("shop.ignore-cancelled-interact-event", true);
   }
 
   @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
@@ -87,7 +96,7 @@ public class PlayerListener extends AbstractQSListener {
   @EventHandler(priority = EventPriority.LOW)
   public void onClick(final PlayerInteractEvent event) {
     // Deprecated: Can use useInteractedBlock() == Result.DENY instead
-    if(event.isCancelled() && plugin.getConfig().getBoolean("shop.ignore-cancelled-interact-event", true)) {
+    if(event.isCancelled() && ignoreCancelledInteractEvent) {
       return;
     }
     if(event.getHand() != EquipmentSlot.HAND) {
@@ -154,8 +163,9 @@ public class PlayerListener extends AbstractQSListener {
           shop = plugin.getShopManager().getShop(attached.getLocation());
           return new AbstractMap.SimpleImmutableEntry<>(shop, InteractionClick.SIGN);
         }
-      } else if(Util.isDoubleChest(b.getBlockData())) {
-
+      } else if(b.getType() == Material.CHEST || b.getType() == Material.TRAPPED_CHEST) {
+        // only chest-family blocks can form a double chest; gating on the material keeps
+        // ordinary block clicks from paying the getBlockData fetch
         attached = Util.getSecondHalf(b);
         if(attached != null) {
 
@@ -170,7 +180,9 @@ public class PlayerListener extends AbstractQSListener {
       }
     }
 
-    if(shop == null && b.getState() instanceof Container) {
+    if(shop == null && b.getState(false) instanceof Container) {
+      // getState(false) skips the tile snapshot copy; only the Container classification
+      // is needed here, which the live state answers identically
 
       return new AbstractMap.SimpleImmutableEntry<>(shop, InteractionClick.CONTAINER);
     }
@@ -348,6 +360,7 @@ public class PlayerListener extends AbstractQSListener {
   @Override
   public ReloadResult reloadModule() {
 
+    init();
     return ReloadResult.builder().status(ReloadStatus.SUCCESS).build();
   }
 
