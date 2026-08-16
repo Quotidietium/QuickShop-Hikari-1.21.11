@@ -126,11 +126,25 @@ public final class TradeBench {
       }
       consume(result);
     });
+
+    final AtomicInteger sellCounter = new AtomicInteger();
+    harness.bench("trade/tradeServiceSell", ctx -> {
+      ctx.index++;
+      final var result = tradeService.executeSellToShop(
+              fixtures.buyingShop(), buyer, fixtures.sellerInventory(),
+              new Location(fixtures.world(), 1000, 64, 1000), 1);
+      if(!result.success()) {
+        throw new IllegalStateException("benchmark sell trade must succeed, run #" + sellCounter.incrementAndGet()
+                + ", reason=" + result.failureReason() + " (" + result.debugMessage() + ")");
+      }
+      consume(result);
+    });
   }
 
   /** Fixtures shared by the bench cases. */
   record Fixtures(InventoryWrapper chest, InventoryWrapper player, ContainerShop shop,
-                  ItemStack shopItem, Inventory chestInventory, World world, ContainerShop tradeShop) {
+                  ItemStack shopItem, Inventory chestInventory, World world, ContainerShop tradeShop,
+                  ContainerShop buyingShop, InventoryWrapper sellerInventory) {
 
   }
 
@@ -153,8 +167,9 @@ public final class TradeBench {
     final ItemStack shopItem = item(Material.DIAMOND, 64, false, true);
     final World world = mock(World.class);
     when(world.getName()).thenReturn("world");
-    final ContainerShop shop = createShop(plugin, shopItem, world);
-    final ContainerShop tradeShop = createShop(plugin, statefulItem(Material.DIAMOND, 64, true), world);
+    final ContainerShop shop = createShop(plugin, shopItem, world, SimpleShopManager.SELLING_TYPE);
+    final ContainerShop tradeShop = createShop(plugin, statefulItem(Material.DIAMOND, 64, true), world, SimpleShopManager.SELLING_TYPE);
+    final ContainerShop buyingShop = createShop(plugin, statefulItem(Material.DIAMOND, 64, true), world, SimpleShopManager.BUYING_TYPE);
 
     final ItemStack[] chestContents = new ItemStack[CHEST_SLOTS];
     for(int i = 0; i < CHEST_SLOTS; i++) {
@@ -172,6 +187,15 @@ public final class TradeBench {
         playerContents[i] = item(MISC_MATERIALS[(i + 3) % MISC_MATERIALS.length], 5, true, false);
       }
     }
+    // seller-side inventory with enough stock for one full unit trade
+    final ItemStack[] sellerContents = new ItemStack[PLAYER_SLOTS];
+    for(int i = 0; i < PLAYER_SLOTS; i++) {
+      if(i < 8) {
+        sellerContents[i] = item(Material.DIAMOND, 17, false, true);
+      } else {
+        sellerContents[i] = item(MISC_MATERIALS[(i + 3) % MISC_MATERIALS.length], 5, true, false);
+      }
+    }
 
     final Inventory chestInventory = mock(Inventory.class);
     // mirror CraftInventory: every accessor call copies the array
@@ -181,7 +205,7 @@ public final class TradeBench {
     lenient().when(chestInventory.getHolder(false)).thenReturn(mock(InventoryHolder.class));
 
     return new Fixtures(new BukkitInventoryWrapper(chestInventory), wrap(playerContents),
-            shop, shopItem, chestInventory, world, tradeShop);
+            shop, shopItem, chestInventory, world, tradeShop, buyingShop, wrap(sellerContents));
   }
 
   /**
@@ -244,6 +268,14 @@ public final class TradeBench {
     lenient().when(plugin.getShopManager()).thenReturn(shopManager);
 
     lenient().when(plugin.getSignUpdateWatcher()).thenReturn(new SignUpdateWatcher());
+
+    // economy stub for the sell-path affordability check (getMaxAffordable)
+    final var economyManager = mock(com.ghostchu.quickshop.api.economy.EconomyManager.class);
+    final var ecoProvider = mock(com.ghostchu.quickshop.api.economy.EconomyProvider.class);
+    lenient().when(economyManager.provider()).thenReturn(ecoProvider);
+    lenient().when(ecoProvider.balance(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any()))
+            .thenReturn(java.math.BigDecimal.valueOf(1_000_000));
+    lenient().when(plugin.getEconomyManager()).thenReturn(economyManager);
   }
 
   private static final Material[] MISC_MATERIALS = {
@@ -306,7 +338,8 @@ public final class TradeBench {
     return stack;
   }
 
-  private static ContainerShop createShop(final QuickShop plugin, final ItemStack item, final World world) {
+  private static ContainerShop createShop(final QuickShop plugin, final ItemStack item, final World world,
+                                          final com.ghostchu.quickshop.api.shop.IShopType type) {
 
     final Location location = new Location(world, 1000, 64, 1000);
     final com.ghostchu.quickshop.api.obj.QUser owner = QUserImpl.createFullFilled(
@@ -317,7 +350,7 @@ public final class TradeBench {
     playerGroup.put(owner.getUniqueId(), "quickshop.builtin.administrator");
     return new ContainerShop(
             plugin, -1L, location, 10.0d, item, owner, false,
-            SimpleShopManager.SELLING_TYPE, SimpleShopManager.ACTIVE_STATE,
+            type, SimpleShopManager.ACTIVE_STATE,
             new YamlConfiguration(), null, false, null,
             "QuickShop-Hikari", "2;1000;64;1000;world", null,
             playerGroup, benefit);

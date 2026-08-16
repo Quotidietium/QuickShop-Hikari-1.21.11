@@ -73,11 +73,37 @@ public interface ShopInventory {
   int getRemainingSpace();
 
   /**
+   * Get shop remaining space over an already-located shop inventory. A null argument
+   * resolves the symbol link, making this identical to {@link #getRemainingSpace()};
+   * implementations may skip the resolution when a wrapper is supplied.
+   *
+   * @param prelocatedInventory the shop inventory located by the caller, null to resolve
+   * @return Remaining space.
+   */
+  default int getRemainingSpace(@Nullable InventoryWrapper prelocatedInventory) {
+
+    return getRemainingSpace();
+  }
+
+  /**
    * Get shop remaining stock.
    *
    * @return Remaining stock.
    */
   int getRemainingStock();
+
+  /**
+   * Get shop remaining stock over an already-located shop inventory. A null argument
+   * resolves the symbol link, making this identical to {@link #getRemainingStock()};
+   * implementations may skip the resolution when a wrapper is supplied.
+   *
+   * @param prelocatedInventory the shop inventory located by the caller, null to resolve
+   * @return Remaining stock.
+   */
+  default int getRemainingStock(@Nullable InventoryWrapper prelocatedInventory) {
+
+    return getRemainingStock();
+  }
 
   int getShopStackingAmount();
 

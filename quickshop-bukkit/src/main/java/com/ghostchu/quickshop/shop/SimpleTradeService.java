@@ -189,7 +189,9 @@ public class SimpleTradeService implements TradeService {
       return executeBuyFromShop(shop, seller, sellerInventory, dropLocation, -amount, options);
     }
 
-    final TradePreview preview = previewSellToShop(shop, seller, sellerInventory, amount);
+    // one symbol-link resolution per trade, shared by the space check and the commit
+    final InventoryWrapper locatedChest = shop.isUnlimited()? null : shop.getInventory();
+    final TradePreview preview = previewSellToShop(shop, seller, sellerInventory, amount, locatedChest);
     if(!preview.allowed()) {
       return failedResult(
               TradeType.SELL_TO_SHOP,
@@ -213,8 +215,7 @@ public class SimpleTradeService implements TradeService {
                 .amount(normalizedAmount)
                 .build();
       } else {
-        final InventoryWrapper chestInv = shop.getInventory();
-        if(chestInv == null) {
+        if(locatedChest == null) {
           return failedResult(
                   TradeType.SELL_TO_SHOP,
                   amount,
@@ -227,7 +228,7 @@ public class SimpleTradeService implements TradeService {
 
         transaction = SimpleInventoryTransaction.builder()
                 .from(sellerInventory)
-                .to(chestInv)
+                .to(locatedChest)
                 .item(item)
                 .amount(normalizedAmount)
                 .build();
@@ -355,6 +356,19 @@ public class SimpleTradeService implements TradeService {
                                                  @NotNull final QUser seller,
                                                  @NotNull final InventoryWrapper sellerInventory,
                                                  final int amount) {
+    return previewSellToShop(shop, seller, sellerInventory, amount, null);
+  }
+
+  /**
+   * Sell preview over an already-located shop inventory; a null prelocatedChest resolves
+   * the symbol link here (public API behaviour). The trade executor passes its single
+   * located wrapper so the space check and the commit share one resolution.
+   */
+  private @NotNull TradePreview previewSellToShop(@NotNull final Shop shop,
+                                                  @NotNull final QUser seller,
+                                                  @NotNull final InventoryWrapper sellerInventory,
+                                                  final int amount,
+                                                  @Nullable final InventoryWrapper prelocatedChest) {
     if(amount <= 0) {
       return previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Amount must be > 0.");
     }
@@ -407,7 +421,7 @@ public class SimpleTradeService implements TradeService {
         );
       }
 
-      int space = shop.getRemainingSpace();
+      int space = shop.getRemainingSpace(prelocatedChest);
 
       if(space == -1) {
         space = Integer.MAX_VALUE;

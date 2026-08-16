@@ -798,6 +798,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public int getRemainingSpace() {
 
+    return getRemainingSpace(null);
+  }
+
+  @Override
+  public int getRemainingSpace(@Nullable final InventoryWrapper prelocatedInventory) {
+
     if(this.unlimited) {
 
       return -1;
@@ -805,12 +811,13 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
 
     if(Bukkit.isPrimaryThread()) {
 
-      if(this.getInventory() == null) {
+      final InventoryWrapper inv = prelocatedInventory != null? prelocatedInventory : this.getInventory();
+      if(inv == null) {
         Log.debug("Failed to calc RemainingSpace for shop " + this + ": Inventory null.");
         return 0;
       }
 
-      final int space = Util.countSpace(this.getInventory(), this);
+      final int space = Util.countSpace(inv, this);
       new ShopInventoryCalculateEvent(this, space, -1).callEvent();
       Log.debug("Space count is: " + space);
       return space;
@@ -828,16 +835,23 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public int getRemainingStock() {
 
+    return getRemainingStock(null);
+  }
+
+  @Override
+  public int getRemainingStock(@Nullable final InventoryWrapper prelocatedInventory) {
+
     if(this.unlimited) {
       return -1;
     }
 
     if(Bukkit.getServer().isOwnedByCurrentRegion(location)) {
 
-      if(this.getInventory() == null) {
+      final InventoryWrapper inv = prelocatedInventory != null? prelocatedInventory : this.getInventory();
+      if(inv == null) {
         return 0;
       }
-      final int stock = Util.countItems(this.getInventory(), this);
+      final int stock = Util.countItems(inv, this);
       new ShopInventoryCalculateEvent(this, -1, stock).callEvent();
       return stock;
     }
