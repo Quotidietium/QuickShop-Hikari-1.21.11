@@ -59,6 +59,36 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
 
   private final int LATEST_DATABASE_VERSION = 20;
 
+  /**
+   * Write-path caches. The data-record dedup SELECT costs a full multi-column table
+   * scan, and dirty shops re-run it on every save wave even when nothing changed, so:
+   * <ul>
+   *   <li>{@code dataIdByRecord} memoizes record-content to existing data row ids;</li>
+   *   <li>{@code persistedRecordByShop} remembers the exact record each shop last
+   *       persisted, letting unchanged saves return without touching SQL;</li>
+   *   <li>{@code dataIdByShopId} feeds {@link #locateShopDataId(long)} so metric
+   *       inserts skip their per-trade lookup SELECT.</li>
+   * </ul>
+   * Entries expire after ten minutes, which bounds staleness for deployments where
+   * several servers share one database (the only external writer the dedup design has
+   * ever assumed absent). Explicit invalidation covers every local delete path.
+   */
+  private final com.google.common.cache.Cache<Map<String, Object>, Long> dataIdByRecord =
+          com.google.common.cache.CacheBuilder.newBuilder()
+                  .expireAfterWrite(10, java.util.concurrent.TimeUnit.MINUTES)
+                  .maximumSize(8192)
+                  .build();
+  private final com.google.common.cache.Cache<Long, Map<String, Object>> persistedRecordByShop =
+          com.google.common.cache.CacheBuilder.newBuilder()
+                  .expireAfterWrite(10, java.util.concurrent.TimeUnit.MINUTES)
+                  .maximumSize(16384)
+                  .build();
+  private final com.google.common.cache.Cache<Long, Long> dataIdByShopId =
+          com.google.common.cache.CacheBuilder.newBuilder()
+                  .expireAfterWrite(10, java.util.concurrent.TimeUnit.MINUTES)
+                  .maximumSize(16384)
+                  .build();
+
   public SimpleDatabaseHelperV2(@NotNull final QuickShop plugin, @NotNull final SQLManager manager, @NotNull final String prefix) throws Exception {
 
     this.plugin = plugin;
@@ -135,7 +165,7 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
   }
 
 
-  public CompletableFuture<Integer> purgeIsolated() {
+  public @NotNull CompletableFuture<@NotNull Integer> purgeIsolated() {
 
     return CompletableFuture.supplyAsync(()->{
       final List<Long> shop2ShopMapIds = listAllANotExistsInB(DataTables.SHOPS, "id", DataTables.SHOP_MAP, "shop");
@@ -147,6 +177,8 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
       shopIsolatedFinal.retainAll(shopAllIds);
       shopIsolatedFinal.forEach(isolatedShopId->{
         try {
+          persistedRecordByShop.invalidate(isolatedShopId);
+          dataIdByShopId.invalidate(isolatedShopId);
           DataTables.SHOPS.createDelete().addCondition("id", isolatedShopId).build().execute();
         } catch(final SQLException e) {
           Log.debug("Failed to delete: " + e.getMessage());
@@ -156,6 +188,8 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
       final List<Long> data2LogPurchaseIds = listAllANotExistsInB(DataTables.DATA, "id", DataTables.LOG_PURCHASE, "data");
       final List<Long> dataIsolatedFinal = new ArrayList<>(data2ShopIds);
       dataIsolatedFinal.retainAll(data2LogPurchaseIds);
+      // bulk deletes bypass removeData(), so the caches must be dropped wholesale
+      invalidateCaches();
       dataIsolatedFinal.forEach(isolatedDataId->{
         try {
           DataTables.DATA.createDelete().addCondition("id", isolatedDataId).build().execute();
@@ -348,13 +382,20 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
   public @NotNull CompletableFuture<@NotNull Long> createData(@NotNull final Shop shop) {
 
     final SimpleDataRecord simpleDataRecord = ((ContainerShop)shop).createDataRecord();
-    return queryDataId(simpleDataRecord).thenCompose(id->{
+    final Map<String, Object> lookupParams = simpleDataRecord.generateLookupParams();
+    return queryDataIdCached(simpleDataRecord, lookupParams).thenCompose(id->{
       if(id == null) {
         final Map<String, Object> map = simpleDataRecord.generateParams();
         return DataTables.DATA.createInsert()
                 .setColumnNames(new ArrayList<>(map.keySet()))
                 .setParams(map.values())
-                .returnGeneratedKey(Long.class).executeFuture(i->i);
+                .returnGeneratedKey(Long.class).executeFuture(i->i)
+                .thenApply(insertedId->{
+                  if(insertedId != null) {
+                    dataIdByRecord.put(lookupParams, insertedId);
+                  }
+                  return insertedId;
+                });
       } else {
         return CompletableFuture.completedFuture(id);
       }
@@ -492,6 +533,7 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
     plugin.getDatabaseHelper().locateShopDataId(metricRecord.getShopId()).whenCompleteAsync((dataId, err)->{
       if(err != null) {
         future.completeExceptionally(err);
+        return;
       }
       DataTables.LOG_PURCHASE
               .createInsert()
@@ -502,6 +544,7 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
               .executeFuture(lines->lines).whenComplete((line, err2)->{
                 if(err2 != null) {
                   future.completeExceptionally(err2);
+                  return;
                 }
                 future.complete(line);
               });
@@ -697,6 +740,10 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
   @Override
   public @NotNull CompletableFuture<@Nullable Long> locateShopDataId(final long shopId) {
 
+    final Long cached = dataIdByShopId.getIfPresent(shopId);
+    if(cached != null) {
+      return CompletableFuture.completedFuture(cached);
+    }
     return DataTables.SHOPS.createQuery()
             .addCondition("id", shopId)
             .setLimit(1)
@@ -704,7 +751,9 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
             .executeFuture(query->{
               final ResultSet result = query.getResultSet();
               if(result.next()) {
-                return result.getLong("data");
+                final long dataId = result.getLong("data");
+                dataIdByShopId.put(shopId, dataId);
+                return dataId;
               }
               return null;
             });
@@ -738,6 +787,7 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
       throw new IllegalArgumentException("Data id must be greater than 0. Provided ID: " + dataId);
     }
 
+    invalidateDataId(dataId);
     return DataTables.DATA.createDelete()
             .addCondition("id", dataId)
             .build().executeFuture(lines->lines);
@@ -752,9 +802,26 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
       throw new IllegalArgumentException("Shop id must be greater than 0. Provided ID: " + shopId);
     }
 
+    persistedRecordByShop.invalidate(shopId);
+    dataIdByShopId.invalidate(shopId);
     return DataTables.SHOPS.createDelete()
             .addCondition("id", shopId)
             .build().executeFuture(lines->lines);
+  }
+
+  /** Drops every cache entry pointing at the given data row id. */
+  private void invalidateDataId(final long dataId) {
+
+    dataIdByRecord.asMap().entrySet().removeIf(entry->Long.valueOf(dataId).equals(entry.getValue()));
+    dataIdByShopId.asMap().entrySet().removeIf(entry->Long.valueOf(dataId).equals(entry.getValue()));
+  }
+
+  /** Drops all write-path caches; called after bulk operations that rewrite tables. */
+  public void invalidateCaches() {
+
+    dataIdByRecord.invalidateAll();
+    persistedRecordByShop.invalidateAll();
+    dataIdByShopId.invalidateAll();
   }
 
   @Override
@@ -888,20 +955,35 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
       Log.debug("Warning: Failed to update shop because the shop id locate result for " + loc + ", because the query shopId is " + shopId);
       return CompletableFuture.completedFuture(null);
     }
-    return queryDataId(simpleDataRecord).thenCompose(dataId->{
+    final Map<String, Object> lookupParams = simpleDataRecord.generateLookupParams();
+    // an identical record was already persisted for this shop: the database is already
+    // in the target state, so neither the dedup SELECT nor the pointer UPDATE is needed
+    if(lookupParams.equals(persistedRecordByShop.getIfPresent(shopId))) {
+      return CompletableFuture.completedFuture(null);
+    }
+    return queryDataIdCached(simpleDataRecord, lookupParams).thenCompose(dataId->{
+      final CompletableFuture<Void> write;
       if(dataId != null) {
-        return DataTables.SHOPS.createUpdate()
+        write = DataTables.SHOPS.createUpdate()
                 .addCondition("id", shopId)
                 .setColumnValues("data", dataId)
                 .build()
                 .executeFuture();
       } else {
-        return createData(shop).thenCompose(createdDataId->DataTables.SHOPS.createUpdate()
+        write = createData(shop).thenCompose(createdDataId->DataTables.SHOPS.createUpdate()
                 .addCondition("id", shopId)
                 .setColumnValues("data", createdDataId)
                 .build()
                 .executeFuture());
       }
+      return write.thenApply(unused->{
+        // refresh the caches only after the write actually committed
+        persistedRecordByShop.put(shopId, lookupParams);
+        if(dataId != null) {
+          dataIdByShopId.put(shopId, dataId);
+        }
+        return (Void)null;
+      });
     });
   }
 
@@ -928,8 +1010,23 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
 
   @NotNull
   public CompletableFuture<@Nullable Long> queryDataId(@NotNull final SimpleDataRecord simpleDataRecord) {
+
     // Check if dataRecord exists in database with same values
-    final Map<String, Object> lookupParams = simpleDataRecord.generateLookupParams();
+    return queryDataIdCached(simpleDataRecord, simpleDataRecord.generateLookupParams());
+  }
+
+  /**
+   * Cache-aware variant of {@link #queryDataId(SimpleDataRecord)}: a memoized record
+   * short-circuits the multi-column dedup SELECT.
+   */
+  @NotNull
+  private CompletableFuture<@Nullable Long> queryDataIdCached(
+          @NotNull final SimpleDataRecord simpleDataRecord, @NotNull final Map<String, Object> lookupParams) {
+
+    final Long cached = dataIdByRecord.getIfPresent(lookupParams);
+    if(cached != null) {
+      return CompletableFuture.completedFuture(cached);
+    }
     final TableQueryBuilder builder = DataTables.DATA.createQuery();
     builder.setLimit(1);
     for(final Map.Entry<String, Object> entry : lookupParams.entrySet()) {
@@ -941,6 +1038,7 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
               if(set.next()) {
                 final long id = set.getLong("id");
                 Log.debug("Found data record with id " + id + " for record " + simpleDataRecord);
+                dataIdByRecord.put(lookupParams, id);
                 return id;
               }
               Log.debug("No data record found for record basic data: " + simpleDataRecord);

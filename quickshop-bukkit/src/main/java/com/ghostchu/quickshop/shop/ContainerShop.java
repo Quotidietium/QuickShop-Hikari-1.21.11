@@ -1922,10 +1922,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
 
   public @NotNull SimpleDataRecord createDataRecord() {
 
+    // both the legacy item column and the encoded column store the same encoding
+    final String encodedItem = plugin.platform().encodeStack(getItem());
     return new SimpleDataRecord(
             getOwner(),
-            plugin.platform().encodeStack(getItem()),
-            plugin.platform().encodeStack(getItem()),
+            encodedItem,
+            encodedItem,
             getShopName(),
             shopType().id(),
             shopState().identifier(),

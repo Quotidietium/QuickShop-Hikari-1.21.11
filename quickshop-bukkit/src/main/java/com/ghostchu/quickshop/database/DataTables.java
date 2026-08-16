@@ -200,9 +200,10 @@ public enum DataTables {
 
   private void create(@NotNull final SQLManager sqlManager, @NotNull final String tablePrefix) throws SQLException {
 
-    if(this.manager == null) {
-      this.manager = sqlManager;
-    }
+    // always bind to the manager of the CURRENT initialization: the enum instance
+    // outlives the database layer, and binding only once would keep every table action
+    // pointed at a replaced (drained) pool after a runtime re-initialization
+    this.manager = sqlManager;
     this.prefix = tablePrefix;
 
     final TableCreateBuilder tableBuilder = sqlManager.createTable(this.getName());

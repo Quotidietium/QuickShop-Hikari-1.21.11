@@ -50,6 +50,9 @@ public class SubCommand_Recovery implements CommandHandler<ConsoleCommandSender>
       try {
         databaseIOUtil.performBackup("recovery");
         TableZipCsvBackup.importTables(file);
+        // the import rewrote every table; drop the write-path caches so stale data row
+        // ids can never leak into subsequent saves
+        ((SimpleDatabaseHelperV2)plugin.getDatabaseHelper()).invalidateCaches();
         Log.debug("Re-loading shop from database...");
         Util.mainThreadRun(()->{
           plugin.getShopLoader().loadShops();
