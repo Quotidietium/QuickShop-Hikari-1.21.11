@@ -34,7 +34,6 @@ import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
 import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.util.Vector3d;
 import com.github.retrooper.packetevents.wrapper.PacketWrapper;
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerChunkData;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity;
@@ -169,8 +168,6 @@ public class PacketFactoryv1_21 implements PacketFactory<PacketWrapper<?>> {
           return;
         }
 
-        final WrapperPlayServerChunkData chunkData = new WrapperPlayServerChunkData(event);
-
         final Player player = event.getPlayer();
         if(player == null || !player.isOnline()) {
 
@@ -182,8 +179,12 @@ public class PacketFactoryv1_21 implements PacketFactory<PacketWrapper<?>> {
           return;
         }
 
-        final int x = chunkData.getColumn().getX();
-        final int z = chunkData.getColumn().getZ();
+        // peek the leading x/z without parsing the chunk: the wrapper's getColumn() runs
+        // the full ChunkReader pass (every section's paletted storage) on this netty
+        // thread for every chunk packet sent to every player
+        final ChunkPacketPeek.Coords coords = ChunkPacketPeek.peek(event.getByteBuf());
+        final int x = coords.x();
+        final int z = coords.z();
 
         final List<VirtualDisplayItem<?>> items = new ArrayList<>();
         VirtualDisplayItemManager.instance().getChunksMapping().computeIfPresent(new SimpleShopChunk(player.getWorld().getName(), x, z), (chunkLoc, targetList)->{
