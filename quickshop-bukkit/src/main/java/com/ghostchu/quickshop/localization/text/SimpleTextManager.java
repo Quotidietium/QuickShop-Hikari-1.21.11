@@ -94,6 +94,13 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
    * sender-aware post processors still run per call outside this cache.
    */
   private final ConcurrentHashMap<String, Component> staticComponentCache = new ConcurrentHashMap<>();
+  /**
+   * (locale, path) to the pre-parsed placeholder-hole template for argument texts. The
+   * template is immutable; rendering copies only the placeholder paths and inserts the
+   * argument components directly, replacing the per-render argument serialization plus
+   * full-template MiniMessage re-parse. Entries fall back to the legacy path internally.
+   */
+  private final ConcurrentHashMap<String, PreParsedTemplate> preParsedTemplateCache = new ConcurrentHashMap<>();
   /** langCode to resolved ProxiedLocale, avoiding locale parsing on every lookup. */
   private final ConcurrentHashMap<String, ProxiedLocale> proxiedLocaleCache = new ConcurrentHashMap<>();
   private final Cache<String, String> languagesCache =
@@ -259,6 +266,7 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     languagesCache.invalidateAll();
     rawTemplateCache.clear();
     staticComponentCache.clear();
+    preParsedTemplateCache.clear();
     proxiedLocaleCache.clear();
     languageFilesManager.reset();
     postProcessors.clear();
@@ -518,6 +526,25 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     return parsed;
   }
 
+  /**
+   * Renders an argument text through the pre-parsed placeholder-hole template. Rendering
+   * either produces the direct argument insertion or returns null, in which case the
+   * caller must use the legacy fill-and-reparse path with the exact original inputs.
+   */
+  @Nullable
+  public Component renderPreParsed(@NotNull final String locale, @NotNull final String path,
+                                   @NotNull final String raw, @NotNull final TagResolver[] tagResolvers,
+                                   @NotNull final Component... args) {
+
+    final String key = locale + ' ' + path;
+    PreParsedTemplate template = preParsedTemplateCache.get(key);
+    if(template == null) {
+      template = PreParsedTemplate.parse(raw, plugin.platform().miniMessage(), tagResolvers);
+      preParsedTemplateCache.put(key, template);
+    }
+    return template.render(args);
+  }
+
   private NumberFormat getCompactNumberInstance(@NotNull final Locale locale) {
 
     return numberFormatCache.computeIfAbsent(locale, l->NumberFormat.getCompactNumberInstance(l, NumberFormat.Style.SHORT));
@@ -587,6 +614,7 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     final String prefix = locale + ' ';
     rawTemplateCache.keySet().removeIf(key->key.startsWith(prefix));
     staticComponentCache.keySet().removeIf(key->key.startsWith(prefix));
+    preParsedTemplateCache.keySet().removeIf(key->key.startsWith(prefix));
   }
 
   @Override
@@ -895,10 +923,18 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
           Log.debug("Fallback Missing Language Key: " + path + ", report to QuickShop!");
           return Collections.singletonList(LegacyComponentSerializer.legacySection().deserialize(path));
         }
-        final List<Component> components = str.stream()
-                .map(s -> MiniMessageFiller.fillRaw(s, args))
-                .map(s -> manager.plugin.platform().miniMessage().deserialize(s, tagResolvers))
-                .toList();
+        final String resolved = manager.findRelativeLanguages(locale).getLocale();
+        final List<Component> components = new ArrayList<>(str.size());
+        for(int i = 0; i < str.size(); i++) {
+          final String line = str.get(i);
+          // pre-parsed per line (same cache contract as single texts); null falls back
+          Component rendered = null;
+          if(args != null && args.length > 0) {
+            rendered = manager.renderPreParsed(resolved, path + '#' + i, line, tagResolvers, args);
+          }
+          components.add(rendered != null? rendered
+                  : manager.plugin.platform().miniMessage().deserialize(MiniMessageFiller.fillRaw(line, args), tagResolvers));
+        }
         return postProcess(components);
       }
     }
@@ -1067,7 +1103,11 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
           // the sender-aware post processors still run per call outside the cache
           component = manager.staticComponent(resolved, path, str, tagResolvers);
         } else {
-          component = manager.plugin.platform().miniMessage().deserialize(MiniMessageFiller.fillRaw(str, args), tagResolvers);
+          // pre-parsed template inserts the arguments directly; any shape it cannot
+          // represent hands the original inputs to the legacy fill-and-reparse path
+          final Component preParsed = manager.renderPreParsed(resolved, path, str, tagResolvers, args);
+          component = preParsed != null? preParsed
+                  : manager.plugin.platform().miniMessage().deserialize(MiniMessageFiller.fillRaw(str, args), tagResolvers);
         }
         return postProcess(component);
       }
