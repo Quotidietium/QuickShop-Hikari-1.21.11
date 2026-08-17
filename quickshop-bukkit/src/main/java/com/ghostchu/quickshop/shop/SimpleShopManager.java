@@ -462,17 +462,20 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
 
     Util.asyncThreadRun(()->{
       final List<Function<String, Component>> sendList = new ArrayList<>();
-      final Function<String, Component> notify = langCode->plugin.platform().setItemStackHoverEvent(plugin.text().of("player-sold-to-your-store", buyerQUser.getDisplay(), amount, Util.getItemStackName(shop.getItem())).forLocale(langCode), shop.getItem());
+      // one fetch for the whole notification (getItem clones + fires RETRIEVE per call)
+      final ItemStack notifyItem = shop.getItem();
+      final Component itemName = Util.getItemStackName(notifyItem);
+      final Function<String, Component> notify = langCode->plugin.platform().setItemStackHoverEvent(plugin.text().of("player-sold-to-your-store", buyerQUser.getDisplay(), amount, itemName).forLocale(langCode), notifyItem);
       sendList.add(notify);
       if(space == amount) {
         Function<String, Component> spaceWarn;
         if(shop.getShopName() == null) {
           spaceWarn = langCode->plugin.text().of("shop-out-of-space", shop.bukkitLocation().getBlockX(), shop.bukkitLocation().getBlockY(), shop.bukkitLocation().getBlockZ()).forLocale(langCode);
         } else {
-          spaceWarn = langCode->plugin.text().of("shop-out-of-space-name", shop.getShopName(), Util.getItemStackName(shop.getItem())).forLocale(langCode);
+          spaceWarn = langCode->plugin.text().of("shop-out-of-space-name", shop.getShopName(), itemName).forLocale(langCode);
         }
         final Function<String, Component> finalSpaceWarn = spaceWarn;
-        spaceWarn = langCode->plugin.platform().setItemStackHoverEvent(finalSpaceWarn.apply(langCode), shop.getItem());
+        spaceWarn = langCode->plugin.platform().setItemStackHoverEvent(finalSpaceWarn.apply(langCode), notifyItem);
         sendList.add(spaceWarn);
       }
       sendStockMessages(shop, sendList);
@@ -995,12 +998,15 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     final ChatSheetPrinter chatSheetPrinter = new ChatSheetPrinter(purchaser);
     chatSheetPrinter.printHeader();
     chatSheetPrinter.printLine(plugin.text().of(purchaser, "menu.successful-purchase").forLocale());
+    // one getItem() fetch for the whole receipt: each call clones the stack and fires the
+    // RETRIEVE event, and the amount/name/enchant lines all read the same item
+    final ItemStack receiptItem = shop.getItem();
     if(showTax) {
-      chatSheetPrinter.printLine(plugin.text().of(purchaser, "menu.item-name-and-price-tax", Component.text(amount * shop.getItem().getAmount()), Util.getItemStackName(shop.getItem()), format(total, shop), format(tax, shop)).forLocale());
+      chatSheetPrinter.printLine(plugin.text().of(purchaser, "menu.item-name-and-price-tax", Component.text(amount * receiptItem.getAmount()), Util.getItemStackName(receiptItem), format(total, shop), format(tax, shop)).forLocale());
     } else {
-      chatSheetPrinter.printLine(plugin.text().of(purchaser, "menu.item-name-and-price", Component.text(amount * shop.getItem().getAmount()), Util.getItemStackName(shop.getItem()), format(total, shop)).forLocale());
+      chatSheetPrinter.printLine(plugin.text().of(purchaser, "menu.item-name-and-price", Component.text(amount * receiptItem.getAmount()), Util.getItemStackName(receiptItem), format(total, shop)).forLocale());
     }
-    MsgUtil.printEnchantment(shop, chatSheetPrinter);
+    MsgUtil.printEnchantment(receiptItem, chatSheetPrinter);
     chatSheetPrinter.printFooter();
   }
 
@@ -1017,7 +1023,8 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     final ChatSheetPrinter chatSheetPrinter = new ChatSheetPrinter(seller);
     chatSheetPrinter.printHeader();
     chatSheetPrinter.printLine(plugin.text().of(seller, "menu.successfully-sold").forLocale());
-    chatSheetPrinter.printLine(plugin.text().of(seller, "menu.item-name-and-price", amount, Util.getItemStackName(shop.getItem()), format(total, shop)).forLocale());
+    final ItemStack receiptItem = shop.getItem();
+    chatSheetPrinter.printLine(plugin.text().of(seller, "menu.item-name-and-price", amount, Util.getItemStackName(receiptItem), format(total, shop)).forLocale());
     if(showTax) {
       if(tax != 0) {
         if(!seller.equals(shop.getOwner())) {
@@ -1027,7 +1034,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         }
       }
     }
-    MsgUtil.printEnchantment(shop, chatSheetPrinter);
+    MsgUtil.printEnchantment(receiptItem, chatSheetPrinter);
     chatSheetPrinter.printFooter();
   }
 
@@ -1193,24 +1200,27 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       Function<String, Component> notify;
       final double ownerPayment = transaction.ownerPayment().doubleValue();
       final double tax = transaction.toTax().doubleValue();
+      // one fetch for the whole notification (getItem clones + fires RETRIEVE per call)
+      final ItemStack notifyItem = shop.getItem();
+      final Component itemName = Util.getItemStackName(notifyItem);
       if(plugin.getConfig().getBoolean("show-tax")) {
-        notify = langCode->plugin.text().of("player-bought-from-your-store-tax", seller, amount * shop.getItem().getAmount(), Util.getItemStackName(shop.getItem()), this.formatter.format(ownerPayment, shop), this.formatter.format(tax, shop)).forLocale(langCode);
+        notify = langCode->plugin.text().of("player-bought-from-your-store-tax", seller, amount * notifyItem.getAmount(), itemName, this.formatter.format(ownerPayment, shop), this.formatter.format(tax, shop)).forLocale(langCode);
       } else {
-        notify = langCode->plugin.text().of("player-bought-from-your-store", seller, amount * shop.getItem().getAmount(), Util.getItemStackName(shop.getItem()), this.formatter.format(ownerPayment, shop)).forLocale(langCode);
+        notify = langCode->plugin.text().of("player-bought-from-your-store", seller, amount * notifyItem.getAmount(), itemName, this.formatter.format(ownerPayment, shop)).forLocale(langCode);
       }
       final Function<String, Component> finalNotify = notify;
-      notify = langCode->plugin.platform().setItemStackHoverEvent(finalNotify.apply(langCode), shop.getItem());
+      notify = langCode->plugin.platform().setItemStackHoverEvent(finalNotify.apply(langCode), notifyItem);
       sendList.add(notify);
       // Transfers the item from A to B
       if(stock == amount) {
         Function<String, Component> stockWarn;
         if(shop.getShopName() == null) {
-          stockWarn = langCode->plugin.text().of("shop-out-of-stock", shop.bukkitLocation().getBlockX(), shop.bukkitLocation().getBlockY(), shop.bukkitLocation().getBlockZ(), Util.getItemStackName(shop.getItem())).forLocale(langCode);
+          stockWarn = langCode->plugin.text().of("shop-out-of-stock", shop.bukkitLocation().getBlockX(), shop.bukkitLocation().getBlockY(), shop.bukkitLocation().getBlockZ(), itemName).forLocale(langCode);
         } else {
-          stockWarn = langCode->plugin.text().of("shop-out-of-stock-name", shop.getShopName(), Util.getItemStackName(shop.getItem())).forLocale(langCode);
+          stockWarn = langCode->plugin.text().of("shop-out-of-stock-name", shop.getShopName(), itemName).forLocale(langCode);
         }
         final Function<String, Component> finalStockWarn = stockWarn;
-        stockWarn = langCode->plugin.platform().setItemStackHoverEvent(finalStockWarn.apply(langCode), shop.getItem());
+        stockWarn = langCode->plugin.platform().setItemStackHoverEvent(finalStockWarn.apply(langCode), notifyItem);
         sendList.add(stockWarn);
       }
       sendStockMessages(shop, sendList);

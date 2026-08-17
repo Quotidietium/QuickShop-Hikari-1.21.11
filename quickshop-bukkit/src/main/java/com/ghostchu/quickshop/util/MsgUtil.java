@@ -29,6 +29,7 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -357,9 +358,18 @@ public class MsgUtil {
 
   public static void printEnchantment(@NotNull final Shop shop, @NotNull final ChatSheetPrinter chatSheetPrinter) {
 
+    printEnchantment(shop.getItem(), chatSheetPrinter);
+  }
+
+  /**
+   * Enchant lines over an already-fetched shop item: getItem() clones the stack and fires
+   * the RETRIEVE event, so receipt paths that already hold the item pass it here.
+   */
+  public static void printEnchantment(@Nullable final ItemStack item, @NotNull final ChatSheetPrinter chatSheetPrinter) {
+
     final Map<Enchantment, Integer> enchantmentIntegerMap = new HashMap<>();
-    if(shop.getItem().getItemMeta() != null) {
-      enchantmentIntegerMap.putAll(shop.getItem().getItemMeta().getEnchants());
+    if(item != null && item.getItemMeta() != null) {
+      enchantmentIntegerMap.putAll(item.getItemMeta().getEnchants());
     }
     printEnchantment(chatSheetPrinter, enchantmentIntegerMap);
   }
