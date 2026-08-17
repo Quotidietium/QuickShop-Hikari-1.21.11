@@ -49,21 +49,21 @@ public final class DataRecordBench {
     final QuickShop plugin = Env.plugin();
 
     // manager needed by ContainerShop.getTaxAccount() (casts to SimpleShopManager)
-    final SimpleShopManager manager = mock(SimpleShopManager.class);
+    final SimpleShopManager manager = Env.hotMock(SimpleShopManager.class);
     when(plugin.getShopManager()).thenReturn(manager);
     when(manager.getCacheTaxAccount()).thenReturn(null);
 
     // platform with a realistic-cost encodeStack stub
-    final Platform platform = mock(Platform.class);
+    final Platform platform = Env.hotMock(Platform.class);
     final String encoded = Base64.getEncoder().encodeToString(new byte[400]);
     when(platform.encodeStack(any(ItemStack.class))).thenAnswer(inv -> encoded);
     when(platform.decodeStack(any(String.class))).thenAnswer(inv -> {
       Base64.getDecoder().decode(inv.getArgument(0, String.class));
-      return mock(ItemStack.class);
+      return Env.hotMock(ItemStack.class);
     });
     when(plugin.platform()).thenReturn(platform);
 
-    final World world = com.ghostchu.quickshop.benchmark.Env.pin(mock(World.class));
+    final World world = com.ghostchu.quickshop.benchmark.Env.pin(Env.hotMock(World.class));
     when(world.getName()).thenReturn("world");
 
     final ContainerShop[] shops = new ContainerShop[SHOP_COUNT];

@@ -39,7 +39,7 @@ public final class EconomyBench {
 
     final QuickShop plugin = Env.plugin();
     final InMemoryEconomy provider = new InMemoryEconomy();
-    final EconomyManager economyManager = mock(EconomyManager.class);
+    final EconomyManager economyManager = Env.hotMock(EconomyManager.class);
     when(economyManager.provider()).thenReturn(provider);
     when(plugin.getEconomyManager()).thenReturn(economyManager);
 

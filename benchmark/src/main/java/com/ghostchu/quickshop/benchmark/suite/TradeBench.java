@@ -209,10 +209,10 @@ public final class TradeBench {
     final QuickShop plugin = Env.plugin();
 
     // real production matcher (workType 0, empty meta-matcher config -> defaults)
-    final Section matcherConfig = mock(Section.class);
+    final Section matcherConfig = Env.hotMock(Section.class);
     when(plugin.getConfig().getSection("matcher.item")).thenReturn(matcherConfig);
     final com.ghostchu.quickshop.platform.Platform platform =
-            mock(com.ghostchu.quickshop.platform.Platform.class);
+            Env.hotMock(com.ghostchu.quickshop.platform.Platform.class);
     when(platform.getItemShopId(any(ItemStack.class))).thenReturn(null);
     // item encode + display name for the purchase-log listener path (baseline side
     // serializes eagerly, candidate defers)
@@ -226,7 +226,7 @@ public final class TradeBench {
     // constant-amount item for the scan fixtures (cheap clones, never depletes) and a
     // stateful one for the trade-service shop (amount accounting through op clones)
     final ItemStack shopItem = item(Material.DIAMOND, 64, false, true);
-    final World world = com.ghostchu.quickshop.benchmark.Env.pin(mock(World.class));
+    final World world = com.ghostchu.quickshop.benchmark.Env.pin(Env.hotMock(World.class));
     when(world.getName()).thenReturn("world");
     final ContainerShop shop = createShop(plugin, shopItem, world, SimpleShopManager.SELLING_TYPE);
     final ContainerShop tradeShop = createShop(plugin, statefulItem(Material.DIAMOND, 64, true), world, SimpleShopManager.SELLING_TYPE);
@@ -258,12 +258,12 @@ public final class TradeBench {
       }
     }
 
-    final Inventory chestInventory = mock(Inventory.class);
+    final Inventory chestInventory = Env.hotMock(Inventory.class);
     // mirror CraftInventory: every accessor call copies the array
     when(chestInventory.getStorageContents()).thenAnswer(inv -> chestContents.clone());
     when(chestInventory.getContents()).thenAnswer(inv -> chestContents.clone());
     when(chestInventory.addItem(any(ItemStack[].class))).thenReturn(new HashMap<>());
-    lenient().when(chestInventory.getHolder(false)).thenReturn(mock(InventoryHolder.class));
+    lenient().when(chestInventory.getHolder(false)).thenReturn(Env.hotMock(InventoryHolder.class));
 
     return new Fixtures(new BukkitInventoryWrapper(chestInventory), wrap(playerContents),
             shop, shopItem, chestInventory, world, tradeShop, buyingShop, wrap(sellerContents));
@@ -285,9 +285,9 @@ public final class TradeBench {
     when(plugin.getInventoryWrapperRegistry()).thenReturn(registry);
     when(Env.server().getWorld("world")).thenReturn(world);
     final var blockState = mock(org.bukkit.block.BlockState.class,
-            org.mockito.Mockito.withSettings().extraInterfaces(InventoryHolder.class));
+            org.mockito.Mockito.withSettings().stubOnly().extraInterfaces(InventoryHolder.class));
     when(((InventoryHolder)blockState).getInventory()).thenReturn(fixtures.chestInventory());
-    final var block = mock(org.bukkit.block.Block.class);
+    final var block = Env.hotMock(org.bukkit.block.Block.class);
     when(block.getType()).thenReturn(Material.CHEST);
     when(block.getWorld()).thenReturn(world);
     when(block.getState(false)).thenReturn(blockState);
@@ -301,8 +301,8 @@ public final class TradeBench {
     // folia: run region-thread tasks inline on the calling thread.
     // QuickShop.folia() is static and reads the instance field directly, so the mock
     // plugin needs the field injected reflectively (stubbing folia() would not help).
-    final var folia = mock(com.tcoded.folialib.FoliaLib.class);
-    final var scheduler = mock(com.tcoded.folialib.impl.PlatformScheduler.class);
+    final var folia = Env.hotMock(com.tcoded.folialib.FoliaLib.class);
+    final var scheduler = Env.hotMock(com.tcoded.folialib.impl.PlatformScheduler.class);
     lenient().when(folia.getScheduler()).thenReturn(scheduler);
     lenient().when(scheduler.runAtLocation(any(Location.class), any(Consumer.class))).thenAnswer(inv -> {
       final Consumer<?> consumer = inv.getArgument(1, Consumer.class);
@@ -312,8 +312,8 @@ public final class TradeBench {
     injectField(plugin, "folia", folia);
 
     // sign rendering over a mocked text pipeline (MiniMessage cost lives in the text suite)
-    final var textManager = mock(com.ghostchu.quickshop.api.localization.text.TextManager.class);
-    final var text = mock(com.ghostchu.quickshop.api.localization.text.Text.class);
+    final var textManager = Env.hotMock(com.ghostchu.quickshop.api.localization.text.TextManager.class);
+    final var text = Env.hotMock(com.ghostchu.quickshop.api.localization.text.Text.class);
     lenient().when(textManager.of(anyString(), any(Object[].class))).thenReturn(text);
     lenient().when(textManager.of(anyString())).thenReturn(text);
     // senders are nullable (ChatSheetPrinter receives null when the QUser has no live player)
@@ -322,7 +322,7 @@ public final class TradeBench {
     lenient().when(textManager.of(org.mockito.ArgumentMatchers.nullable(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any(Object[].class))).thenReturn(text);
     lenient().when(text.forLocale(anyString())).thenReturn(Component.empty());
     lenient().when(text.forLocale()).thenReturn(Component.empty());
-    final var proxiedLocale = mock(com.ghostchu.quickshop.api.localization.text.ProxiedLocale.class);
+    final var proxiedLocale = Env.hotMock(com.ghostchu.quickshop.api.localization.text.ProxiedLocale.class);
     lenient().when(proxiedLocale.getLocale()).thenReturn("en_us");
     lenient().when(textManager.findRelativeLanguages(any(com.ghostchu.quickshop.api.obj.QUser.class), anyBoolean()))
             .thenReturn(proxiedLocale);
@@ -332,15 +332,15 @@ public final class TradeBench {
     lenient().when(plugin.platform().setItemStackHoverEvent(any(Component.class), any(ItemStack.class)))
             .thenAnswer(inv -> inv.getArgument(0, Component.class));
 
-    final var shopManager = mock(SimpleShopManager.class);
+    final var shopManager = Env.hotMock(SimpleShopManager.class);
     lenient().when(shopManager.shopLayoutProvider()).thenReturn(new SimpleShopLayoutProvider(plugin));
     lenient().when(plugin.getShopManager()).thenReturn(shopManager);
 
     lenient().when(plugin.getSignUpdateWatcher()).thenReturn(new SignUpdateWatcher());
 
     // economy stub for the sell-path affordability check (getMaxAffordable)
-    final var economyManager = mock(com.ghostchu.quickshop.api.economy.EconomyManager.class);
-    final var ecoProvider = mock(com.ghostchu.quickshop.api.economy.EconomyProvider.class);
+    final var economyManager = Env.hotMock(com.ghostchu.quickshop.api.economy.EconomyManager.class);
+    final var ecoProvider = Env.hotMock(com.ghostchu.quickshop.api.economy.EconomyProvider.class);
     lenient().when(economyManager.provider()).thenReturn(ecoProvider);
     lenient().when(ecoProvider.balance(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any()))
             .thenReturn(java.math.BigDecimal.valueOf(1_000_000));
@@ -359,7 +359,7 @@ public final class TradeBench {
     final QuickShop plugin = Env.plugin();
 
     final SimpleShopManager manager = mock(SimpleShopManager.class,
-            org.mockito.Mockito.withSettings().defaultAnswer(org.mockito.Mockito.CALLS_REAL_METHODS));
+            org.mockito.Mockito.withSettings().stubOnly().defaultAnswer(org.mockito.Mockito.CALLS_REAL_METHODS));
     when(plugin.getShopManager()).thenReturn(manager);
     lenient().when(manager.shopLayoutProvider()).thenReturn(new SimpleShopLayoutProvider(plugin));
     lenient().when(manager.tradeService()).thenReturn(tradeService);
@@ -367,16 +367,16 @@ public final class TradeBench {
     injectField(manager, "plugin", plugin);
 
     // tax: flat zero rates through the real TaxRates value object
-    final var taxProvider = mock(com.ghostchu.quickshop.api.shop.tax.TaxProvider.class);
+    final var taxProvider = Env.hotMock(com.ghostchu.quickshop.api.shop.tax.TaxProvider.class);
     lenient().when(taxProvider.calculateTax(any(com.ghostchu.quickshop.api.shop.Shop.class),
                     any(com.ghostchu.quickshop.api.obj.QUser.class)))
             .thenReturn(new com.ghostchu.quickshop.api.shop.tax.TaxRates(0.0d, 0.0d));
-    final var taxManager = mock(com.ghostchu.quickshop.api.shop.tax.TaxManager.class);
+    final var taxManager = Env.hotMock(com.ghostchu.quickshop.api.shop.tax.TaxManager.class);
     lenient().when(taxManager.provider()).thenReturn(taxProvider);
     lenient().when(taxManager.taxAccount()).thenReturn("");
     injectField(manager, "taxManager", taxManager);
 
-    final var formatter = mock(com.ghostchu.quickshop.util.economyformatter.EconomyFormatter.class);
+    final var formatter = Env.hotMock(com.ghostchu.quickshop.util.economyformatter.EconomyFormatter.class);
     lenient().when(formatter.format(any(Double.class), any(com.ghostchu.quickshop.api.shop.Shop.class)))
             .thenReturn("$0");
     injectField(manager, "formatter", formatter);
@@ -384,14 +384,14 @@ public final class TradeBench {
     injectField(manager, "sendStockMessageToStaff", false);
 
     // permissions: everyone may use foreign shops
-    final var permissionManager = mock(com.ghostchu.quickshop.permission.PermissionManager.class);
+    final var permissionManager = Env.hotMock(com.ghostchu.quickshop.permission.PermissionManager.class);
     lenient().when(permissionManager.hasPermission(any(org.bukkit.command.CommandSender.class), anyString()))
             .thenReturn(true);
     lenient().when(plugin.perm()).thenReturn(permissionManager);
 
     // economy operations for the full commit chain (balance is already stubbed)
-    final var economyManager = mock(com.ghostchu.quickshop.api.economy.EconomyManager.class);
-    final var ecoProvider = mock(com.ghostchu.quickshop.api.economy.EconomyProvider.class);
+    final var economyManager = Env.hotMock(com.ghostchu.quickshop.api.economy.EconomyManager.class);
+    final var ecoProvider = Env.hotMock(com.ghostchu.quickshop.api.economy.EconomyProvider.class);
     lenient().when(economyManager.provider()).thenReturn(ecoProvider);
     lenient().when(ecoProvider.valid()).thenReturn(true);
     lenient().when(ecoProvider.withdraw(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any(), any(java.math.BigDecimal.class)))
@@ -403,24 +403,24 @@ public final class TradeBench {
     lenient().when(plugin.getEconomyManager()).thenReturn(economyManager);
 
     // trader player driving the action methods
-    final org.bukkit.entity.Player trader = mock(org.bukkit.entity.Player.class);
+    final org.bukkit.entity.Player trader = Env.hotMock(org.bukkit.entity.Player.class);
     lenient().when(trader.getUniqueId()).thenReturn(
             UUID.nameUUIDFromBytes("action-trader".getBytes(StandardCharsets.UTF_8)));
     lenient().when(trader.getName()).thenReturn("action-trader");
     lenient().when(trader.isOnline()).thenReturn(true);
     lenient().when(trader.getLocation()).thenReturn(new Location(fixtures.world(), 1000, 64, 1002));
-    final var traderInventory = mock(org.bukkit.inventory.PlayerInventory.class);
+    final var traderInventory = Env.hotMock(org.bukkit.inventory.PlayerInventory.class);
     lenient().when(trader.getInventory()).thenReturn(traderInventory);
 
     // shop owner is online so owner notifications take the direct-message path
-    final org.bukkit.entity.Player ownerPlayer = mock(org.bukkit.entity.Player.class);
-    final var ownerOffline = mock(org.bukkit.OfflinePlayer.class);
+    final org.bukkit.entity.Player ownerPlayer = Env.hotMock(org.bukkit.entity.Player.class);
+    final var ownerOffline = Env.hotMock(org.bukkit.OfflinePlayer.class);
     lenient().when(ownerOffline.isOnline()).thenReturn(true);
     lenient().when(ownerOffline.getPlayer()).thenReturn(ownerPlayer);
     lenient().when(Env.server().getOfflinePlayer(any(java.util.UUID.class))).thenReturn(ownerOffline);
 
     // interaction context: chest block still there, shop unchanged
-    final var info = mock(com.ghostchu.quickshop.api.shop.Info.class);
+    final var info = Env.hotMock(com.ghostchu.quickshop.api.shop.Info.class);
     final Location infoLocation = new Location(fixtures.world(), 1000, 64, 1000);
     lenient().when(info.getLocation()).thenReturn(infoLocation);
     lenient().when(info.hasChanged(any(com.ghostchu.quickshop.api.shop.Shop.class))).thenReturn(false);
@@ -435,7 +435,7 @@ public final class TradeBench {
 
   private static InventoryWrapper wrap(final ItemStack[] contents) {
 
-    final Inventory inventory = mock(Inventory.class);
+    final Inventory inventory = Env.hotMock(Inventory.class);
     // mirror CraftInventory: every accessor call copies the array
     when(inventory.getStorageContents()).thenAnswer(inv -> contents.clone());
     when(inventory.getContents()).thenAnswer(inv -> contents.clone());
@@ -450,7 +450,7 @@ public final class TradeBench {
    */
   private static ItemStack item(final Material material, final int amount, final boolean meta, final boolean shopFamily) {
 
-    final ItemStack stack = mock(ItemStack.class);
+    final ItemStack stack = Env.hotMock(ItemStack.class);
     when(stack.getType()).thenReturn(material);
     when(stack.getAmount()).thenReturn(amount);
     when(stack.getMaxStackSize()).thenReturn(64);
@@ -470,7 +470,7 @@ public final class TradeBench {
    */
   private static ItemStack statefulItem(final Material material, final int amount, final boolean shopFamily) {
 
-    final ItemStack stack = mock(ItemStack.class);
+    final ItemStack stack = Env.hotMock(ItemStack.class);
     final int[] amt = {amount};
     when(stack.getType()).thenReturn(material);
     when(stack.getAmount()).thenAnswer(inv -> amt[0]);
@@ -494,7 +494,7 @@ public final class TradeBench {
     final Location location = new Location(world, 1000, 64, 1000);
     final com.ghostchu.quickshop.api.obj.QUser owner = QUserImpl.createFullFilled(
             UUID.nameUUIDFromBytes("trade-owner".getBytes(StandardCharsets.UTF_8)), "trade-owner", true);
-    final var benefit = mock(com.ghostchu.quickshop.api.economy.benefit.BenefitProvider.class);
+    final var benefit = Env.hotMock(com.ghostchu.quickshop.api.economy.benefit.BenefitProvider.class);
     when(benefit.serialize()).thenReturn("{}");
     final Map<UUID, String> playerGroup = new HashMap<>();
     playerGroup.put(owner.getUniqueId(), "quickshop.builtin.administrator");

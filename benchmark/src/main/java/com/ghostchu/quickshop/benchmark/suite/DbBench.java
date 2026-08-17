@@ -38,7 +38,7 @@ public final class DbBench {
 
     final QuickShop plugin = Env.plugin();
 
-    final PlayerFinder finder = mock(PlayerFinder.class);
+    final PlayerFinder finder = Env.hotMock(PlayerFinder.class);
     when(finder.uuid2NameFuture(any(UUID.class), anyBoolean(), any()))
             .thenAnswer(inv -> CompletableFuture.completedFuture("user"));
     when(finder.name2Uuid(anyString(), anyBoolean(), any()))

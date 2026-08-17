@@ -34,7 +34,7 @@ public final class Shops {
 
     final QuickShop plugin = Env.plugin();
     final Location location = new Location(world, x, y, z);
-    final ItemStack item = mock(ItemStack.class);
+    final ItemStack item = Env.hotMock(ItemStack.class);
     when(item.getType()).thenReturn(Material.DIAMOND);
     when(item.getAmount()).thenReturn(64);
     when(item.hasItemMeta()).thenReturn(false);
@@ -43,7 +43,7 @@ public final class Shops {
     final com.ghostchu.quickshop.api.obj.QUser owner = QUserImpl.createFullFilled(
             UUID.nameUUIDFromBytes(("owner-" + ownerIndex).getBytes(StandardCharsets.UTF_8)),
             "owner-" + ownerIndex, true);
-    final var benefit = mock(com.ghostchu.quickshop.api.economy.benefit.BenefitProvider.class);
+    final var benefit = Env.hotMock(com.ghostchu.quickshop.api.economy.benefit.BenefitProvider.class);
     when(benefit.serialize()).thenReturn("{}");
     final Map<UUID, String> playerGroup = new HashMap<>();
     playerGroup.put(owner.getUniqueId(), "quickshop.builtin.administrator");

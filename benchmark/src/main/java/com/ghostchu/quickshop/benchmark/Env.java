@@ -51,6 +51,16 @@ public final class Env {
     install();
   }
 
+  /**
+   * Mock without Mockito's invocation recording: benchmark hot paths call some mocks
+   * millions of times per JVM and never verify on them — recording otherwise grows
+   * into gigabytes of retained invocation metadata over a full run.
+   */
+  public static <T> T hotMock(final Class<T> type) {
+
+    return mock(type, Mockito.withSettings().stubOnly());
+  }
+
   /** Keeps a strong reference for the whole benchmark JVM (returns the argument). */
   public static <T> T pin(final T object) {
 
@@ -102,13 +112,17 @@ public final class Env {
 
     private static PluginBundle createPlugin() {
 
-      final QuickShop plugin = mock(QuickShop.class);
+      // stubOnly: benchmark hot paths invoke this mock millions of times per JVM and
+    // never verify on it; Mockito's per-invocation recording otherwise accumulates
+    // gigabytes of invocation metadata over the full suite run (the R20 "text
+    // pollution" and the R21 OOM were this, not machine drift)
+    final QuickShop plugin = mock(QuickShop.class, Mockito.withSettings().stubOnly());
       Mockito.lenient().when(plugin.logger()).thenReturn(mock(org.slf4j.Logger.class));
       Mockito.lenient().when(plugin.getDataFolder()).thenReturn(DATA_FOLDER);
       // QuickShopBukkit's PluginBase.getName()/getPluginMeta() are final and read the
       // JavaPlugin.pluginMeta field (null on a mock). Mockito mocks skip constructors, so
       // the field can simply be injected reflectively to make the final methods work.
-      final com.ghostchu.quickshop.QuickShopBukkit bukkitPlugin = mock(com.ghostchu.quickshop.QuickShopBukkit.class);
+      final com.ghostchu.quickshop.QuickShopBukkit bukkitPlugin = mock(com.ghostchu.quickshop.QuickShopBukkit.class, Mockito.withSettings().stubOnly());
       Mockito.lenient().when(plugin.getJavaPlugin()).thenReturn(bukkitPlugin);
       final io.papermc.paper.plugin.configuration.PluginMeta pluginMeta =
               mock(io.papermc.paper.plugin.configuration.PluginMeta.class);

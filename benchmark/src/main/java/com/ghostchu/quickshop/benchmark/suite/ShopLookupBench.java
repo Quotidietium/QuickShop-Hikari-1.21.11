@@ -32,15 +32,15 @@ public final class ShopLookupBench {
   public static void run(final com.ghostchu.quickshop.benchmark.BenchHarness harness) throws Exception {
 
     final var plugin = Env.plugin();
-    when(plugin.getReloadManager()).thenReturn(mock(ReloadManager.class));
+    when(plugin.getReloadManager()).thenReturn(Env.hotMock(ReloadManager.class));
     final SimpleShopManager manager = new SimpleShopManager(plugin);
     // shop-cache boxing reaches back into the plugin for the shop manager
     when(plugin.getShopManager()).thenReturn(manager);
 
-    final World world = com.ghostchu.quickshop.benchmark.Env.pin(mock(World.class));
+    final World world = com.ghostchu.quickshop.benchmark.Env.pin(Env.hotMock(World.class));
     when(world.getName()).thenReturn("world");
     // isValid() resolves the block at the shop location and checks its type
-    final org.bukkit.block.Block block = mock(org.bukkit.block.Block.class);
+    final org.bukkit.block.Block block = Env.hotMock(org.bukkit.block.Block.class);
     when(block.getWorld()).thenReturn(world);
     when(block.getType()).thenReturn(org.bukkit.Material.CHEST);
     when(world.getBlockAt(org.mockito.ArgumentMatchers.any(Location.class)))

@@ -30,7 +30,7 @@ public final class TextBench {
     Env.setConfig("lang-processor.replace-filller-post-process", false);
 
     final QuickShop plugin = Env.plugin();
-    final Platform platform = mock(Platform.class);
+    final Platform platform = Env.hotMock(Platform.class);
     when(platform.miniMessage()).thenReturn(MiniMessage.miniMessage());
     when(plugin.platform()).thenReturn(platform);
 
