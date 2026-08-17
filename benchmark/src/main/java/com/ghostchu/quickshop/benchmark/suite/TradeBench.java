@@ -167,6 +167,27 @@ public final class TradeBench {
       }
       consume(result);
     });
+
+    // per-trade purchase-log listener (InternalListener.shopPurchase with log-actions on):
+    // measures the listener's main-thread cost — baseline builds the log entry eagerly
+    // (shop snapshot + two item encodes + name render + Gson), candidate defers via
+    // logEventLazy and only captures the supplier
+    Env.setConfig("logging.log-actions", true);
+    Env.setConfig("logging.log-balance", false);
+    final com.ghostchu.quickshop.listener.InternalListener internalListener =
+            new com.ghostchu.quickshop.listener.InternalListener(Env.plugin());
+    final var purchaseEvent = new com.ghostchu.quickshop.api.event.economy.ShopSuccessPurchaseEvent(
+            fixtures.tradeShop(), buyer, fixtures.player(), 1, 10.0d, 0.5d);
+    final AtomicInteger logCounter = new AtomicInteger();
+    harness.bench("trade/purchaseLogListener", ctx -> {
+      ctx.index++;
+      try {
+        internalListener.shopPurchase(purchaseEvent);
+      } catch(final Throwable t) {
+        throw new IllegalStateException("log listener failed, run #" + logCounter.incrementAndGet(), t);
+      }
+      consume(ctx.index);
+    });
   }
 
   /** Fixtures shared by the bench cases. */
@@ -193,6 +214,11 @@ public final class TradeBench {
     final com.ghostchu.quickshop.platform.Platform platform =
             mock(com.ghostchu.quickshop.platform.Platform.class);
     when(platform.getItemShopId(any(ItemStack.class))).thenReturn(null);
+    // item encode + display name for the purchase-log listener path (baseline side
+    // serializes eagerly, candidate defers)
+    lenient().when(platform.encodeStack(any(ItemStack.class)))
+            .thenReturn(java.util.Base64.getEncoder().encodeToString(new byte[400]));
+    lenient().when(platform.getTranslation(any(ItemStack.class))).thenReturn(Component.text("Diamond"));
     lenient().when(plugin.platform()).thenReturn(platform);
     final QuickShopItemMatcherImpl matcher = new QuickShopItemMatcherImpl(plugin);
     when(plugin.getItemMatcher()).thenReturn(matcher);
