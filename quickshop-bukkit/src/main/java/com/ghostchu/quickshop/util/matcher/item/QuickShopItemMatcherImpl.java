@@ -184,6 +184,14 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
       }
     }
 
+    // type gate before the normalization clones: differing materials can never match under
+    // any work type (isSimilar/equals/meta comparison all require equal types), so skipping
+    // the two clones keeps mismatched slots cheap in full-inventory scans
+    if(!typeMatches(requireStack, givenStack)) {
+      Log.debug("Fail: Item type mismatch!");
+      return false;
+    }
+
     requireStack = requireStack.clone();
     requireStack.setAmount(1);
     givenStack = givenStack.clone();
@@ -193,10 +201,6 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
     }
     if(workType == 2) {
       return requireStack.equals(givenStack);
-    }
-
-    if(!typeMatches(requireStack, givenStack)) {
-      return false;
     }
 
     if(requireStack.hasItemMeta() && givenStack.hasItemMeta()) {
