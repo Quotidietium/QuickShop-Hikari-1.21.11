@@ -124,6 +124,12 @@
             <optional>true</optional>
         </dependency>
         <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-buffer</artifactId>
+            <version>4.1.106.Final</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>com.github.retrooper</groupId>
             <artifactId>packetevents-spigot</artifactId>
             <version>${depend.packetevents}</version>
