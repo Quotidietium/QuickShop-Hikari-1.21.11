@@ -25,84 +25,75 @@ public class MetricListener extends AbstractQSListener implements Listener {
   public void onCreate(final ShopCreateEvent event) {
 
     if(!event.isPhase(Phase.POST) || event.shop().isEmpty()) {
-
       return;
     }
 
-    plugin.getDatabaseHelper().insertMetricRecord(
-                    ShopMetricRecord.builder()
-                            .time(System.currentTimeMillis())
-                            .shopId(event.shop().get().getShopId())
-                            .player(event.user())
-                            .tax(0.0d)
-                            .total(plugin.getConfig().getDouble("shop.cost"))
-                            .type(ShopOperationEnum.CREATE)
-                            .build()
-                                                 )
-            .exceptionally(e->{
-              Log.debug("Failed to insert shop metric record: " + e.getMessage());
-              return 0;
-            });
+    metric(new ShopMetricRecord(
+            System.currentTimeMillis(),
+            event.shop().get().getShopId(),
+            ShopOperationEnum.CREATE,
+            plugin.getConfig().getDouble("shop.cost"),
+            0.0d,
+            0,
+            event.user()));
   }
 
   @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
   public void onDelete(final ShopDeleteEvent event) {
 
     if(!event.isPhase(Phase.POST) || event.shop().isEmpty()) {
-
       return;
     }
 
-    plugin.getDatabaseHelper().insertMetricRecord(
-                    ShopMetricRecord.builder()
-                            .time(System.currentTimeMillis())
-                            .shopId(event.shop().get().getShopId())
-                            .player(event.shop().get().getOwner())
-                            .tax(0.0d)
-                            .total(plugin.getConfig().getBoolean("shop.refund")? plugin.getConfig().getDouble("shop.cost", 0.0d) : 0.0d)
-                            .type(ShopOperationEnum.DELETE)
-                            .build()
-                                                 )
-            .exceptionally(e->{
-              Log.debug("Failed to insert shop metric record: " + e.getMessage());
-              return 0;
-            });
-
+    metric(new ShopMetricRecord(
+            System.currentTimeMillis(),
+            event.shop().get().getShopId(),
+            ShopOperationEnum.DELETE,
+            plugin.getConfig().getBoolean("shop.refund")? plugin.getConfig().getDouble("shop.cost", 0.0d) : 0.0d,
+            0.0d,
+            0,
+            event.shop().get().getOwner()));
   }
 
   @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
   public void onDelete(final ShopOngoingFeeEvent event) {
 
-    plugin.getDatabaseHelper().insertMetricRecord(
-                    ShopMetricRecord.builder()
-                            .time(System.currentTimeMillis())
-                            .shopId(event.getShop().getShopId())
-                            .player(event.getShop().getOwner())
-                            .tax(0.0d)
-                            .total(event.getCost())
-                            .type(ShopOperationEnum.ONGOING_FEE)
-                            .build()
-                                                 )
-            .exceptionally(e->{
-              Log.debug("Failed to insert shop metric record: " + e.getMessage());
-              return 0;
-            });
+    metric(new ShopMetricRecord(
+            System.currentTimeMillis(),
+            event.getShop().getShopId(),
+            ShopOperationEnum.ONGOING_FEE,
+            event.getCost(),
+            0.0d,
+            0,
+            event.getShop().getOwner()));
   }
 
   @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
   public void onPurchase(final ShopSuccessPurchaseEvent event) {
 
-    plugin.getDatabaseHelper().insertMetricRecord(
-                    ShopMetricRecord.builder()
-                            .time(System.currentTimeMillis())
-                            .shopId(event.getShop().getShopId())
-                            .player(event.getPurchaser())
-                            .tax(event.getTax())
-                            .total(event.getBalanceWithoutTax())
-                            .type(event.getShop().shopType().operationType())
-                            .amount(event.getAmount())
-                            .build()
-                                                 )
+    metric(new ShopMetricRecord(
+            System.currentTimeMillis(),
+            event.getShop().getShopId(),
+            event.getShop().shopType().operationType(),
+            event.getBalanceWithoutTax(),
+            event.getTax(),
+            event.getAmount(),
+            event.getPurchaser()));
+  }
+
+  /**
+   * Routes the record through the MetricBatcher (one batched insert per flush window
+   * instead of one statement per trade); falls back to the direct single insert when
+   * the batcher is absent (unit-test environments).
+   */
+  private void metric(final ShopMetricRecord record) {
+
+    final MetricBatcher batcher = plugin.getMetricBatcher();
+    if(batcher != null) {
+      batcher.offer(record);
+      return;
+    }
+    plugin.getDatabaseHelper().insertMetricRecord(record)
             .exceptionally(e->{
               Log.debug("Failed to insert shop metric record: " + e.getMessage());
               return 0;

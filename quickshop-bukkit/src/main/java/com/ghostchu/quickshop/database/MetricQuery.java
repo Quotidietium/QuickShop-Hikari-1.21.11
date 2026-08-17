@@ -31,6 +31,10 @@ public class MetricQuery {
 
     this.databaseHelper = databaseHelper;
     this.plugin = plugin;
+    // metric writes are batched; nudge the queue so counts include very recent trades
+    if(plugin.getMetricBatcher() != null) {
+      plugin.getMetricBatcher().flushAsync();
+    }
   }
 
 

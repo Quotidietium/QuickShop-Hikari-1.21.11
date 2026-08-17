@@ -300,6 +300,13 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   private OngoingFeeWatcher ongoingFeeWatcher;
   @Getter
   private SignUpdateWatcher signUpdateWatcher;
+  /**
+   * Coalesces per-trade metric records into periodic batched inserts (null only in
+   * unit-test environments that never reach the enable phase).
+   */
+  @Getter
+  @Nullable
+  private com.ghostchu.quickshop.metric.MetricBatcher metricBatcher;
   @Getter
   private boolean allowStack;
   @Getter
@@ -853,6 +860,8 @@ public class QuickShop implements QuickShopAPI, Reloadable {
 
     logger.info("Registering listeners...");
     this.interactionManager = new QuickShopInteractionManager(this);
+    // metric batching must exist before listeners fire
+    this.metricBatcher = new com.ghostchu.quickshop.metric.MetricBatcher(this);
     // Register events
     // Listeners (These don't)
     registerListeners();
@@ -1120,6 +1129,9 @@ public class QuickShop implements QuickShopAPI, Reloadable {
 
     calendarWatcher = new CalendarWatcher(this);
     signUpdateWatcher.start(1, 10);
+    if(metricBatcher != null) {
+      metricBatcher.start();
+    }
     if(logWatcher != null) {
       logWatcher.start(10, 10);
       logger.info("Log actions is enabled. Actions will be logged in the qs.log file!");
@@ -1264,6 +1276,10 @@ public class QuickShop implements QuickShopAPI, Reloadable {
       logger.info("Disabling the BungeeChat messenger listener.");
       Bukkit.getOnlinePlayers().forEach(player->this.bungeeListener.notifyForCancel(player));
       this.bungeeListener.unregister();
+    }
+    if(metricBatcher != null) {
+      logger.info("Flushing pending metric records...");
+      metricBatcher.flushSync(10);
     }
     if(shopSaveWatcher != null) {
       logger.info("Stopping shop auto save...");
