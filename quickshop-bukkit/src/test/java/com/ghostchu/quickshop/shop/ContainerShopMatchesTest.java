@@ -258,4 +258,40 @@ class ContainerShopMatchesTest {
     // type mismatch dominates every builtin work-type path
     assertFalse(matcher.matches(require, given));
   }
+
+  @Test
+  void typeMismatchSkipsNormalizationClones() {
+
+    assertEquals(0, AbstractQSEvent.getHandlerList().getRegisteredListeners().length);
+
+    final QuickShopItemMatcherImpl matcher = new QuickShopItemMatcherImpl(plugin);
+    when(plugin.getItemMatcher()).thenReturn(matcher);
+
+    final ItemStack require = slot(Material.DIAMOND);
+    when(require.isSimilar(any(ItemStack.class))).thenReturn(false);
+    final ItemStack given = slot(Material.IRON_INGOT);
+
+    assertFalse(matcher.matches(require, given));
+
+    // differing materials can never match, so the mismatch path must bail out before the
+    // amount-normalization clones (full-inventory scans hit this path for every foreign slot)
+    verify(require, never()).clone();
+    verify(given, never()).clone();
+  }
+
+  @Test
+  void sameTypeMismatchStillRunsFullComparison() {
+
+    assertEquals(0, AbstractQSEvent.getHandlerList().getRegisteredListeners().length);
+
+    final QuickShopItemMatcherImpl matcher = new QuickShopItemMatcherImpl(plugin);
+    when(plugin.getItemMatcher()).thenReturn(matcher);
+
+    // same material, dissimilar meta, no meta on either stack: workType 0 accepts by type
+    final ItemStack require = slot(Material.DIAMOND);
+    when(require.isSimilar(any(ItemStack.class))).thenReturn(false);
+    final ItemStack given = slot(Material.DIAMOND);
+
+    assertTrue(matcher.matches(require, given));
+  }
 }
