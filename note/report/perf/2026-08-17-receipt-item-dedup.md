@@ -3,7 +3,7 @@
 > 基准程序与方法论同前（34 用例 × 7 套件；同态交替 A/B，基线 commit `414b5eea2` =
 > R17 闭合并提交文档后的 HEAD，各 3 fork 中位数）。
 
-## R18：收据/通知单次 getItem（commit 8873fc9a）
+## R18：收据/通知单次 getItem（commit a03abce10）
 
 ### 问题
 
