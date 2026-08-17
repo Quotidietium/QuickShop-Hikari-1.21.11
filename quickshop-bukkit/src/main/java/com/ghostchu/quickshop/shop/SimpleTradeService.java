@@ -19,10 +19,12 @@ package com.ghostchu.quickshop.shop;
  */
 
 import com.ghostchu.quickshop.QuickShop;
+import com.ghostchu.quickshop.api.event.inventory.ShopInventoryCalculateEvent;
 import com.ghostchu.quickshop.api.inventory.InventoryWrapper;
 import com.ghostchu.quickshop.api.obj.QUser;
 import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.api.shop.trading.TradeFailureReason;
+import com.ghostchu.quickshop.api.shop.trading.TradeObservation;
 import com.ghostchu.quickshop.api.shop.trading.TradeOptions;
 import com.ghostchu.quickshop.api.shop.trading.TradePreview;
 import com.ghostchu.quickshop.api.shop.trading.TradeResult;
@@ -83,7 +85,8 @@ public class SimpleTradeService implements TradeService {
     // one symbol-link resolution per trade: the preview and the commit share the located
     // inventory (single-threaded trade, nothing can swap the container in between)
     final InventoryWrapper locatedChest = shop.isUnlimited()? null : shop.getInventory();
-    final TradePreview preview = previewBuyFromShop(shop, buyer, buyerInventory, amount, locatedChest);
+    final PreviewOutcome outcome = previewBuyOutcome(shop, buyer, buyerInventory, amount, locatedChest);
+    final TradePreview preview = outcome.preview();
     if(!preview.allowed()) {
       return failedResult(
               TradeType.BUY_FROM_SHOP,
@@ -92,7 +95,8 @@ public class SimpleTradeService implements TradeService {
               preview.unitPrice(),
               preview.totalPrice(),
               preview.limitingReason(),
-              preview.debugMessage());
+              preview.debugMessage(),
+              outcome.observation());
     }
 
     try {
@@ -115,7 +119,8 @@ public class SimpleTradeService implements TradeService {
                   unitPrice(shop),
                   totalPrice(shop, 0),
                   TradeFailureReason.SHOP_TRANSACTION_FAILED,
-                  "Shop inventory is null.");
+                  "Shop inventory is null.",
+                  outcome.observation());
         }
 
         transaction = SimpleInventoryTransaction.builder()
@@ -137,7 +142,8 @@ public class SimpleTradeService implements TradeService {
                 unitPrice(shop),
                 totalPrice(shop, 0),
                 TradeFailureReason.INVENTORY_TRANSACTION_FAILED,
-                "Inventory transaction failed: " + transaction.getLastError());
+                "Inventory transaction failed: " + transaction.getLastError(),
+                outcome.observation());
       }
 
       if(options.updateSigns() && !shop.isUnlimited()) {
@@ -148,7 +154,8 @@ public class SimpleTradeService implements TradeService {
               TradeType.BUY_FROM_SHOP,
               amount,
               amount,
-              unitPrice(shop));
+              unitPrice(shop),
+              outcome.observation());
     } catch(final Exception e) {
       return failedResult(
               TradeType.BUY_FROM_SHOP,
@@ -157,7 +164,8 @@ public class SimpleTradeService implements TradeService {
               unitPrice(shop),
               totalPrice(shop, 0),
               TradeFailureReason.INTERNAL_ERROR,
-              e.getMessage());
+              e.getMessage(),
+              outcome.observation());
     }
   }
 
@@ -191,7 +199,8 @@ public class SimpleTradeService implements TradeService {
 
     // one symbol-link resolution per trade, shared by the space check and the commit
     final InventoryWrapper locatedChest = shop.isUnlimited()? null : shop.getInventory();
-    final TradePreview preview = previewSellToShop(shop, seller, sellerInventory, amount, locatedChest);
+    final PreviewOutcome outcome = previewSellOutcome(shop, seller, sellerInventory, amount, locatedChest);
+    final TradePreview preview = outcome.preview();
     if(!preview.allowed()) {
       return failedResult(
               TradeType.SELL_TO_SHOP,
@@ -200,7 +209,8 @@ public class SimpleTradeService implements TradeService {
               preview.unitPrice(),
               preview.totalPrice(),
               preview.limitingReason(),
-              preview.debugMessage());
+              preview.debugMessage(),
+              outcome.observation());
     }
 
     try {
@@ -223,7 +233,8 @@ public class SimpleTradeService implements TradeService {
                   unitPrice(shop),
                   totalPrice(shop, 0),
                   TradeFailureReason.SHOP_TRANSACTION_FAILED,
-                  "Shop inventory is null.");
+                  "Shop inventory is null.",
+                  outcome.observation());
         }
 
         transaction = SimpleInventoryTransaction.builder()
@@ -245,7 +256,8 @@ public class SimpleTradeService implements TradeService {
                 unitPrice(shop),
                 totalPrice(shop, 0),
                 TradeFailureReason.INVENTORY_TRANSACTION_FAILED,
-                "Inventory transaction failed: " + transaction.getLastError());
+                "Inventory transaction failed: " + transaction.getLastError(),
+                outcome.observation());
       }
 
       if(options.updateSigns()) {
@@ -256,7 +268,8 @@ public class SimpleTradeService implements TradeService {
               TradeType.SELL_TO_SHOP,
               amount,
               amount,
-              unitPrice(shop));
+              unitPrice(shop),
+              outcome.observation());
     } catch(final Exception e) {
       return failedResult(
               TradeType.SELL_TO_SHOP,
@@ -265,7 +278,8 @@ public class SimpleTradeService implements TradeService {
               unitPrice(shop),
               totalPrice(shop, 0),
               TradeFailureReason.INTERNAL_ERROR,
-              e.getMessage());
+              e.getMessage(),
+              outcome.observation());
     }
   }
 
@@ -274,7 +288,8 @@ public class SimpleTradeService implements TradeService {
                                                   @NotNull final QUser buyer,
                                                   @NotNull final InventoryWrapper buyerInventory,
                                                   final int amount) {
-    return previewBuyFromShop(shop, buyer, buyerInventory, amount, null);
+
+    return previewBuyOutcome(shop, buyer, buyerInventory, amount, null).preview();
   }
 
   /**
@@ -282,40 +297,45 @@ public class SimpleTradeService implements TradeService {
    * the symbol link here (public API behaviour). The trade executor passes its single
    * located wrapper so preview and commit share one resolution.
    */
-  private @NotNull TradePreview previewBuyFromShop(@NotNull final Shop shop,
-                                                   @NotNull final QUser buyer,
-                                                   @NotNull final InventoryWrapper buyerInventory,
-                                                   final int amount,
-                                                   @Nullable final InventoryWrapper prelocatedChest) {
+  private @NotNull PreviewOutcome previewBuyOutcome(@NotNull final Shop shop,
+                                                    @NotNull final QUser buyer,
+                                                    @NotNull final InventoryWrapper buyerInventory,
+                                                    final int amount,
+                                                    @Nullable final InventoryWrapper prelocatedChest) {
     if(amount <= 0) {
-      return previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Amount must be > 0.");
+      return new PreviewOutcome(previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Amount must be > 0."), TradeObservation.EMPTY);
     }
     final int previewUnitSize = shop.getItemUnitSize();
     if(previewUnitSize <= 0 || (long)previewUnitSize * amount > Integer.MAX_VALUE) {
-      return previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Invalid shop item unit size or amount overflow.");
+      return new PreviewOutcome(previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Invalid shop item unit size or amount overflow."), TradeObservation.EMPTY);
     }
     if(!shop.isValid()) {
-      return previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.SHOP_INVALID, "Shop is invalid.");
+      return new PreviewOutcome(previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.SHOP_INVALID, "Shop is invalid."), TradeObservation.EMPTY);
     }
     if(shop.isFrozen()) {
-      return previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.SHOP_FROZEN, "Shop is frozen.");
+      return new PreviewOutcome(previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.SHOP_FROZEN, "Shop is frozen."), TradeObservation.EMPTY);
     }
     if(!shop.isSelling()) {
-      return previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.SHOP_DISABLED, "Shop is not selling items.");
+      return new PreviewOutcome(previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.SHOP_DISABLED, "Shop is not selling items."), TradeObservation.EMPTY);
     }
 
+    Integer measuredStock = null;
     if(!shop.isUnlimited()) {
       final InventoryWrapper chestInv = prelocatedChest != null? prelocatedChest : shop.getInventory();
       if(chestInv == null) {
-        return previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.SHOP_TRANSACTION_FAILED, "Shop inventory is null.");
+        return new PreviewOutcome(previewFailure(TradeType.BUY_FROM_SHOP, amount, TradeFailureReason.SHOP_TRANSACTION_FAILED, "Shop inventory is null."), TradeObservation.EMPTY);
       }
 
       final int stackSize = Math.max(1, shop.getItemUnitSize());
       final int stock = Util.countItems(chestInv, shop);
+      measuredStock = stock;
+      // same per-calculation event the pre-trade getRemainingStock() scan used to fire, so
+      // inventory-cache listeners keep seeing one stock calculation per trade
+      new ShopInventoryCalculateEvent(shop, -1, stock).callEvent();
       final int requestedUnits = normalizeAmount(shop, amount) / stackSize;
       if(stock < requestedUnits) {
         final int allowedTrades = stock / stackSize;
-        return new TradePreview(
+        return new PreviewOutcome(new TradePreview(
                 TradeType.BUY_FROM_SHOP,
                 amount,
                 Math.max(0, allowedTrades),
@@ -323,13 +343,14 @@ public class SimpleTradeService implements TradeService {
                 totalPrice(shop, Math.max(0, allowedTrades)),
                 false,
                 TradeFailureReason.STOCK_TOO_LOW,
-                "Not enough stock in shop.");
+                "Not enough stock in shop."), observation(measuredStock, null, null, null));
       }
     }
 
     final int buyerSpace = Util.countSpace(buyerInventory, shop);
+    final TradeObservation observation = observation(measuredStock, null, null, buyerSpace);
     if(buyerSpace < amount) {
-      return new TradePreview(
+      return new PreviewOutcome(new TradePreview(
               TradeType.BUY_FROM_SHOP,
               amount,
               Math.max(0, buyerSpace),
@@ -337,10 +358,10 @@ public class SimpleTradeService implements TradeService {
               totalPrice(shop, Math.max(0, buyerSpace)),
               false,
               TradeFailureReason.INVENTORY_FULL,
-              "Buyer does not have enough inventory space.");
+              "Buyer does not have enough inventory space."), observation);
     }
 
-    return new TradePreview(
+    return new PreviewOutcome(new TradePreview(
             TradeType.BUY_FROM_SHOP,
             amount,
             amount,
@@ -348,7 +369,7 @@ public class SimpleTradeService implements TradeService {
             totalPrice(shop, amount),
             true,
             null,
-            null);
+            null), observation);
   }
 
   @Override
@@ -356,7 +377,8 @@ public class SimpleTradeService implements TradeService {
                                                  @NotNull final QUser seller,
                                                  @NotNull final InventoryWrapper sellerInventory,
                                                  final int amount) {
-    return previewSellToShop(shop, seller, sellerInventory, amount, null);
+
+    return previewSellOutcome(shop, seller, sellerInventory, amount, null).preview();
   }
 
   /**
@@ -364,35 +386,36 @@ public class SimpleTradeService implements TradeService {
    * the symbol link here (public API behaviour). The trade executor passes its single
    * located wrapper so the space check and the commit share one resolution.
    */
-  private @NotNull TradePreview previewSellToShop(@NotNull final Shop shop,
-                                                  @NotNull final QUser seller,
-                                                  @NotNull final InventoryWrapper sellerInventory,
-                                                  final int amount,
-                                                  @Nullable final InventoryWrapper prelocatedChest) {
+  private @NotNull PreviewOutcome previewSellOutcome(@NotNull final Shop shop,
+                                                     @NotNull final QUser seller,
+                                                     @NotNull final InventoryWrapper sellerInventory,
+                                                     final int amount,
+                                                     @Nullable final InventoryWrapper prelocatedChest) {
     if(amount <= 0) {
-      return previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Amount must be > 0.");
+      return new PreviewOutcome(previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Amount must be > 0."), TradeObservation.EMPTY);
     }
     final int previewUnitSize = shop.getItemUnitSize();
     if(previewUnitSize <= 0 || (long)previewUnitSize * amount > Integer.MAX_VALUE) {
-      return previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Invalid shop item unit size or amount overflow.");
+      return new PreviewOutcome(previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.INVALID_AMOUNT, "Invalid shop item unit size or amount overflow."), TradeObservation.EMPTY);
     }
     if(!shop.isValid()) {
-      return previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.SHOP_INVALID, "Shop is invalid.");
+      return new PreviewOutcome(previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.SHOP_INVALID, "Shop is invalid."), TradeObservation.EMPTY);
     }
     if(shop.isFrozen()) {
-      return previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.SHOP_FROZEN, "Shop is frozen.");
+      return new PreviewOutcome(previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.SHOP_FROZEN, "Shop is frozen."), TradeObservation.EMPTY);
     }
     if(!shop.isBuying()) {
-      return previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.SHOP_DISABLED, "Shop is not buying items.");
+      return new PreviewOutcome(previewFailure(TradeType.SELL_TO_SHOP, amount, TradeFailureReason.SHOP_DISABLED, "Shop is not buying items."), TradeObservation.EMPTY);
     }
 
 
     final int stackSize = Math.max(1, shop.getItemUnitSize());
     final int requestedUnits = normalizeAmount(shop, amount) / stackSize;
     final int sellerStock = Util.countItems(sellerInventory, shop);
+    final TradeObservation traderObservation = observation(null, null, sellerStock, null);
     if(sellerStock < requestedUnits) {
       final int allowedTrades = sellerStock / stackSize;
-      return new TradePreview(
+      return new PreviewOutcome(new TradePreview(
               TradeType.SELL_TO_SHOP,
               amount,
               Math.max(0, allowedTrades),
@@ -401,7 +424,7 @@ public class SimpleTradeService implements TradeService {
               false,
               TradeFailureReason.ITEM_NOT_ENOUGH,
               "Seller does not have enough items."
-      );
+      ), traderObservation);
     }
 
     if(!shop.isUnlimited()) {
@@ -409,7 +432,7 @@ public class SimpleTradeService implements TradeService {
       //TODO: Make a separate method for util.count items, requested, etc that provide raw output versus normalized output that is divided into stacks.
       final int maxAffordable = shop.getMaxAffordable();
       if(amount > maxAffordable) {
-        return new TradePreview(
+        return new PreviewOutcome(new TradePreview(
                 TradeType.SELL_TO_SHOP,
                 amount,
                 Math.max(0, maxAffordable),
@@ -418,17 +441,15 @@ public class SimpleTradeService implements TradeService {
                 false,
                 TradeFailureReason.INSUFFICIENT_FUNDS,
                 "Shop cannot afford that many items."
-        );
+        ), traderObservation);
       }
 
-      int space = shop.getRemainingSpace(prelocatedChest);
+      final int space = shop.getRemainingSpace(prelocatedChest);
+      final int effectiveSpace = space == -1? Integer.MAX_VALUE : space;
 
-      if(space == -1) {
-        space = Integer.MAX_VALUE;
-      }
-
-      if(requestedUnits > space) {
-        return new TradePreview(
+      final TradeObservation observation = observation(null, space == -1? null : space, sellerStock, null);
+      if(requestedUnits > effectiveSpace) {
+        return new PreviewOutcome(new TradePreview(
                 TradeType.SELL_TO_SHOP,
                 amount,
                 Math.max(0, space),
@@ -437,11 +458,22 @@ public class SimpleTradeService implements TradeService {
                 false,
                 TradeFailureReason.SHOP_NO_SPACE,
                 "Shop does not have enough space."
-        );
+        ), observation);
       }
+
+      return new PreviewOutcome(new TradePreview(
+              TradeType.SELL_TO_SHOP,
+              amount,
+              amount,
+              unitPrice(shop),
+              totalPrice(shop, amount),
+              true,
+              null,
+              null
+      ), observation);
     }
 
-    return new TradePreview(
+    return new PreviewOutcome(new TradePreview(
             TradeType.SELL_TO_SHOP,
             amount,
             amount,
@@ -450,11 +482,25 @@ public class SimpleTradeService implements TradeService {
             true,
             null,
             null
-    );
+    ), traderObservation);
   }
 
   private int normalizeAmount(@NotNull final Shop shop, final int tradeAmount) {
     return shop.getItemUnitSize() * tradeAmount;
+  }
+
+  /** Internal preview carrier: the API preview plus the measurements taken while producing it. */
+  private record PreviewOutcome(@NotNull TradePreview preview, @NotNull TradeObservation observation) {
+
+  }
+
+  private static TradeObservation observation(@Nullable final Integer chestStock, @Nullable final Integer chestSpace,
+                                              @Nullable final Integer traderStock, @Nullable final Integer traderSpace) {
+
+    if(chestStock == null && chestSpace == null && traderStock == null && traderSpace == null) {
+      return TradeObservation.EMPTY;
+    }
+    return new TradeObservation(chestStock, chestSpace, traderStock, traderSpace);
   }
 
   /**
@@ -485,14 +531,14 @@ public class SimpleTradeService implements TradeService {
   private TradeResult validateTradeAmount(@NotNull final Shop shop, final int amount, @NotNull final TradeType type) {
 
     if(amount == 0) {
-      return failedResult(type, amount, 0, unitPrice(shop), totalPrice(shop, 0), TradeFailureReason.INVALID_AMOUNT, "Amount must be > 0.");
+      return failedResult(type, amount, 0, unitPrice(shop), totalPrice(shop, 0), TradeFailureReason.INVALID_AMOUNT, "Amount must be > 0.", TradeObservation.EMPTY);
     }
     final int unitSize = shop.getItemUnitSize();
     if(unitSize <= 0) {
-      return failedResult(type, amount, 0, unitPrice(shop), totalPrice(shop, 0), TradeFailureReason.INVALID_AMOUNT, "Shop item unit size must be > 0.");
+      return failedResult(type, amount, 0, unitPrice(shop), totalPrice(shop, 0), TradeFailureReason.INVALID_AMOUNT, "Shop item unit size must be > 0.", TradeObservation.EMPTY);
     }
     if((long)unitSize * Math.abs((long)amount) > Integer.MAX_VALUE) {
-      return failedResult(type, amount, 0, unitPrice(shop), totalPrice(shop, 0), TradeFailureReason.INVALID_AMOUNT, "Trade amount too large (integer overflow).");
+      return failedResult(type, amount, 0, unitPrice(shop), totalPrice(shop, 0), TradeFailureReason.INVALID_AMOUNT, "Trade amount too large (integer overflow).", TradeObservation.EMPTY);
     }
     return null;
   }
@@ -526,7 +572,8 @@ public class SimpleTradeService implements TradeService {
   private TradeResult successResult(@NotNull final TradeType type,
                                     final int requestedAmount,
                                     final int tradedAmount,
-                                    @NotNull final BigDecimal unitPrice) {
+                                    @NotNull final BigDecimal unitPrice,
+                                    @Nullable final TradeObservation observation) {
     return new TradeResult(
             true,
             type,
@@ -538,7 +585,8 @@ public class SimpleTradeService implements TradeService {
             ZERO,
             null,
             null,
-            null
+            null,
+            observation
     );
   }
 
@@ -548,7 +596,8 @@ public class SimpleTradeService implements TradeService {
                                    @NotNull final BigDecimal unitPrice,
                                    @NotNull final BigDecimal totalPrice,
                                    @NotNull final TradeFailureReason reason,
-                                   final String debugMessage) {
+                                   final String debugMessage,
+                                   @Nullable final TradeObservation observation) {
     return new TradeResult(
             false,
             type,
@@ -560,7 +609,8 @@ public class SimpleTradeService implements TradeService {
             ZERO,
             reason,
             null,
-            debugMessage
+            debugMessage,
+            observation
     );
   }
 }
