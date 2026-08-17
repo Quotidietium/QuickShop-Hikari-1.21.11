@@ -69,6 +69,17 @@ text 套件 OOM（4GB 堆耗尽，7.5GB heap dump）。
 全序运行：套件时长恢复正常（text 91s→7.3s、database 157s→27s）、OOM 消失、
 `forLocaleWithArgs` 全序稳态 926ns 与 R19 干净窗口一致。**R20 报告的污染说明已更正。**
 
+## 附：实机验证进展与连带修复
+
+在 test/ 服务器（Paper 1.21.11 + Vault + EssentialsX + **packetevents 2.9.5 插件**）上对
+R21 做端到端验证时发现**连带兼容性缺陷**：代码把 PacketEvents 插件作为优先展示物后端
+（pom 中 provided、运行时取自插件），但 plugin.yml 的 softdepend 从未声明 `packetevents`
+——在仅安装 PacketEvents（无 ProtocolLib）的服务器上，QuickShop 启用阶段即
+`NoClassDefFoundError: com/github/retrooper/packetevents/PacketEvents` 崩溃（日志实证）。
+已修复（softdepend 补一行，无该插件的服务器零影响）。收尾时服务器已在修复版构建上
+重启进行展示物可见性验证，因会话结束中断——该项留待下次会话续验（步骤：装好
+packetevents 插件 → `node test/bot/qs-display-check.js` 断言商店上方 item 实体可见）。
+
 ## 结论
 
 R21 消除了展示物子系统在区块流送上的隐性每包全量解析（Netty 线程、每玩家每区块包，
