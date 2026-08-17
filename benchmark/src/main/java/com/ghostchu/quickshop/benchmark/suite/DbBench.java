@@ -95,6 +95,40 @@ public final class DbBench {
       ctx.index++;
       consume(helper.listShops(null, false).size());
     });
+
+    // per-trade metric insert cost: one qs_log_purchase row per purchase op
+    harness.bench("db/metricInsertSingle", ctx -> {
+      final long shopId = ids[permutation[(int)(ctx.index++ % permutation.length)]];
+      consume(helper.insertMetricRecord(metricRecord(shopId, ctx.index)).join());
+    });
+
+    // batched metric flush (candidate builds only — probed at runtime so baseline jars
+    // simply skip the case); one op = one JDBC batch of 100 records
+    try {
+      SimpleDatabaseHelperV2.class.getMethod("insertMetricRecords", java.util.List.class);
+      final int batchSize = 100;
+      harness.bench("db/metricInsertBatch100", ctx -> {
+        ctx.index++;
+        final java.util.List<com.ghostchu.quickshop.api.database.ShopMetricRecord> batch = new java.util.ArrayList<>(batchSize);
+        for(int i = 0; i < batchSize; i++) {
+          batch.add(metricRecord(ids[permutation[(int)((ctx.index + i) % permutation.length)]], ctx.index + i));
+        }
+        consume(helper.insertMetricRecords(batch).join());
+      });
+    } catch(final NoSuchMethodException absentInBaseline) {
+      // baseline jar: insertMetricRecords not present, case intentionally unregistered
+    }
+  }
+
+  private static com.ghostchu.quickshop.api.database.ShopMetricRecord metricRecord(final long shopId, final long seq) {
+
+    return new com.ghostchu.quickshop.api.database.ShopMetricRecord(
+            System.currentTimeMillis(), shopId,
+            com.ghostchu.quickshop.api.database.ShopOperationEnum.PURCHASE_SELLING_SHOP,
+            10.0d, 0.5d, (int)(seq % 64),
+            com.ghostchu.quickshop.obj.QUserImpl.createFullFilled(
+                    java.util.UUID.nameUUIDFromBytes("metric-bench".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    "metric-bench", true));
   }
 
   /**
