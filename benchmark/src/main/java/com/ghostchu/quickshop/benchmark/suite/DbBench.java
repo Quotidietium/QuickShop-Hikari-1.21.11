@@ -118,6 +118,29 @@ public final class DbBench {
     } catch(final NoSuchMethodException absentInBaseline) {
       // baseline jar: insertMetricRecords not present, case intentionally unregistered
     }
+
+    // per-trade external-cache row write (one REPLACE per value change)
+    harness.bench("db/externalCacheUpdateSingle", ctx -> {
+      final long shopId = ids[permutation[(int)(ctx.index++ % permutation.length)]];
+      consume(helper.updateExternalInventoryProfileCache(shopId, (int)(ctx.index % 54), (int)(ctx.index % 64)).join());
+    });
+
+    // batched external-cache flush (candidate only): one op = 100 deduped REPLACE rows
+    try {
+      SimpleDatabaseHelperV2.class.getMethod("updateExternalInventoryProfileCaches", java.util.List.class);
+      final int cacheBatchSize = 100;
+      harness.bench("db/externalCacheBatch100", ctx -> {
+        ctx.index++;
+        final java.util.List<SimpleDatabaseHelperV2.ShopCacheRow> rows = new java.util.ArrayList<>(cacheBatchSize);
+        for(int i = 0; i < cacheBatchSize; i++) {
+          final long shopId = ids[permutation[(int)((ctx.index + i) % permutation.length)]];
+          rows.add(new SimpleDatabaseHelperV2.ShopCacheRow(shopId, i % 54, i % 64));
+        }
+        consume(helper.updateExternalInventoryProfileCaches(rows).join());
+      });
+    } catch(final NoSuchMethodException absentInBaseline) {
+      // baseline jar: batched method not present, case intentionally unregistered
+    }
   }
 
   private static com.ghostchu.quickshop.api.database.ShopMetricRecord metricRecord(final long shopId, final long seq) {
