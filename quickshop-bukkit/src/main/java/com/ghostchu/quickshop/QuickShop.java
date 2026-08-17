@@ -307,6 +307,13 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   @Getter
   @Nullable
   private com.ghostchu.quickshop.metric.MetricBatcher metricBatcher;
+  /**
+   * Coalesces the remaining per-trade DB writes (qs_external_cache updates, qs_messages
+   * offline-message inserts); null only before the enable phase / unit tests.
+   */
+  @Getter
+  @Nullable
+  private com.ghostchu.quickshop.database.DbWriteBatcher dbWriteBatcher;
   @Getter
   private boolean allowStack;
   @Getter
@@ -862,6 +869,9 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     this.interactionManager = new QuickShopInteractionManager(this);
     // metric batching must exist before listeners fire
     this.metricBatcher = new com.ghostchu.quickshop.metric.MetricBatcher(this);
+    if(this.getDatabaseHelper() instanceof final com.ghostchu.quickshop.database.SimpleDatabaseHelperV2 dbHelper) {
+      this.dbWriteBatcher = new com.ghostchu.quickshop.database.DbWriteBatcher(this, dbHelper);
+    }
     // Register events
     // Listeners (These don't)
     registerListeners();
@@ -1132,6 +1142,9 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     if(metricBatcher != null) {
       metricBatcher.start();
     }
+    if(dbWriteBatcher != null) {
+      dbWriteBatcher.start();
+    }
     if(logWatcher != null) {
       logWatcher.start(10, 10);
       logger.info("Log actions is enabled. Actions will be logged in the qs.log file!");
@@ -1280,6 +1293,10 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     if(metricBatcher != null) {
       logger.info("Flushing pending metric records...");
       metricBatcher.flushSync(10);
+    }
+    if(dbWriteBatcher != null) {
+      logger.info("Flushing pending database write batches...");
+      dbWriteBatcher.flushSync(10);
     }
     if(shopSaveWatcher != null) {
       logger.info("Stopping shop auto save...");

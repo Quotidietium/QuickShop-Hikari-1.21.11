@@ -288,7 +288,11 @@ public class MsgUtil {
     //capture the cutoff before reading: deleting everything for the player would also wipe
     //messages concurrently stored while we were selecting/sending (e.g. trades at join time)
     final long flushStart = System.currentTimeMillis();
-    PLUGIN.getDatabaseHelper().selectPlayerMessages(playerUniqueId)
+    // batched offline messages must land before the read so joining players receive them
+    final var batcher = PLUGIN.getDbWriteBatcher();
+    final java.util.concurrent.CompletableFuture<Void> messagesFlushed = batcher != null
+            ? batcher.flushMessagesAsync() : java.util.concurrent.CompletableFuture.completedFuture(null);
+    messagesFlushed.thenCompose(v->PLUGIN.getDatabaseHelper().selectPlayerMessages(playerUniqueId))
             .thenAccept(msgs->{
               for(final String msg : msgs) {
                 PLUGIN.platform().sendMessage(player, GsonComponentSerializer.gson().deserialize(msg));
@@ -444,13 +448,19 @@ public class MsgUtil {
     Log.debug(serialized);
     final OfflinePlayer p = Bukkit.getOfflinePlayer(uuid);
     if(!p.isOnline()) {
-      PLUGIN.getDatabaseHelper().saveOfflineTransactionMessage(uuid, serialized, System.currentTimeMillis())
-              .thenAccept(v->{
-              })
-              .exceptionally(err->{
-                PLUGIN.logger().warn("Could not save transaction message to database", err);
-                return null;
-              });
+      // batched: one queue entry here, one JDBC batch per flush window
+      final var batcher = PLUGIN.getDbWriteBatcher();
+      if(batcher != null) {
+        batcher.offerOfflineMessage(uuid, serialized, System.currentTimeMillis());
+      } else {
+        PLUGIN.getDatabaseHelper().saveOfflineTransactionMessage(uuid, serialized, System.currentTimeMillis())
+                .thenAccept(v->{
+                })
+                .exceptionally(err->{
+                  PLUGIN.logger().warn("Could not save transaction message to database", err);
+                  return null;
+                });
+      }
       try {
         if(p.getName() != null && PLUGIN.getConfig().getBoolean("bungee-cross-server-msg", true)) {
           PLUGIN.getDatabaseHelper().getPlayerLocale(uuid).whenCompleteAsync((locale, err)->{

@@ -121,6 +121,12 @@ public class InternalListener extends AbstractQSListener {
       return;
     }
     countUpdateCache.put(event.getShop(), new SpaceCache(event.getStock(), event.getSpace()));
+    // batched: one row write per shop per flush window instead of one per change
+    final var batcher = plugin.getDbWriteBatcher();
+    if(batcher != null) {
+      batcher.offerInventoryCache(event.getShop().getShopId(), event.getSpace(), event.getStock());
+      return;
+    }
     plugin.getDatabaseHelper().updateExternalInventoryProfileCache(event.getShop().getShopId(), event.getSpace(), event.getStock())
             .exceptionally(err->{
               Log.debug("Error updating external inventory profile cache for shop " + event.getShop().getShopId() + ": " + err.getMessage());

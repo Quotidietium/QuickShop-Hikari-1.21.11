@@ -689,6 +689,12 @@ public abstract class AbstractShopManager implements ShopManager {
   public CompletableFuture<@NotNull ShopInventoryCountCache> queryShopInventoryCacheInDatabase(@NotNull final Shop shop) {
 
     Util.ensureThread(true);
+    // batched cache writes must land before the read (browse menu / async fallback path)
+    final var batcher = plugin.getDbWriteBatcher();
+    if(batcher != null) {
+      return batcher.flushInventoryCacheAsync()
+              .thenCompose(v->plugin.getDatabaseHelper().queryInventoryCache(shop.getShopId()));
+    }
     return plugin.getDatabaseHelper().queryInventoryCache(shop.getShopId());
   }
 
