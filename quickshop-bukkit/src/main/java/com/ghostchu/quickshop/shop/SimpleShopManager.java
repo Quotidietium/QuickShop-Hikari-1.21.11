@@ -351,11 +351,9 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       return false;
     }
 
-    int space = shop.getRemainingSpace();
-
-    if(space == -1) {
-      space = Integer.MAX_VALUE;
-    }
+    // no eager chest space scan here: the trade preview measures it once and reports it
+    // via TradeResult.observation(); the failure branch and the out-of-space notification
+    // read it from there (the chest is untouched by a failed preview)
 
     // Money handling
     // BUYING MODE  Shop Owner -> Player
@@ -409,6 +407,10 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         }
         case SHOP_NO_SPACE -> {
 
+          // preview measured the chest space before refusing; identical to a fresh scan
+          // (third-party trade services without observations fall back)
+          final Integer measured = result.observation().chestSpace();
+          final int space = measured != null? measured : shop.getRemainingSpace();
           plugin.text().of(buyer, "shop-has-no-space", Component.text(space), Util.getItemStackName(shop.getItem())).send();
           return false;
         }
@@ -424,7 +426,8 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         }
         case ITEM_NOT_ENOUGH -> {
 
-          final int count = Util.countItems(buyerInventory, shop);
+          // preview counted the seller inventory before refusing; identical to a fresh scan
+          final int count = result.observation().traderStock() != null? result.observation().traderStock() : Util.countItems(buyerInventory, shop);
           plugin.text().of(buyer, "you-dont-have-that-many-items", Component.text(count), Util.getItemStackName(shop.getItem())).send();
           return false;
         }
@@ -444,7 +447,13 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
 
     sendSellSuccess(buyerQUser, shop, amount, total, transaction.toTax().doubleValue());
     new ShopSuccessPurchaseEvent(shop, buyerQUser, buyerInventory, amount, total, transaction.toTax().doubleValue()).callEvent();
-    shop.setSignText(plugin.text().findRelativeLanguages(buyer)); // Update the signs count
+    // sign refresh already happened inside the trade service (SignUpdateWatcher batch, or
+    // immediate per shop.immediate-trade-sign-updates) in the trading player's locale —
+    // a second immediate render here would duplicate that work per trade
+    // pre-trade chest space as measured by the preview (MAX_VALUE semantics preserved for
+    // unlimited shops; third-party trade services without observations pay one scan here)
+    final Integer measuredSpace = result.observation().chestSpace();
+    final int space = measuredSpace != null? measuredSpace : shop.getRemainingSpace();
     notifySold(buyerQUser, shop, amount, space);
     return true;
   }
@@ -577,16 +586,10 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       return false;
     }
 
-    int stock = shop.getRemainingStock();
-    if(stock == -1) {
-      stock = Integer.MAX_VALUE;
-    }
-
-    /*if(shop.isStackingShop()) {
-      stock = stock * shop.getItem().getAmount();
-    }*/
-
-    final int playerSpace = Util.countSpace(sellerInventory, shop);
+    // no eager chest/player scans here: the trade preview measures exactly these values once
+    // and reports them back via TradeResult.observation(); failure branches read them from
+    // there (the inventories are untouched on a failed preview, so the values are identical
+    // to a fresh scan)
 
     final TaxRates taxRates = taxManager.provider().calculateTax(shop, sellerQUser);
 
@@ -646,11 +649,17 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         }
         case STOCK_TOO_LOW -> {
 
+          // preview measured the chest before refusing; nothing moved, so this is identical
+          // to a fresh scan (third-party trade services without observations fall back)
+          final Integer measured = result.observation().chestStock();
+          final int stock = measured != null? measured : shop.getRemainingStock();
           plugin.text().of(seller, "shop-stock-too-low", Component.text(stock), Util.getItemStackName(shop.getItem())).send();
           return false;
         }
         case INVENTORY_FULL -> {
 
+          // preview measured the buyer inventory before refusing; identical to a fresh scan
+          final int playerSpace = result.observation().traderSpace() != null? result.observation().traderSpace() : Util.countSpace(sellerInventory, shop);
           plugin.text().of(seller, "inventory-space-full", amount, playerSpace).send();
           return false;
         }
@@ -667,6 +676,12 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       return false;
     }
 
+    // pre-trade stock as measured by the preview (MAX_VALUE for unlimited shops, matching
+    // the old getRemainingStock() == -1 mapping); notifies the owner when a trade exactly
+    // emptied the shop. Third-party trade services without observations pay one scan here,
+    // keeping the historical behaviour
+    final Integer measuredStock = result.observation().chestStock();
+    final int stock = measuredStock != null? measuredStock : shop.getRemainingStock();
     sendPurchaseSuccess(sellerQUser, shop, amount, total, transaction.fromTax().doubleValue());
     new ShopSuccessPurchaseEvent(shop, sellerQUser, sellerInventory, amount, total, transaction.fromTax().doubleValue()).callEvent();
     notifyBought(sellerQUser, shop, amount, stock, transaction);
