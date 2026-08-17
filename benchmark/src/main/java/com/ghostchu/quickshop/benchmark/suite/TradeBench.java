@@ -200,7 +200,7 @@ public final class TradeBench {
     // constant-amount item for the scan fixtures (cheap clones, never depletes) and a
     // stateful one for the trade-service shop (amount accounting through op clones)
     final ItemStack shopItem = item(Material.DIAMOND, 64, false, true);
-    final World world = mock(World.class);
+    final World world = com.ghostchu.quickshop.benchmark.Env.pin(mock(World.class));
     when(world.getName()).thenReturn("world");
     final ContainerShop shop = createShop(plugin, shopItem, world, SimpleShopManager.SELLING_TYPE);
     final ContainerShop tradeShop = createShop(plugin, statefulItem(Material.DIAMOND, 64, true), world, SimpleShopManager.SELLING_TYPE);

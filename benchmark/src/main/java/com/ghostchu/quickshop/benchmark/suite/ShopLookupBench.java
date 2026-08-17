@@ -37,7 +37,7 @@ public final class ShopLookupBench {
     // shop-cache boxing reaches back into the plugin for the shop manager
     when(plugin.getShopManager()).thenReturn(manager);
 
-    final World world = mock(World.class);
+    final World world = com.ghostchu.quickshop.benchmark.Env.pin(mock(World.class));
     when(world.getName()).thenReturn("world");
     // isValid() resolves the block at the shop location and checks its type
     final org.bukkit.block.Block block = mock(org.bukkit.block.Block.class);

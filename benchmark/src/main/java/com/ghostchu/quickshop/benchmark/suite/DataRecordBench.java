@@ -63,7 +63,7 @@ public final class DataRecordBench {
     });
     when(plugin.platform()).thenReturn(platform);
 
-    final World world = mock(World.class);
+    final World world = com.ghostchu.quickshop.benchmark.Env.pin(mock(World.class));
     when(world.getName()).thenReturn("world");
 
     final ContainerShop[] shops = new ContainerShop[SHOP_COUNT];

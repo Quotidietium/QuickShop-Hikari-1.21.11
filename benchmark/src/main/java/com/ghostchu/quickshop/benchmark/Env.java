@@ -17,8 +17,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,9 +40,22 @@ import static org.mockito.Mockito.when;
 public final class Env {
 
   private static final Map<String, Object> CONFIGS = new ConcurrentHashMap<>();
+  /**
+   * Bukkit Location keeps its World in a WeakReference, so a mock World held only by a
+   * suite-local variable can be collected mid-benchmark and every later getWorld() throws
+   * "World unloaded". Suites pin their world mocks here.
+   */
+  private static final List<Object> PINS = new CopyOnWriteArrayList<>();
 
   static {
     install();
+  }
+
+  /** Keeps a strong reference for the whole benchmark JVM (returns the argument). */
+  public static <T> T pin(final T object) {
+
+    PINS.add(object);
+    return object;
   }
 
   private static final class Holder {

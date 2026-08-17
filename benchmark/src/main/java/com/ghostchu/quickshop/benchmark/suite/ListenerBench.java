@@ -48,7 +48,7 @@ public final class ListenerBench {
 
     final PlayerListener listener = new PlayerListener(plugin);
 
-    final World world = mock(World.class);
+    final World world = com.ghostchu.quickshop.benchmark.Env.pin(mock(World.class));
     when(world.getName()).thenReturn("world");
     final Player player = mock(Player.class);
     lenient().when(player.getUniqueId()).thenReturn(UUID.nameUUIDFromBytes(new byte[]{1}));
