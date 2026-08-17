@@ -994,7 +994,7 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
   }
 
   /** Batched form of {@link #updateExternalInventoryProfileCache(long, int, int)}. */
-  record ShopCacheRow(long shopId, int space, int stock) {
+  public record ShopCacheRow(long shopId, int space, int stock) {
 
   }
 
