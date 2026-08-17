@@ -18,6 +18,7 @@ package com.ghostchu.quickshop.api.shop.trading;
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
@@ -31,5 +32,29 @@ import java.math.BigDecimal;
 public record TradeResult(boolean success, TradeType tradeType, int requestedAmount, int tradedAmount,
                           BigDecimal unitPrice, BigDecimal totalPrice, BigDecimal actorTax,
                           BigDecimal ownerTax, @Nullable TradeFailureReason failureReason,
-                          @Nullable String messageKey, @Nullable String debugMessage) {
+                          @Nullable String messageKey, @Nullable String debugMessage,
+                          @Nullable TradeObservation observation) {
+
+  /**
+   * Legacy constructor without inventory observations; equivalent to an empty observation so
+   * third-party trade services keep compiling and behaving as before.
+   */
+  public TradeResult(final boolean success, final TradeType tradeType, final int requestedAmount,
+                     final int tradedAmount, final BigDecimal unitPrice, final BigDecimal totalPrice,
+                     final BigDecimal actorTax, final BigDecimal ownerTax,
+                     @Nullable final TradeFailureReason failureReason, @Nullable final String messageKey,
+                     @Nullable final String debugMessage) {
+
+    this(success, tradeType, requestedAmount, tradedAmount, unitPrice, totalPrice, actorTax,
+            ownerTax, failureReason, messageKey, debugMessage, TradeObservation.EMPTY);
+  }
+
+  /**
+   * @return pre-trade inventory measurements taken during validation, never null
+   *         (empty when the producing trade service supplies none)
+   */
+  public @NotNull TradeObservation observation() {
+
+    return observation != null? observation : TradeObservation.EMPTY;
+  }
 }
