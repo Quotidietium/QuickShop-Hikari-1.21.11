@@ -14,8 +14,8 @@
 | 目标平台 | 仅 Paper（Spigot 直接拒绝启动）；Folia 兼容 |
 | 代码规模 | 663 个 Java 文件：api 177 / bukkit 357 / addon 62 / compat 52 / common 12 / platform 3 |
 | 数据库 | MySQL 或 H2(MODE=MYSQL)，schema 版本 20，EasySQL + HikariCP |
-| 测试 | quickshop-bukkit 100 个用例全绿（回归 + 查找表索引 + DB 写缓存 + 文本缓存 + QUser 驻留 + 事件快路径 + 匹配免克隆 + 迭代器快照 + 木牌调度 + 点击路径 + 交易观测 + 指标批处理 + 剩余 DB 写批处理 + 文本预解析等价） |
-| 基准 | `benchmark/` 独立模块：34 用例 × 7 套件（查找表/序列化/经济/文本/H2 数据库（含指标与外部缓存插入）/交易热路径（含 action 全路径）/监听器点击），报告见 [report/perf](report/perf/) |
+| 测试 | quickshop-bukkit 104 个用例全绿（回归 + 查找表索引 + DB 写缓存 + 文本缓存 + QUser 驻留 + 事件快路径 + 匹配免克隆 + 迭代器快照 + 木牌调度 + 点击路径 + 交易观测 + 指标批处理 + 剩余 DB 写批处理 + 文本预解析等价 + 日志懒队列） |
+| 基准 | `benchmark/` 独立模块：35 用例 × 7 套件（R20 起）（查找表/序列化/经济/文本/H2 数据库（含指标与外部缓存插入）/交易热路径（含 action 全路径）/监听器点击），报告见 [report/perf](report/perf/) |
 | 本仓库定位 | 独立 fork（已移除 upstream，不再同步社区上游） |
 
 ## 一句话理解这个项目
@@ -34,6 +34,7 @@
    - **交易数量溢出/零单位刷钱漏洞**：unitSize=0 或溢出为 0 时移 0 件物品却全额转账（已修 9c88938d5）。
 5. **测试与性能基线演进**：审计循环建立了回归网（38 用例）；2026-08-16 第一轮性能优化循环（7 轮，详见 [report/perf/2026-08-16-performance-optimization.md](report/perf/2026-08-16-performance-optimization.md)）后达 56 用例全绿，并新增 `benchmark/` 基准模块（19 用例 × 5 套件）。核心收益：id/owner 查找 O(n)→O(1)（142μs/282μs→~100ns）、脏店保存不变跳写 -81%、无参消息渲染 -99%、全量读店 -38%、指标定位 SELECT -99.6%。
 6. **第二轮性能优化循环（交易与交互热路径，R8–R12 + R14，详见 [report/perf/2026-08-16-trade-path-optimization.md](report/perf/2026-08-16-trade-path-optimization.md))**：买卖全链路 -62.7%/-61.2%、库存扫描 -44%/-38%、迭代器 O(n²)→O(n)（纯迭代 -98.1%）、交易后木牌更新批处理合并、点击路径方块访问削减（R13 带参文本参数序列化尝试实测无收益已回退并记录）。测试增至 70 用例全绿、基准扩至 28 用例 × 7 套件。
+12. **第八轮（R20·购买日志卸载，2026-08-18，详见 [report/perf/2026-08-18-purchase-log-offload.md](report/perf/2026-08-18-purchase-log-offload.md)）**：LogWatcher 懒队列 + `logEventLazy` + 监听器懒构造——每笔交易日志序列化移出主线程（**-97.9%**，180μs→3.7μs，5v5 fork 零交叉）；qs.log 内容/顺序/轮转不变。测试 104 用例全绿、基准 35 用例；八轮累计交易全链约 **-84%**。
 11. **第七轮（R19·带参文本预解析，2026-08-18，详见 [report/perf/2026-08-18-text-preparse.md](report/perf/2026-08-18-text-preparse.md)）**：占位符模板预解析为哨兵孔组件树，参数组件直插（免序列化与全模板重解析），带参渲染 27μs→1.1μs（**-95.9%**）；三重守卫不满足即回退原路径，内置 282 模板全语料逐字节等价。测试 100 用例全绿。
 10. **第六轮（R18·收据/通知单次 getItem，2026-08-17，详见 [report/perf/2026-08-17-receipt-item-dedup.md](report/perf/2026-08-17-receipt-item-dedup.md)）**：收据与店主通知各取一次商店物品并复用（printEnchantment 增传栈重载），每笔交易省 4~6 次克隆与 RETRIEVE 事件；actionBuy 再 -8.7%。会话五轮总览见该报告末尾（交易全链买 -82%、每笔 DB 写全批量化）。
 9. **第五轮（R17·剩余每笔交易 DB 写批处理，2026-08-17，详见 [report/perf/2026-08-17-remaining-db-write-batching.md](report/perf/2026-08-17-remaining-db-write-batching.md)）**：通用 `BatchingQueue`（按键保末值去重）+ `DbWriteBatcher`——qs_external_cache 批量 REPLACE（每条摊销 **-67.7%**，同店连点 N 行→1 行）与 qs_messages 离线消息保序批插；读方链式冲刷保精确新鲜。每笔成功交易的 DB 写全部批量化（指标/缓存/消息各 1/窗口），主线程提交成本百 ns 级。测试 91 用例全绿、基准 34 用例。
