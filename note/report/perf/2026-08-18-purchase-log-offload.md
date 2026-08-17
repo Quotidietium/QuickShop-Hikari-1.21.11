@@ -34,13 +34,15 @@
 | trade/actionBuy / actionSell | 3,652,859 / 3,757,896 | 3,656,926 / 3,755,301 | ±0.1% | 交易主链无回归（日志成本原本在监听器直调用例中单独计量） |
 | text/forLocaleWithArgs / NoArgs | 17,400 / 226 | 18,873 / 2,113 | 污染窗口，见下 | R20 未触碰文本路径 |
 
-**text 套件测量窗口污染说明**：本轮 A/B 的 10 个 fork 中 9 个出现 text 用例劣化
-（withArgs 14~27μs、部分 noArgs 1.9~11.8μs），而两侧代码在文本路径上**完全相同**
-（基线 e3f79d3bb 已含 R19）。事后用裸 `java`（绕开 exec:exec 的 Maven 父进程环境）以
-两种堆型复测候选 jar：**withArgs 899/978ns、noArgs 190/191ns——与 R19 干净窗口一致，
-零回归**。污染形态与 R15 记录的会话干扰同型（分配敏感路径被选择性放大），本轮记录的
-甄别方法：裸 JVM 复测 + 两侧同码对照。机器可读数据：`benchmark/results/round20-baseline/`
-与 `round20/`（5 fork 交替，零套件失败）。
+**text 套件测量污染说明（2026-08-18 R21 已破案并修复）**：本轮 A/B 的 10 个 fork 中
+9 个出现 text 用例劣化（withArgs 14~27μs、部分 noArgs 1.9~11.8μs），而两侧代码在文本
+路径上完全相同（基线 e3f79d3bb 已含 R19）。当时的甄别方法（裸 `java` 复测：withArgs
+899/978ns、noArgs 190/191ns，零回归）结论正确；**真实根因在 R21 破案：基准 harness 的
+Mockito mock 逐调用记录无限累积**——随基准用例增多，每个 JVM 数百万次 mock 调用的记录
+元数据涨至 GB 级，挤占堆并使分配敏感路径（带参渲染）在 GC 压力下劣化 10~50 倍；R21 已
+将全部热点 mock 改为 `stubOnly()`（免记录），此后全序运行 text 套件恢复 926ns 稳态。
+此前若依赖本轮污染窗口的 text 数字作对照，应改用 R19 的干净数据或 R21 修复后的复测。
+机器可读数据：`benchmark/results/round20-baseline/` 与 `round20/`（5 fork 交替）。
 
 ### 测试（104 用例全绿，100→104）
 
