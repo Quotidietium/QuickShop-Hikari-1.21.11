@@ -139,12 +139,47 @@ public final class TradeBench {
       }
       consume(result);
     });
+
+    final ActionFixtures actionFixtures = installActionTradeEnvironment(fixtures, tradeService);
+    final AtomicInteger actionBuyCounter = new AtomicInteger();
+    harness.bench("trade/actionBuy", ctx -> {
+      ctx.index++;
+      // full player-facing buy: permission + tax + purchase event + preview + inventory
+      // commit + economy commit + receipt + owner notification
+      final boolean result = actionFixtures.manager().actionSelling(
+              actionFixtures.trader(), fixtures.player(), actionFixtures.eco(),
+              actionFixtures.info(), fixtures.tradeShop(), 1);
+      if(!result) {
+        throw new IllegalStateException("benchmark action trade must succeed, run #" + actionBuyCounter.incrementAndGet());
+      }
+      consume(result);
+    });
+
+    final AtomicInteger actionSellCounter = new AtomicInteger();
+    harness.bench("trade/actionSell", ctx -> {
+      ctx.index++;
+      // full player-facing sell: same chain in the sell-to-shop direction
+      final boolean result = actionFixtures.manager().actionBuying(
+              actionFixtures.trader(), fixtures.sellerInventory(), actionFixtures.eco(),
+              actionFixtures.info(), fixtures.buyingShop(), 1);
+      if(!result) {
+        throw new IllegalStateException("benchmark action sell must succeed, run #" + actionSellCounter.incrementAndGet());
+      }
+      consume(result);
+    });
   }
 
   /** Fixtures shared by the bench cases. */
   record Fixtures(InventoryWrapper chest, InventoryWrapper player, ContainerShop shop,
                   ItemStack shopItem, Inventory chestInventory, World world, ContainerShop tradeShop,
                   ContainerShop buyingShop, InventoryWrapper sellerInventory) {
+
+  }
+
+  /** Full player-facing action-path fixtures (manager with real action methods, trader, info). */
+  record ActionFixtures(SimpleShopManager manager, org.bukkit.entity.Player trader,
+                        com.ghostchu.quickshop.api.economy.EconomyProvider eco,
+                        com.ghostchu.quickshop.api.shop.Info info) {
 
   }
 
@@ -255,13 +290,21 @@ public final class TradeBench {
     final var text = mock(com.ghostchu.quickshop.api.localization.text.Text.class);
     lenient().when(textManager.of(anyString(), any(Object[].class))).thenReturn(text);
     lenient().when(textManager.of(anyString())).thenReturn(text);
+    // senders are nullable (ChatSheetPrinter receives null when the QUser has no live player)
+    lenient().when(textManager.of(org.mockito.ArgumentMatchers.nullable(org.bukkit.command.CommandSender.class), anyString(), any(Object[].class))).thenReturn(text);
+    lenient().when(textManager.of(org.mockito.ArgumentMatchers.nullable(java.util.UUID.class), anyString(), any(Object[].class))).thenReturn(text);
+    lenient().when(textManager.of(org.mockito.ArgumentMatchers.nullable(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any(Object[].class))).thenReturn(text);
     lenient().when(text.forLocale(anyString())).thenReturn(Component.empty());
+    lenient().when(text.forLocale()).thenReturn(Component.empty());
     final var proxiedLocale = mock(com.ghostchu.quickshop.api.localization.text.ProxiedLocale.class);
     lenient().when(proxiedLocale.getLocale()).thenReturn("en_us");
     lenient().when(textManager.findRelativeLanguages(any(com.ghostchu.quickshop.api.obj.QUser.class), anyBoolean()))
             .thenReturn(proxiedLocale);
     lenient().when(plugin.text()).thenReturn(textManager);
     lenient().when(plugin.getTextManager()).thenReturn(textManager);
+    // hover decoration passes the component through (notify paths chain on its result)
+    lenient().when(plugin.platform().setItemStackHoverEvent(any(Component.class), any(ItemStack.class)))
+            .thenAnswer(inv -> inv.getArgument(0, Component.class));
 
     final var shopManager = mock(SimpleShopManager.class);
     lenient().when(shopManager.shopLayoutProvider()).thenReturn(new SimpleShopLayoutProvider(plugin));
@@ -276,6 +319,87 @@ public final class TradeBench {
     lenient().when(ecoProvider.balance(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any()))
             .thenReturn(java.math.BigDecimal.valueOf(1_000_000));
     lenient().when(plugin.getEconomyManager()).thenReturn(economyManager);
+  }
+
+  /**
+   * Wires the player-facing action layer on top of the trade-service environment: a
+   * SimpleShopManager mock that runs the real actionSelling/actionBuying code (fields
+   * injected reflectively; its constructor drags in half the plugin, so Objenesis + CALLS_REAL
+   * _REAL_METHODS skips it), a trader player, a fresh Info, permissions, tax provider,
+   * economy operations, and an online shop owner so owner notifications skip the database.
+   */
+  private static ActionFixtures installActionTradeEnvironment(final Fixtures fixtures, final SimpleTradeService tradeService) {
+
+    final QuickShop plugin = Env.plugin();
+
+    final SimpleShopManager manager = mock(SimpleShopManager.class,
+            org.mockito.Mockito.withSettings().defaultAnswer(org.mockito.Mockito.CALLS_REAL_METHODS));
+    when(plugin.getShopManager()).thenReturn(manager);
+    lenient().when(manager.shopLayoutProvider()).thenReturn(new SimpleShopLayoutProvider(plugin));
+    lenient().when(manager.tradeService()).thenReturn(tradeService);
+    // Objenesis skips AbstractShopManager's constructor, so its fields start null
+    injectField(manager, "plugin", plugin);
+
+    // tax: flat zero rates through the real TaxRates value object
+    final var taxProvider = mock(com.ghostchu.quickshop.api.shop.tax.TaxProvider.class);
+    lenient().when(taxProvider.calculateTax(any(com.ghostchu.quickshop.api.shop.Shop.class),
+                    any(com.ghostchu.quickshop.api.obj.QUser.class)))
+            .thenReturn(new com.ghostchu.quickshop.api.shop.tax.TaxRates(0.0d, 0.0d));
+    final var taxManager = mock(com.ghostchu.quickshop.api.shop.tax.TaxManager.class);
+    lenient().when(taxManager.provider()).thenReturn(taxProvider);
+    lenient().when(taxManager.taxAccount()).thenReturn("");
+    injectField(manager, "taxManager", taxManager);
+
+    final var formatter = mock(com.ghostchu.quickshop.util.economyformatter.EconomyFormatter.class);
+    lenient().when(formatter.format(any(Double.class), any(com.ghostchu.quickshop.api.shop.Shop.class)))
+            .thenReturn("$0");
+    injectField(manager, "formatter", formatter);
+    injectField(manager, "showTax", false);
+    injectField(manager, "sendStockMessageToStaff", false);
+
+    // permissions: everyone may use foreign shops
+    final var permissionManager = mock(com.ghostchu.quickshop.permission.PermissionManager.class);
+    lenient().when(permissionManager.hasPermission(any(org.bukkit.command.CommandSender.class), anyString()))
+            .thenReturn(true);
+    lenient().when(plugin.perm()).thenReturn(permissionManager);
+
+    // economy operations for the full commit chain (balance is already stubbed)
+    final var economyManager = mock(com.ghostchu.quickshop.api.economy.EconomyManager.class);
+    final var ecoProvider = mock(com.ghostchu.quickshop.api.economy.EconomyProvider.class);
+    lenient().when(economyManager.provider()).thenReturn(ecoProvider);
+    lenient().when(ecoProvider.valid()).thenReturn(true);
+    lenient().when(ecoProvider.withdraw(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any(), any(java.math.BigDecimal.class)))
+            .thenReturn(true);
+    lenient().when(ecoProvider.deposit(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any(), any(java.math.BigDecimal.class)))
+            .thenReturn(true);
+    lenient().when(ecoProvider.balance(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any()))
+            .thenReturn(java.math.BigDecimal.valueOf(1_000_000));
+    lenient().when(plugin.getEconomyManager()).thenReturn(economyManager);
+
+    // trader player driving the action methods
+    final org.bukkit.entity.Player trader = mock(org.bukkit.entity.Player.class);
+    lenient().when(trader.getUniqueId()).thenReturn(
+            UUID.nameUUIDFromBytes("action-trader".getBytes(StandardCharsets.UTF_8)));
+    lenient().when(trader.getName()).thenReturn("action-trader");
+    lenient().when(trader.isOnline()).thenReturn(true);
+    lenient().when(trader.getLocation()).thenReturn(new Location(fixtures.world(), 1000, 64, 1002));
+    final var traderInventory = mock(org.bukkit.inventory.PlayerInventory.class);
+    lenient().when(trader.getInventory()).thenReturn(traderInventory);
+
+    // shop owner is online so owner notifications take the direct-message path
+    final org.bukkit.entity.Player ownerPlayer = mock(org.bukkit.entity.Player.class);
+    final var ownerOffline = mock(org.bukkit.OfflinePlayer.class);
+    lenient().when(ownerOffline.isOnline()).thenReturn(true);
+    lenient().when(ownerOffline.getPlayer()).thenReturn(ownerPlayer);
+    lenient().when(Env.server().getOfflinePlayer(any(java.util.UUID.class))).thenReturn(ownerOffline);
+
+    // interaction context: chest block still there, shop unchanged
+    final var info = mock(com.ghostchu.quickshop.api.shop.Info.class);
+    final Location infoLocation = new Location(fixtures.world(), 1000, 64, 1000);
+    lenient().when(info.getLocation()).thenReturn(infoLocation);
+    lenient().when(info.hasChanged(any(com.ghostchu.quickshop.api.shop.Shop.class))).thenReturn(false);
+
+    return new ActionFixtures(manager, trader, ecoProvider, info);
   }
 
   private static final Material[] MISC_MATERIALS = {
