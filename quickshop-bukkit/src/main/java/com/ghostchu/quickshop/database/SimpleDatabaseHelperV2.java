@@ -37,6 +37,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -551,6 +552,54 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
     });
     return future;
 
+  }
+
+  @Override
+  public @NotNull CompletableFuture<@NotNull Integer> insertMetricRecords(@NotNull final List<ShopMetricRecord> metricRecords) {
+
+    if(metricRecords.isEmpty()) {
+      return CompletableFuture.completedFuture(0);
+    }
+    // resolve each distinct shop's data id once, then insert every row through a single
+    // JDBC batch statement
+    final Map<Long, Long> dataIds = new HashMap<>();
+    final List<CompletableFuture<Void>> lookups = new ArrayList<>(metricRecords.size());
+    for(final ShopMetricRecord record : metricRecords) {
+      final long shopId = record.getShopId();
+      if(!dataIds.containsKey(shopId)) {
+        dataIds.put(shopId, null);
+        lookups.add(locateShopDataId(shopId).thenAccept(dataId->dataIds.put(shopId, dataId)));
+      }
+    }
+    final CompletableFuture<Integer> future = new CompletableFuture<>();
+    CompletableFuture.allOf(lookups.toArray(CompletableFuture[]::new)).whenCompleteAsync((ignored, err)->{
+      if(err != null) {
+        future.completeExceptionally(err);
+        return;
+      }
+      final var insert = DataTables.LOG_PURCHASE
+              .createInsertBatch()
+              .setColumnNames("time", "shop", "data", "buyer", "type", "amount", "money", "tax");
+      for(final ShopMetricRecord record : metricRecords) {
+        final Long dataId = dataIds.get(record.getShopId());
+        if(dataId == null) {
+          Log.debug("Skipping metric record for shop " + record.getShopId() + ": data id unresolved.");
+          continue;
+        }
+        insert.addParamsBatch(
+                new Date(record.getTime()), record.getShopId(), dataId, record.getPlayer(),
+                record.getType().name(), record.getAmount(), record.getTotal(), record.getTax());
+      }
+      insert.executeFuture(lines->lines.stream().mapToInt(Integer::intValue).sum())
+              .whenComplete((lines, err2)->{
+                if(err2 != null) {
+                  future.completeExceptionally(err2);
+                  return;
+                }
+                future.complete(lines);
+              });
+    }, QuickExecutor.getHikaricpExecutor());
+    return future;
   }
 
   @Override

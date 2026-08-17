@@ -127,6 +127,24 @@ public interface DatabaseHelper {
   @NotNull
   CompletableFuture<@NotNull Integer> insertMetricRecord(@NotNull ShopMetricRecord recordEntry);
 
+  /**
+   * Insert multiple metric records, ideally in one batched statement. The default
+   * implementation loops {@link #insertMetricRecord(ShopMetricRecord)}; implementations
+   * should override with a JDBC batch when their SQL layer supports it.
+   *
+   * @param records records to insert, never null (may be empty)
+   *
+   * @return future completing with the total number of affected rows
+   */
+  default @NotNull CompletableFuture<@NotNull Integer> insertMetricRecords(@NotNull List<ShopMetricRecord> records) {
+
+    if(records.isEmpty()) {
+      return CompletableFuture.completedFuture(0);
+    }
+    return CompletableFuture.allOf(records.stream().map(this::insertMetricRecord).toArray(CompletableFuture[]::new))
+            .thenApply(v->records.size());
+  }
+
   void insertTransactionRecord(@Nullable UUID from, @Nullable UUID to, double amount, @Nullable String currency, double taxAmount, @Nullable UUID taxAccount, @Nullable String error);
 
   @NotNull
