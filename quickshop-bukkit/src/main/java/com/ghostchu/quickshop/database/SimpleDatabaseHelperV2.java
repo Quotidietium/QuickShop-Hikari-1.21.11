@@ -979,7 +979,7 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
   }
 
   @Override
-  public @NotNull CompletableFuture<@NotNull Integer> updateExternalInventoryProfileCache(final long shopId, final int space, final int stock) {
+  public @NotNull CompletableFuture<Integer> updateExternalInventoryProfileCache(final long shopId, final int space, final int stock) {
 
 
     if(shopId <= 0) {
@@ -991,6 +991,50 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
             .setColumnNames("shop", "space", "stock")
             .setParams(shopId, space, stock)
             .executeFuture(lines->lines);
+  }
+
+  /** Batched form of {@link #updateExternalInventoryProfileCache(long, int, int)}. */
+  record ShopCacheRow(long shopId, int space, int stock) {
+
+  }
+
+  /**
+   * Writes a batch of inventory-cache rows through one JDBC replace batch. Callers hand
+   * already-deduplicated rows (one per shop, latest value).
+   */
+  public @NotNull CompletableFuture<Integer> updateExternalInventoryProfileCaches(@NotNull final List<ShopCacheRow> rows) {
+
+    if(rows.isEmpty()) {
+      return CompletableFuture.completedFuture(0);
+    }
+    for(final ShopCacheRow row : rows) {
+      if(row.shopId() <= 0) {
+        throw new IllegalArgumentException("Shop id must be greater than 0. Provided ID: " + row.shopId());
+      }
+    }
+    final var batch = DataTables.EXTERNAL_CACHE.createReplaceBatch().setColumnNames("shop", "space", "stock");
+    for(final ShopCacheRow row : rows) {
+      batch.addParamsBatch(row.shopId(), row.space(), row.stock());
+    }
+    return batch.executeFuture(lines->lines.stream().mapToInt(Integer::intValue).sum());
+  }
+
+  /** Batched form of {@link #saveOfflineTransactionMessage(UUID, String, long)}. */
+  record OfflineMessageRow(UUID receiver, String message, long time) {
+
+  }
+
+  /** Appends a batch of offline messages through one JDBC insert batch (order preserved). */
+  public @NotNull CompletableFuture<Integer> saveOfflineTransactionMessages(@NotNull final List<OfflineMessageRow> messages) {
+
+    if(messages.isEmpty()) {
+      return CompletableFuture.completedFuture(0);
+    }
+    final var batch = DataTables.MESSAGES.createInsertBatch().setColumnNames("receiver", "time", "content");
+    for(final OfflineMessageRow row : messages) {
+      batch.addParamsBatch(row.receiver().toString(), new Date(row.time()), row.message());
+    }
+    return batch.executeFuture(lines->lines.stream().mapToInt(Integer::intValue).sum());
   }
 
   @Override
