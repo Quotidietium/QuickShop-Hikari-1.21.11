@@ -70,6 +70,7 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
 
     itemMetaMatcher = new ItemMetaMatcher(plugin.getConfig().getSection("matcher.item"), this);
     workType = plugin.getConfig().getInt("matcher.work-type");
+    shopIdCache = null;
   }
 
   /**
@@ -175,7 +176,7 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
       }
     }
 
-    final String shopIdOrigin = plugin.platform().getItemShopId(requireStack);
+    final String shopIdOrigin = lookupShopId(requireStack);
     if(shopIdOrigin != null) {
       Log.debug("ShopId compare -> Origin: " + shopIdOrigin + "  Given: " + plugin.platform().getItemShopId(givenStack));
       final String shopIdTester = plugin.platform().getItemShopId(givenStack);
@@ -213,6 +214,38 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
   private boolean typeMatches(final ItemStack requireStack, final ItemStack givenStack) {
 
     return requireStack.getType().equals(givenStack.getType());
+  }
+
+  /**
+   * Single-entry identity cache for the shop-item side of the shopId comparison. Full
+   * inventory scans call matches() once per slot with the SAME requireStack instance
+   * (ContainerShop passes its live item field), so the origin shopId would otherwise be
+   * re-read for every foreign slot — an NBTItem construction each time when NBTAPI is
+   * present. The cache is only consulted while no ShopItemMatchEvent listener is
+   * registered: a listener is the only actor able to mutate the stack between two
+   * matches() calls of a scan (single region thread, no other callbacks), which makes a
+   * cached read provably equal to a fresh one; with listeners registered every call
+   * re-reads exactly as before. The stack identity key also invalidates naturally when
+   * the shop item is replaced (new instance).
+   */
+  private record ShopIdCacheEntry(@NotNull ItemStack stack, @Nullable String shopId) {
+
+  }
+
+  private volatile ShopIdCacheEntry shopIdCache;
+
+  private String lookupShopId(@NotNull final ItemStack requireStack) {
+
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      return plugin.platform().getItemShopId(requireStack);
+    }
+    final ShopIdCacheEntry cached = this.shopIdCache;
+    if(cached != null && cached.stack() == requireStack) {
+      return cached.shopId();
+    }
+    final String shopId = plugin.platform().getItemShopId(requireStack);
+    this.shopIdCache = new ShopIdCacheEntry(requireStack, shopId);
+    return shopId;
   }
 
   /**
