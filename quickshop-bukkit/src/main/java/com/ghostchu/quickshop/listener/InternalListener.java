@@ -163,14 +163,17 @@ public class InternalListener extends AbstractQSListener {
   public void shopPurchase(final ShopSuccessPurchaseEvent event) {
 
     if(loggingAction) {
-      plugin.logEvent(new ShopPurchaseLog(event.getShop().saveToInfoStorage(),
-                                          event.getShop().shopType(),
-                                          event.getPurchaser(),
-                                          LegacyComponentSerializer.legacySection().serialize(Util.getItemStackName(event.getShop().getItem())),
-                                          Util.serialize(event.getShop().getItem()),
-                                          event.getAmount(),
-                                          event.getBalance(),
-                                          event.getTax()));
+      // the log entry carries an item snapshot, an item encode and a name render; build
+      // all of it lazily so the heavy serialization leaves the main thread (state is
+      // read at flush time, at most one watcher period later)
+      plugin.logEventLazy(()->new ShopPurchaseLog(event.getShop().saveToInfoStorage(),
+                                                  event.getShop().shopType(),
+                                                  event.getPurchaser(),
+                                                  LegacyComponentSerializer.legacySection().serialize(Util.getItemStackName(event.getShop().getItem())),
+                                                  Util.serialize(event.getShop().getItem()),
+                                                  event.getAmount(),
+                                                  event.getBalance(),
+                                                  event.getTax()));
     }
     if(loggingBalance) {
       plugin.logEvent(new PlayerEconomyPreCheckLog(false, event.getPurchaser(), plugin.getEconomyManager().provider().balance(event.getPurchaser(), event.getShop().bukkitLocation().getWorld().getName(), event.getShop().getCurrency())));
