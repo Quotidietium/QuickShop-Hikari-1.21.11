@@ -108,6 +108,29 @@ StackWalker 走栈约 5~10μs），消除的每次扫描包含 54~41 次 mock �
   同型不相似仍走完整比较。
 - 既有 70 用例零改动全绿（含资金回归、交易冒烟 18 万笔、木牌调度断言）。
 
+## 实机验证（test/ Paper 1.21.11 服务器，2026-08-17）
+
+环境：`test/` 内置 Paper 1.21.11（独立端口 25598/25599-RCON 启动，避免与宿主上既有
+25565 服务器冲突）+ Vault 1.7.3 + EssentialsX 2.21.1 + 本轮构建的
+QuickShop-Hikari jar。脚本：`test/bot/qs-e2e.js`（双假人，mineflayer + 最小 RCON 客户端）。
+
+流程与结果（E2E PASSED，全 6 步）：
+1. 店主假人 QE2E 以 `/qs create 1.0` 建店（手持单颗钻石，单位=1，$1/颗；箱子由 RCON
+   setblock 预置 64 钻——注意 1.21.x 物品 NBT 计数字段为小写 `count`，`Count:64b` 会被
+   静默回落为 1）。
+2. 买家假人 QBuyE 左键商店箱（mineflayer `dig` 即 START_DIGGING=左键交互）→ 收到
+   "Enter in chat, how many you wish to BUY" 提示。
+3. 聊天 `1` → **actionSelling 真实执行**：买家钻石 +1、支付 $1.05（$1 + 5% 税）。
+4. 再次左键 → 聊天 `2` → 钻石 +2、支付 $2.10。
+5. 金额守恒：买家共付 $3.15 = 店主实收 $3.00 + 税 $0.15（税入 QuickShop 税号路由，
+   Essentials 侧不可见）。
+6. 商店在两笔交易后存活（qs info 计数不变），服务器日志无异常。
+
+附带验证：插件完整启用链（libby 装库 → H2 schema v20 → EssentialsX Economy 经
+BuiltIn-Vault 桥装载 → 7 watcher 启动）；无 Vault 时走 BootError 优雅降级
+（"QuickShop is disabled" 提示，命令路由仍可达）。停服关停序列干净（商店保存 watcher →
+日志 watcher → 无 ERROR）。
+
 ## 结论
 
 R15 将玩家侧交易全链路压至基线的 27%~33%（actionBuy -73.0%、actionSell -66.7%，全部
