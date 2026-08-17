@@ -28,7 +28,9 @@ public class LogWatcher implements AutoCloseable, Runnable {
 
   private static final DateTimeFormatter DATETIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault());
   private static final DateTimeFormatter LOG_FILE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
-  private final Queue<String> logs = new ConcurrentLinkedQueue<>();
+
+  /** One queue for both eager strings and lazy suppliers, so global ordering is kept. */
+  private final Queue<java.util.function.Supplier<String>> logs = new ConcurrentLinkedQueue<>();
 
   private WrappedTask task = null;
 
@@ -105,6 +107,7 @@ public class LogWatcher implements AutoCloseable, Runnable {
   public void close() {
 
     if(printWriter != null) {
+      run();
       printWriter.flush();
       printWriter.close();
     }
@@ -112,7 +115,18 @@ public class LogWatcher implements AutoCloseable, Runnable {
 
   public void log(@NotNull final String log) {
 
-    logs.add("[" + DATETIME_FORMATTER.format(Instant.now()) + "] " + log);
+    logs.add(()->"[" + DATETIME_FORMATTER.format(Instant.now()) + "] " + log);
+  }
+
+  /**
+   * Queues a log line whose rendering (and any heavy serialization inside it) runs on
+   * the watcher's async tick instead of the calling thread. Ordering with {@link #log(String)}
+   * entries is preserved. A throwing supplier is isolated: the failure is reported and
+   * the remaining queue keeps flowing.
+   */
+  public void logLazy(@NotNull final java.util.function.Supplier<String> line) {
+
+    logs.add(()->"[" + DATETIME_FORMATTER.format(Instant.now()) + "] " + line.get());
   }
 
   @Override
@@ -122,10 +136,14 @@ public class LogWatcher implements AutoCloseable, Runnable {
       //Waiting for init
       return;
     }
-    final Iterator<String> iterator = logs.iterator();
+    final Iterator<java.util.function.Supplier<String>> iterator = logs.iterator();
     while(iterator.hasNext()) {
-      final String log = iterator.next();
-      printWriter.println(log);
+      final java.util.function.Supplier<String> entry = iterator.next();
+      try {
+        printWriter.println(entry.get());
+      } catch(final Throwable t) {
+        Log.debug("Skipped a log entry whose rendering failed: " + t.getMessage());
+      }
       iterator.remove();
     }
     printWriter.flush();

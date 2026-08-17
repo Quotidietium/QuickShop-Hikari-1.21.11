@@ -739,6 +739,36 @@ public class QuickShop implements QuickShopAPI, Reloadable {
 
   }
 
+  /**
+   * Variant of {@link #logEvent(Object)} that defers the log object's construction and
+   * JSON rendering off the calling (main) thread: the supplier runs on the log watcher's
+   * async tick (file mode) or the database executor (database mode). Hot per-trade
+   * listeners pass their heavy serializations (shop snapshot, item encode) here; the
+   * captured state is read at flush time (at most one watcher period later).
+   */
+  public void logEventLazy(@NotNull final java.util.function.Supplier<?> eventObjectSupplier) {
+
+    if(this.getLogWatcher() == null) {
+      return;
+    }
+    if(loggingLocation == 0) {
+      this.getLogWatcher().logLazy(()->JsonUtil.getGson().toJson(eventObjectSupplier.get()));
+    } else {
+      com.ghostchu.quickshop.common.util.QuickExecutor.getHikaricpExecutor().execute(()->{
+        try {
+          getDatabaseHelper().insertHistoryRecord(eventObjectSupplier.get())
+                  .exceptionally(throwable->{
+                    Log.debug("Failed to log event: " + throwable.getMessage());
+                    return null;
+                  });
+        } catch(final Throwable throwable) {
+          Log.debug("Failed to render lazy log event: " + throwable.getMessage());
+        }
+      });
+    }
+
+  }
+
   @Override
   public void registerLocalizedTranslationKeyMapping(@NotNull final String translationKey, @NotNull final String key) {
 
