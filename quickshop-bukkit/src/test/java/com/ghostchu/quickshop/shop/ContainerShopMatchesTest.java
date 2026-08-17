@@ -294,4 +294,74 @@ class ContainerShopMatchesTest {
 
     assertTrue(matcher.matches(require, given));
   }
+
+  @Test
+  void shopIdLookupIsCachedPerStackIdentityWithoutListeners() {
+
+    assertEquals(0, AbstractQSEvent.getHandlerList().getRegisteredListeners().length);
+
+    final var platform = mock(com.ghostchu.quickshop.platform.Platform.class);
+    when(plugin.platform()).thenReturn(platform);
+    final int[] lookups = {0};
+    when(platform.getItemShopId(any(ItemStack.class))).thenAnswer(inv -> {
+      lookups[0]++;
+      return null; // no shopId: falls through to the type gate below
+    });
+
+    final QuickShopItemMatcherImpl matcher = new QuickShopItemMatcherImpl(plugin);
+    when(plugin.getItemMatcher()).thenReturn(matcher);
+
+    final ItemStack require = slot(Material.DIAMOND);
+    when(require.isSimilar(any(ItemStack.class))).thenReturn(false);
+
+    // repeated scans re-query the same requireStack instance: origin lookups collapse to one
+    for(int i = 0; i < 10; i++) {
+      assertFalse(matcher.matches(require, slot(Material.IRON_INGOT)));
+    }
+    assertEquals(1, lookups[0]);
+
+    // a different requireStack instance reads fresh
+    final ItemStack require2 = slot(Material.DIAMOND);
+    when(require2.isSimilar(any(ItemStack.class))).thenReturn(false);
+    assertFalse(matcher.matches(require2, slot(Material.IRON_INGOT)));
+    assertEquals(2, lookups[0]);
+  }
+
+  @Test
+  void shopIdLookupCacheBypassedWhenListenersRegistered() {
+
+    HandlerList.unregisterAll();
+    final RegisteredListener listener = new RegisteredListener(
+            mock(Listener.class),
+            (executorListener, event)->{
+            },
+            EventPriority.NORMAL,
+            mock(Plugin.class),
+            false);
+    AbstractQSEvent.getHandlerList().register(listener);
+    doAnswer(inv -> {
+      listener.callEvent(inv.getArgument(0, org.bukkit.event.Event.class));
+      return null;
+    }).when(pluginManager).callEvent(any(org.bukkit.event.Event.class));
+
+    final var platform = mock(com.ghostchu.quickshop.platform.Platform.class);
+    when(plugin.platform()).thenReturn(platform);
+    final int[] lookups = {0};
+    when(platform.getItemShopId(any(ItemStack.class))).thenAnswer(inv -> {
+      lookups[0]++;
+      return null;
+    });
+
+    final QuickShopItemMatcherImpl matcher = new QuickShopItemMatcherImpl(plugin);
+    when(plugin.getItemMatcher()).thenReturn(matcher);
+
+    final ItemStack require = slot(Material.DIAMOND);
+    when(require.isSimilar(any(ItemStack.class))).thenReturn(false);
+
+    for(int i = 0; i < 3; i++) {
+      assertFalse(matcher.matches(require, slot(Material.IRON_INGOT)));
+    }
+    // listeners may mutate stacks between calls, so every call re-reads
+    assertEquals(3, lookups[0]);
+  }
 }
