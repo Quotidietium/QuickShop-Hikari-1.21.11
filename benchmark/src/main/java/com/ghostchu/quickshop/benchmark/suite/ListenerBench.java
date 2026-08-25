@@ -129,7 +129,7 @@ public final class ListenerBench {
     // candidate-only unified entry point; baseline falls back to the historic
     // listener body inside the bench op
     java.lang.invoke.MethodHandle resend = null;
-    final com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager resendTarget;
+    com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager resendTarget = null;
     try {
       final var method = com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager.class
               .getMethod("resendChunkDisplays", org.bukkit.entity.Player.class, String.class, int.class, int.class);
@@ -139,12 +139,13 @@ public final class ListenerBench {
               org.mockito.Mockito.withSettings().stubOnly()
                       .defaultAnswer(org.mockito.Mockito.CALLS_REAL_METHODS));
       injectField(resendTarget, "chunksMapping", new java.util.concurrent.ConcurrentHashMap<>());
-      resendTarget.getChunksMapping().put(new com.ghostchu.quickshop.shop.SimpleShopChunk("world", 1, 2),
-                                          new java.util.ArrayList<>(java.util.List.of(displays)));
+      // raw Map: the value's generic VirtualDisplayItem element type is not nameable
+      // from this module without a package-private constructor reference
+      ((java.util.Map)resendTarget.getChunksMapping()).put(new com.ghostchu.quickshop.shop.SimpleShopChunk("world", 1, 2),
+                                                           new java.util.ArrayList<>(java.util.List.of(displays)));
     } catch(final NoSuchMethodException absentInBaseline) {
       // baseline jar predates resendChunkDisplays: the op below measures the historic
       // listener body instead
-      resendTarget = null;
     }
 
     final java.lang.invoke.MethodHandle candidateResend = resend;
@@ -163,7 +164,7 @@ public final class ListenerBench {
       } else {
         // the baseline CHUNK_DATA listener body (in-map variant), per display
         for(final var display : displays) {
-          BenchHarness.consume(display.isApplicableForPlayer(entering));
+          com.ghostchu.quickshop.benchmark.BenchHarness.consume(display.isApplicableForPlayer(entering));
           display.getPacketSenders().add(entering.getUniqueId());
           display.sendDestroyPacket(entering);
           display.sendFakeItem(entering);
@@ -205,15 +206,34 @@ public final class ListenerBench {
     when(shop.bukkitLocation()).thenReturn(new Location(world, 16, 64, 32));
     lenient().when(shop.isLoaded()).thenReturn(true);
 
-    final var display = new com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItem<>(manager, factory, shop);
+    // the constructor is package-private (manager-factory creation only) on both the
+    // baseline and candidate jars, so construction goes through reflection; every
+    // method the bench loop calls is public and invoked directly
+    final var displayClass = com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItem.class;
+    final var constructor = displayClass.getDeclaredConstructor(
+            com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager.class,
+            com.ghostchu.quickshop.api.shop.display.PacketFactory.class,
+            com.ghostchu.quickshop.api.shop.Shop.class);
+    constructor.setAccessible(true);
+    final var display = constructor.newInstance(manager, factory, shop);
     display.spawn();
     return display;
   }
 
+  /** Walks the class hierarchy for the field: mock instances are ByteBuddy subclasses,
+   *  and the injected fields may be public (shopEntities) or private (chunksMapping). */
   private static void injectField(final Object target, final String field, final Object value) throws Exception {
 
-    final var declared = target.getClass().getField(field);
-    declared.setAccessible(true);
-    declared.set(target, value);
+    for(Class<?> type = target.getClass(); type != null; type = type.getSuperclass()) {
+      try {
+        final var declared = type.getDeclaredField(field);
+        declared.setAccessible(true);
+        declared.set(target, value);
+        return;
+      } catch(final NoSuchFieldException deeper) {
+        // walk up the hierarchy
+      }
+    }
+    throw new NoSuchFieldException(field + " not found on " + target.getClass());
   }
 }
