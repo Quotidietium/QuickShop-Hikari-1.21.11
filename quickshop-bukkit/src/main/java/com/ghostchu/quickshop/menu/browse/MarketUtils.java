@@ -28,8 +28,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,6 +47,71 @@ public final class MarketUtils {
 
   private MarketUtils() {
     // Utility class
+  }
+
+  /**
+   * Loads the inventory-count cache rows for all given shops in ONE batched database
+   * round-trip (with one pending-write flush first, preserving the exact-freshness
+   * guarantee of the per-shop path). Menu renders call this once up front and pass the
+   * snapshot through filter/sort/statistics — the per-shop path would cost one blocking
+   * query per shop (and, inside sort comparators, per comparison).
+   *
+   * @param shops the shops whose cache rows are needed
+   *
+   * @return shopId -&gt; cache; shops without a cache row are absent (reads fall back to 0)
+   */
+  @NotNull
+  public static Map<Long, ShopInventoryCountCache> loadInventoryCaches(@NotNull final Collection<Shop> shops) {
+
+    if(shops.isEmpty()) {
+      return Map.of();
+    }
+    try {
+      final List<Long> shopIds = shops.stream().map(Shop::getShopId).distinct().toList();
+      final var batcher = QuickShop.getInstance().getDbWriteBatcher();
+      final var future = (batcher != null)
+              ? batcher.flushInventoryCacheAsync()
+                      .thenCompose(v->QuickShop.getInstance().getDatabaseHelper().queryInventoryCaches(shopIds))
+              : QuickShop.getInstance().getDatabaseHelper().queryInventoryCaches(shopIds);
+      return future.join();
+    } catch(final Exception e) {
+      // same fallback semantics as the per-shop readers: no data beats broken menus
+      return Map.of();
+    }
+  }
+
+  /**
+   * Stock for a shop from a preloaded snapshot. Unlimited shops read -1; shops without a
+   * cache row read 0 (identical to the per-shop path's uninitialized/error fallback).
+   */
+  public static int stockOf(@NotNull final Shop shop, @NotNull final Map<Long, ShopInventoryCountCache> snapshot) {
+
+    if(shop.isUnlimited()) {
+      return -1;
+    }
+    final ShopInventoryCountCache cache = snapshot.get(shop.getShopId());
+    if(cache == null) {
+      return 0;
+    }
+    final int stock = cache.getStock();
+    return stock >= 0? stock : 0;
+  }
+
+  /**
+   * Space for a shop from a preloaded snapshot; same fallback semantics as
+   * {@link #stockOf(Shop, Map)}.
+   */
+  public static int spaceOf(@NotNull final Shop shop, @NotNull final Map<Long, ShopInventoryCountCache> snapshot) {
+
+    if(shop.isUnlimited()) {
+      return -1;
+    }
+    final ShopInventoryCountCache cache = snapshot.get(shop.getShopId());
+    if(cache == null) {
+      return 0;
+    }
+    final int space = cache.getSpace();
+    return space >= 0? space : 0;
   }
 
   /**
@@ -87,6 +154,21 @@ public final class MarketUtils {
       group.calculateStatistics();
     }
 
+    return groups;
+  }
+
+  /**
+   * Snapshot-aware variant of {@link #groupShopsByItem(List)}: group statistics are
+   * computed from the preloaded cache map.
+   */
+  @NotNull
+  public static List<MarketItemGroup> groupShopsByItem(@NotNull final List<Shop> shops,
+                                                       @NotNull final Map<Long, ShopInventoryCountCache> snapshot) {
+
+    final List<MarketItemGroup> groups = groupShopsByItem(shops);
+    for(final MarketItemGroup group : groups) {
+      group.calculateStatistics(snapshot);
+    }
     return groups;
   }
 
@@ -137,6 +219,29 @@ public final class MarketUtils {
                 return getStockFromCache(shop) > 0;
               } else {
                 return getSpaceFromCache(shop) > 0;
+              }
+            })
+            .toList();
+  }
+
+  /**
+   * Snapshot-aware variant of {@link #filterByStock(List, boolean)}: all reads come from
+   * the preloaded map, no database access.
+   */
+  @NotNull
+  public static List<Shop> filterByStock(@NotNull final List<Shop> shops, final boolean stockOnly,
+                                         @NotNull final Map<Long, ShopInventoryCountCache> snapshot) {
+
+    if(!stockOnly) {
+      return new ArrayList<>(shops);
+    }
+    return shops.stream()
+            .filter(shop->{
+              if(shop.isUnlimited()) return true;
+              if(shop.isSelling()) {
+                return stockOf(shop, snapshot) > 0;
+              } else {
+                return spaceOf(shop, snapshot) > 0;
               }
             })
             .toList();
@@ -198,6 +303,29 @@ public final class MarketUtils {
   }
 
   /**
+   * Snapshot-aware variant of {@link #filterGroupsByStock(List, boolean)}.
+   */
+  @NotNull
+  public static List<MarketItemGroup> filterGroupsByStock(@NotNull final List<MarketItemGroup> groups,
+                                                          final boolean stockOnly,
+                                                          @NotNull final Map<Long, ShopInventoryCountCache> snapshot) {
+
+    if(!stockOnly) {
+      return new ArrayList<>(groups);
+    }
+    return groups.stream()
+            .filter(group->group.getShops().stream().anyMatch(shop->{
+              if(shop.isUnlimited()) return true;
+              if(shop.isSelling()) {
+                return stockOf(shop, snapshot) > 0;
+              } else {
+                return spaceOf(shop, snapshot) > 0;
+              }
+            }))
+            .toList();
+  }
+
+  /**
    * Sort shops based on sort mode. Uses database cache for stock sorting to avoid Folia
    * cross-region block access issues.
    *
@@ -219,6 +347,28 @@ public final class MarketUtils {
       }
       case PRICE_DESC -> sorted.sort((a, b) -> a.comparePrice(b.price(), true));
       case STOCK -> sorted.sort(Comparator.comparingInt(MarketUtils::getStockFromCache).reversed());
+      case NAME -> sorted.sort(Comparator.comparing(shop->
+                                                            CommonUtil.prettifyText(shop.getItem().getType().name())));
+    }
+
+    return sorted;
+  }
+
+  /**
+   * Snapshot-aware variant of {@link #sortShops(List, BrowseSortMode)}: the STOCK mode
+   * sorts on map lookups instead of a blocking cache query per comparison.
+   */
+  @NotNull
+  public static List<Shop> sortShops(@NotNull final List<Shop> shops,
+                                     @NotNull final BrowseSortMode sortMode,
+                                     @NotNull final Map<Long, ShopInventoryCountCache> snapshot) {
+
+    final List<Shop> sorted = new ArrayList<>(shops);
+
+    switch(sortMode) {
+      case PRICE_ASC -> sorted.sort((a, b) -> a.comparePrice(b.price(), false));
+      case PRICE_DESC -> sorted.sort((a, b) -> a.comparePrice(b.price(), true));
+      case STOCK -> sorted.sort(Comparator.comparingInt((final Shop shop)->stockOf(shop, snapshot)).reversed());
       case NAME -> sorted.sort(Comparator.comparing(shop->
                                                             CommonUtil.prettifyText(shop.getItem().getType().name())));
     }
@@ -365,6 +515,25 @@ public final class MarketUtils {
   }
 
   /**
+   * Snapshot-aware variant of {@link #processShops(List, BrowseFilterMode, BrowseSortMode, String, boolean)}:
+   * every stock/space read comes from the preloaded map, zero database access.
+   */
+  @NotNull
+  public static List<Shop> processShops(@NotNull final List<Shop> shops,
+                                        @NotNull final BrowseFilterMode filterMode,
+                                        @NotNull final BrowseSortMode sortMode,
+                                        @Nullable final String searchQuery,
+                                        final boolean stockOnly,
+                                        @NotNull final Map<Long, ShopInventoryCountCache> snapshot) {
+
+    List<Shop> result = filterShops(shops, filterMode);
+    result = filterByStock(result, stockOnly, snapshot);
+    result = searchShops(result, searchQuery);
+    result = sortShops(result, sortMode, snapshot);
+    return result;
+  }
+
+  /**
    * Apply all filters, search, and sorting to item groups
    *
    * @param shops       The original list of shops
@@ -390,6 +559,26 @@ public final class MarketUtils {
     List<MarketItemGroup> groups = groupShopsByItem(filteredShops);
 
     // Sort the groups
+    groups = sortGroups(groups, sortMode);
+
+    return groups;
+  }
+
+  /**
+   * Snapshot-aware variant of {@link #processGroups(List, BrowseFilterMode, BrowseSortMode, String, boolean)}.
+   */
+  @NotNull
+  public static List<MarketItemGroup> processGroups(@NotNull final List<Shop> shops,
+                                                    @NotNull final BrowseFilterMode filterMode,
+                                                    @NotNull final BrowseSortMode sortMode,
+                                                    @Nullable final String searchQuery,
+                                                    final boolean stockOnly,
+                                                    @NotNull final Map<Long, ShopInventoryCountCache> snapshot) {
+    List<Shop> filteredShops = filterShops(shops, filterMode);
+    filteredShops = filterByStock(filteredShops, stockOnly, snapshot);
+    filteredShops = searchShops(filteredShops, searchQuery);
+
+    List<MarketItemGroup> groups = groupShopsByItem(filteredShops, snapshot);
     groups = sortGroups(groups, sortMode);
 
     return groups;
