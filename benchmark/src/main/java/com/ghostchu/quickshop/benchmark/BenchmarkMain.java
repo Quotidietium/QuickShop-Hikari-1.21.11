@@ -4,6 +4,7 @@ import com.ghostchu.quickshop.benchmark.suite.DataRecordBench;
 import com.ghostchu.quickshop.benchmark.suite.DbBench;
 import com.ghostchu.quickshop.benchmark.suite.EconomyBench;
 import com.ghostchu.quickshop.benchmark.suite.ListenerBench;
+import com.ghostchu.quickshop.benchmark.suite.MenuBench;
 import com.ghostchu.quickshop.benchmark.suite.ShopLookupBench;
 import com.ghostchu.quickshop.benchmark.suite.TextBench;
 import com.ghostchu.quickshop.benchmark.suite.TradeBench;
@@ -61,6 +62,7 @@ public final class BenchmarkMain {
     runSuite(harness, failures, "shop-lookup", ShopLookupBench::run);
     runSuite(harness, failures, "trade", TradeBench::run);
     runSuite(harness, failures, "listener", ListenerBench::run);
+    runSuite(harness, failures, "menu", MenuBench::run);
     runSuite(harness, failures, "data-record", DataRecordBench::run);
     runSuite(harness, failures, "economy", EconomyBench::run);
     runSuite(harness, failures, "text", TextBench::run);
