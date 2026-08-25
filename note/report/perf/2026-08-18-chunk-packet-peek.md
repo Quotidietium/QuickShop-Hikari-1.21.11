@@ -75,10 +75,15 @@ text 套件 OOM（4GB 堆耗尽，7.5GB heap dump）。
 R21 做端到端验证时发现**连带兼容性缺陷**：代码把 PacketEvents 插件作为优先展示物后端
 （pom 中 provided、运行时取自插件），但 plugin.yml 的 softdepend 从未声明 `packetevents`
 ——在仅安装 PacketEvents（无 ProtocolLib）的服务器上，QuickShop 启用阶段即
-`NoClassDefFoundError: com/github/retrooper/packetevents/PacketEvents` 崩溃（日志实证）。
-已修复（softdepend 补一行，无该插件的服务器零影响）。收尾时服务器已在修复版构建上
-重启进行展示物可见性验证，因会话结束中断——该项留待下次会话续验（步骤：装好
-packetevents 插件 → `node test/bot/qs-display-check.js` 断言商店上方 item 实体可见）。
+`NoClassDefFoundError: com.github.retrooper.packetevents.PacketEvents` 崩溃（日志实证）。
+已修复（softdepend 补一行，无该插件的服务器零影响）。
+
+**补记（2026-08-26，后续会话完成验证）**：换装支持 1.21.11 的 packetevents
+2.13.1-SNAPSHOT（codemc CI build 907）后，`node test/bot/qs-display-check.js`
+**DISPLAY-CHECK PASSED**——假人经「CHUNK_DATA 包 → peek → 重送」链路在商店上方
+看到 item 实体（含拉远卸载/拉回重载循环）。同次会话发现并修复了更深一层的稳定性缺陷
+（启用失败后端被选中即崩溃，见 R22 报告）。运行环境要求留档：**packetevents 需 ≥
+支持 1.21.11 的构建（2.9.5 仅支持到 1.21.8，启用即失败）**。
 
 ## 结论
 
