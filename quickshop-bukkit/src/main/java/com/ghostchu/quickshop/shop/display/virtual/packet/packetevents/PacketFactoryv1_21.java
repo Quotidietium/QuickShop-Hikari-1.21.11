@@ -19,8 +19,6 @@ package com.ghostchu.quickshop.shop.display.virtual.packet.packetevents;
 
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.shop.display.PacketFactory;
-import com.ghostchu.quickshop.shop.SimpleShopChunk;
-import com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItem;
 import com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager;
 import com.ghostchu.quickshop.shop.display.virtual.packet.PacketEventsHandler;
 import com.ghostchu.quickshop.util.Util;
@@ -183,30 +181,8 @@ public class PacketFactoryv1_21 implements PacketFactory<PacketWrapper<?>> {
         // the full ChunkReader pass (every section's paletted storage) on this netty
         // thread for every chunk packet sent to every player
         final ChunkPacketPeek.Coords coords = ChunkPacketPeek.peek(event.getByteBuf());
-        final int x = coords.x();
-        final int z = coords.z();
 
-        final List<VirtualDisplayItem<?>> items = new ArrayList<>();
-        VirtualDisplayItemManager.instance().getChunksMapping().computeIfPresent(new SimpleShopChunk(player.getWorld().getName(), x, z), (chunkLoc, targetList)->{
-
-          for(final VirtualDisplayItem<?> target : targetList) {
-            if(!target.isSpawned()) {
-
-              continue;
-            }
-            if(target.isApplicableForPlayer(player)) { // TODO: Refactor with better way
-
-              target.getPacketSenders().add(player.getUniqueId());
-              items.add(target);
-            }
-          }
-          return targetList;
-        });
-
-        for(final VirtualDisplayItem<?> target : items) {
-          target.sendDestroyPacket(player);
-          target.sendFakeItem(player);
-        }
+        VirtualDisplayItemManager.instance().resendChunkDisplays(player, player.getWorld().getName(), coords.x(), coords.z());
       }
     };
 
@@ -255,23 +231,7 @@ public class PacketFactoryv1_21 implements PacketFactory<PacketWrapper<?>> {
         final int x = unloadChunk.getChunkX();
         final int z = unloadChunk.getChunkZ();
 
-        final List<VirtualDisplayItem<?>> items = new ArrayList<>();
-        VirtualDisplayItemManager.instance().getChunksMapping().computeIfPresent(new SimpleShopChunk(player.getWorld().getName(), x, z), (chunkLoc, targetList)->{
-          for(final VirtualDisplayItem<?> target : targetList) {
-
-            if(!target.isSpawned()) {
-
-              continue;
-            }
-            items.add(target);
-            target.getPacketSenders().remove(player.getUniqueId());
-          }
-          return targetList;
-        });
-
-        for(final VirtualDisplayItem<?> target : items) {
-          target.sendDestroyPacket(player);
-        }
+        VirtualDisplayItemManager.instance().withdrawChunkDisplays(player, player.getWorld().getName(), x, z);
       }
     };
 

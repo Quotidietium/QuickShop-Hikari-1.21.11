@@ -29,8 +29,6 @@ import com.comphenix.protocol.wrappers.WrappedDataValue;
 import com.comphenix.protocol.wrappers.WrappedDataWatcher;
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.shop.display.PacketFactory;
-import com.ghostchu.quickshop.shop.SimpleShopChunk;
-import com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItem;
 import com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager;
 import com.ghostchu.quickshop.shop.display.virtual.packet.ProtocolLibHandler;
 import com.ghostchu.quickshop.util.Util;
@@ -218,19 +216,7 @@ public class PacketFactoryv1_20 implements PacketFactory<PacketContainer> {
         //chunk z
         final int z = integerStructureModifier.read(1);
 
-        VirtualDisplayItemManager.instance().getChunksMapping().computeIfPresent(new SimpleShopChunk(player.getWorld().getName(), x, z), (chunkLoc, targetList)->{
-          for(final VirtualDisplayItem<?> target : targetList) {
-            if(!target.isSpawned()) {
-              continue;
-            }
-            if(target.isApplicableForPlayer(player)) { // TODO: Refactor with better way
-              target.getPacketSenders().add(player.getUniqueId());
-              target.sendDestroyPacket(player);
-              target.sendFakeItem(player);
-            }
-          }
-          return targetList;
-        });
+        VirtualDisplayItemManager.instance().resendChunkDisplays(player, player.getWorld().getName(), x, z);
       }
     };
 
@@ -271,18 +257,7 @@ public class PacketFactoryv1_20 implements PacketFactory<PacketContainer> {
           final int x = intModifier.read(0);
           final int z = intModifier.read(1);
 
-        VirtualDisplayItemManager.instance().getChunksMapping().computeIfPresent(new SimpleShopChunk(player.getWorld().getName(), x, z), (chunkLoc, targetList)->{
-          for(final VirtualDisplayItem<?> target : targetList) {
-
-            if(!target.isSpawned()) {
-
-              continue;
-            }
-            target.sendDestroyPacket(player);
-            target.getPacketSenders().remove(player.getUniqueId());
-          }
-          return targetList;
-        });
+        VirtualDisplayItemManager.instance().withdrawChunkDisplays(player, player.getWorld().getName(), x, z);
       }
     };
 

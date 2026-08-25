@@ -25,11 +25,13 @@ import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.api.shop.ShopChunk;
 import com.ghostchu.quickshop.api.shop.display.PacketFactory;
 import com.ghostchu.quickshop.api.shop.display.PacketHandler;
+import com.ghostchu.quickshop.shop.SimpleShopChunk;
 import com.ghostchu.quickshop.shop.display.virtual.packet.PacketEventsHandler;
 import com.ghostchu.quickshop.shop.display.virtual.packet.ProtocolLibHandler;
 import com.ghostchu.quickshop.util.logger.Log;
 import lombok.Getter;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
@@ -96,8 +98,11 @@ public class VirtualDisplayItemManager {
     final String preferred = QuickShop.getInstance().getConfig().getString("shop.display-protocol", "protocollib").toLowerCase(Locale.ROOT);
 
     //attempt to use the preferred packet handler.
+    //only consider handlers whose plugin is ENABLED: a backend that loaded but failed to
+    //enable (e.g. a packetevents build too old for this server version) already had its
+    //PluginClassLoader closed by the server, touching its classes throws NoClassDefFoundError
     final PacketHandler<?> handler = packetHandlers.get(preferred);
-    if(handler != null && Bukkit.getPluginManager().getPlugin(handler.pluginName()) != null) {
+    if(handler != null && Bukkit.getPluginManager().isPluginEnabled(handler.pluginName())) {
 
       this.packetHandler = handler;
       return;
@@ -105,7 +110,7 @@ public class VirtualDisplayItemManager {
 
     for(final PacketHandler<?> packetHandler : packetHandlers.values()) {
 
-      if(Bukkit.getPluginManager().getPlugin(packetHandler.pluginName()) != null) {
+      if(Bukkit.getPluginManager().isPluginEnabled(packetHandler.pluginName())) {
 
         this.packetHandler = packetHandler;
       }
@@ -149,6 +154,72 @@ public class VirtualDisplayItemManager {
       mapOldVal.remove(value);
       return mapOldVal;
     });
+  }
+
+  /**
+   * Resends every spawned virtual display item of the given chunk to the player (chunk
+   * sent / re-sent). Registers the player as a packet sender and sends one
+   * destroy-spawn-meta sequence per display; sendFakeItem's leading destroy packet
+   * already covers a client that still holds the entity from a previous send, so no
+   * extra destroy is issued before it.
+   *
+   * <p>Packets are sent after the mapping lookup finishes so no packet send happens
+   * while the mapping bin lock is held (sends may re-enter Bukkit services).</p>
+   *
+   * @param player the player the chunk was sent to
+   * @param world  the chunk's world name
+   * @param x      the chunk x coordinate
+   * @param z      the chunk z coordinate
+   */
+  public void resendChunkDisplays(@NotNull final Player player, @NotNull final String world, final int x, final int z) {
+
+    final List<VirtualDisplayItem<?>> targets = new ArrayList<>();
+    chunksMapping.computeIfPresent(new SimpleShopChunk(world, x, z), (chunkLoc, targetList)->{
+
+      for(final VirtualDisplayItem<?> target : targetList) {
+        if(!target.isSpawned()) {
+          continue;
+        }
+        if(target.isApplicableForPlayer(player)) {
+          target.getPacketSenders().add(player.getUniqueId());
+          targets.add(target);
+        }
+      }
+      return targetList;
+    });
+
+    for(final VirtualDisplayItem<?> target : targets) {
+      target.sendFakeItem(player);
+    }
+  }
+
+  /**
+   * Withdraws the player's virtual display items of the given chunk (chunk unloaded
+   * client-side): destroys each spawned display and unregisters the player as a packet
+   * sender, sending outside the mapping bin lock as above.
+   *
+   * @param player the player the chunk was unloaded for
+   * @param world  the chunk's world name
+   * @param x      the chunk x coordinate
+   * @param z      the chunk z coordinate
+   */
+  public void withdrawChunkDisplays(@NotNull final Player player, @NotNull final String world, final int x, final int z) {
+
+    final List<VirtualDisplayItem<?>> targets = new ArrayList<>();
+    chunksMapping.computeIfPresent(new SimpleShopChunk(world, x, z), (chunkLoc, targetList)->{
+
+      for(final VirtualDisplayItem<?> target : targetList) {
+        if(target.isSpawned()) {
+          targets.add(target);
+        }
+      }
+      return targetList;
+    });
+
+    for(final VirtualDisplayItem<?> target : targets) {
+      target.sendDestroyPacket(player);
+      target.getPacketSenders().remove(player.getUniqueId());
+    }
   }
 
   public void unload() {
