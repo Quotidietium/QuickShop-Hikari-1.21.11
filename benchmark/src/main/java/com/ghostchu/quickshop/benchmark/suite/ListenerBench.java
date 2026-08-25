@@ -33,7 +33,7 @@ public final class ListenerBench {
 
   }
 
-  public static void run(final com.ghostchu.quickshop.benchmark.BenchHarness harness) {
+  public static void run(final com.ghostchu.quickshop.benchmark.BenchHarness harness) throws Exception {
 
     final QuickShop plugin = Env.plugin();
 
@@ -110,5 +110,110 @@ public final class ListenerBench {
     } catch(final ClassNotFoundException absentInBaseline) {
       // baseline jar: peek class not present, case intentionally unregistered
     }
+
+    // display-item chunk-entrance resend: what one CHUNK_DATA packet costs per spawned
+    // shop display of that chunk (applicability event + sender registration + the
+    // packet sequence). The R22 candidate routes through the unified
+    // VirtualDisplayItemManager.resendChunkDisplays (one destroy-spawn-meta sequence);
+    // the baseline listener body additionally issued an explicit destroy packet right
+    // before sendFakeItem — which itself opens with a destroy — so each display cost
+    // one redundant packet + event dispatch. The unified method is probed reflectively
+    // so this source compiles against baseline jars too (R16 runtime-probe precedent).
+    lenient().when(Env.server().getOnlinePlayers()).thenReturn(java.util.List.of());
+    lenient().when(Env.server().getViewDistance()).thenReturn(10);
+    final var displays = new com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItem<?>[4];
+    for(int i = 0; i < displays.length; i++) {
+      displays[i] = buildSpawnedDisplay(world);
+    }
+
+    // candidate-only unified entry point; baseline falls back to the historic
+    // listener body inside the bench op
+    java.lang.invoke.MethodHandle resend = null;
+    final com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager resendTarget;
+    try {
+      final var method = com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager.class
+              .getMethod("resendChunkDisplays", org.bukkit.entity.Player.class, String.class, int.class, int.class);
+      resend = java.lang.invoke.MethodHandles.publicLookup().unreflect(method);
+      resendTarget = org.mockito.Mockito.mock(
+              com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager.class,
+              org.mockito.Mockito.withSettings().stubOnly()
+                      .defaultAnswer(org.mockito.Mockito.CALLS_REAL_METHODS));
+      injectField(resendTarget, "chunksMapping", new java.util.concurrent.ConcurrentHashMap<>());
+      resendTarget.getChunksMapping().put(new com.ghostchu.quickshop.shop.SimpleShopChunk("world", 1, 2),
+                                          new java.util.ArrayList<>(java.util.List.of(displays)));
+    } catch(final NoSuchMethodException absentInBaseline) {
+      // baseline jar predates resendChunkDisplays: the op below measures the historic
+      // listener body instead
+      resendTarget = null;
+    }
+
+    final java.lang.invoke.MethodHandle candidateResend = resend;
+    final com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager candidateTarget = resendTarget;
+    final org.bukkit.entity.Player entering = Env.pin(Env.hotMock(org.bukkit.entity.Player.class));
+    lenient().when(entering.getUniqueId()).thenReturn(UUID.nameUUIDFromBytes(new byte[]{2}));
+
+    harness.bench("listener/displayResend", ctx -> {
+      ctx.index++;
+      if(candidateResend != null) {
+        try {
+          candidateResend.invokeExact(candidateTarget, entering, "world", 1, 2);
+        } catch(final Throwable t) {
+          throw new IllegalStateException("resendChunkDisplays failed", t);
+        }
+      } else {
+        // the baseline CHUNK_DATA listener body (in-map variant), per display
+        for(final var display : displays) {
+          BenchHarness.consume(display.isApplicableForPlayer(entering));
+          display.getPacketSenders().add(entering.getUniqueId());
+          display.sendDestroyPacket(entering);
+          display.sendFakeItem(entering);
+        }
+      }
+    });
+  }
+
+  /**
+   * A fully spawned VirtualDisplayItem over mock shop/factory/manager surfaces. The
+   * packet factory hands out three marker packets (velocity stays null on both sides,
+   * matching the packetevents factories) and the display manager mock is a stub-only
+   * hot mock with a real entity-id map injected.
+   */
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private static com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItem<?> buildSpawnedDisplay(final World world) throws Exception {
+
+    final var manager = Env.pin(Env.hotMock(com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager.class));
+    when(manager.generateEntityId()).thenReturn(9000);
+    lenient().when(manager.packetHandler()).thenReturn(null);
+    injectField(manager, "shopEntities", new java.util.concurrent.ConcurrentHashMap());
+
+    final var factory = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.shop.display.PacketFactory.class));
+    when(factory.createSpawnPacket(org.mockito.ArgumentMatchers.anyInt(), any(Location.class))).thenReturn(new Object());
+    when(factory.createMetaDataPacket(org.mockito.ArgumentMatchers.anyInt(), any())).thenReturn(new Object());
+    when(factory.createDestroyPacket(org.mockito.ArgumentMatchers.anyInt())).thenReturn(new Object());
+    when(factory.createVelocityPacket(org.mockito.ArgumentMatchers.anyInt())).thenReturn(null);
+
+    final var item = Env.pin(Env.hotMock(org.bukkit.inventory.ItemStack.class));
+    lenient().when(item.clone()).thenReturn(item);
+    lenient().when(item.asOne()).thenReturn(item);
+    lenient().when(item.getEnchantments()).thenReturn(java.util.Map.of());
+    lenient().when(item.getAmount()).thenReturn(1);
+    lenient().when(item.getMaxStackSize()).thenReturn(64);
+
+    final var shop = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.shop.Shop.class));
+    when(shop.getShopId()).thenReturn((long)(Math.random() * Long.MAX_VALUE));
+    when(shop.getItem()).thenReturn(item);
+    when(shop.bukkitLocation()).thenReturn(new Location(world, 16, 64, 32));
+    lenient().when(shop.isLoaded()).thenReturn(true);
+
+    final var display = new com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItem<>(manager, factory, shop);
+    display.spawn();
+    return display;
+  }
+
+  private static void injectField(final Object target, final String field, final Object value) throws Exception {
+
+    final var declared = target.getClass().getField(field);
+    declared.setAccessible(true);
+    declared.set(target, value);
   }
 }
