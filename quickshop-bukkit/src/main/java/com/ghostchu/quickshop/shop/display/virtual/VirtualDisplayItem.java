@@ -33,15 +33,15 @@ import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.logger.Log;
 import com.ghostchu.simplereloadlib.Reloadable;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -79,7 +79,8 @@ public class VirtualDisplayItem<T> extends AbstractDisplayItem implements Reload
     if(getDisplayLocation() != null) {
 
       this.spawnPacket = packetFactory.createSpawnPacket(entityID, getDisplayLocation());
-      this.metaPacket = packetFactory.createMetaDataPacket(entityID, checkEnchants(getOriginalItemStack().clone()));
+      // checkEnchants deep-copies via asOne(), the original stack is never mutated
+      this.metaPacket = packetFactory.createMetaDataPacket(entityID, checkEnchants(getOriginalItemStack()));
       this.velocityPacket = packetFactory.createVelocityPacket(entityID);
       this.destroyPacket = packetFactory.createDestroyPacket(entityID);
 
@@ -234,14 +235,17 @@ public class VirtualDisplayItem<T> extends AbstractDisplayItem implements Reload
     chunkLocation = SimpleShopChunk.fromLocation(shop.bukkitLocation());
     manager.put(chunkLocation, this);
     //Let nearby player can saw fake item
-    final List<Player> onlinePlayers = new ArrayList<>(Bukkit.getOnlinePlayers());
-    onlinePlayers.removeIf(p->!p.getWorld().equals(shop.bukkitLocation().getWorld()));
+    final Location shopLocation = shop.bukkitLocation();
+    final World shopWorld = shopLocation.getWorld();
+    // squared comparison: Math.abs(distance()) > viewDistance*16 without the sqrt per player
+    final int maxDistance = Bukkit.getViewDistance() * 16;
+    final double maxDistanceSq = (double)maxDistance * maxDistance;
 
-    for(final Player onlinePlayer : onlinePlayers) {
-
-      final double distance = onlinePlayer.getLocation().distance(shop.bukkitLocation());
-      if(Math.abs(distance) > Bukkit.getViewDistance() * 16) {
-
+    for(final Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+      if(!onlinePlayer.getWorld().equals(shopWorld)) {
+        continue;
+      }
+      if(onlinePlayer.getLocation().distanceSquared(shopLocation) > maxDistanceSq) {
         continue;
       }
       if(isApplicableForPlayer(onlinePlayer)) { // TODO: Refactor with better way
