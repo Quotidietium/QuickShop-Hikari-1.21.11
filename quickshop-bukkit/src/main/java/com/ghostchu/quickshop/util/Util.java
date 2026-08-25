@@ -16,6 +16,7 @@ import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.common.util.RomanNumber;
 import com.ghostchu.quickshop.obj.QUserImpl;
 import com.ghostchu.quickshop.shop.SimpleInfo;
+import com.ghostchu.quickshop.api.shop.display.DisplayType;
 import com.ghostchu.quickshop.shop.display.AbstractDisplayItem;
 import com.ghostchu.quickshop.util.logger.Log;
 import dev.dejvokep.boostedyaml.route.Route;
@@ -1329,6 +1330,12 @@ public class Util {
     }
     if(inv.getHolder() == null) {
       Log.debug("Skipped plugin gui inventory check.");
+      return;
+    }
+    // guard item stacks only exist for the non-virtual display types; under VIRTUALITEM
+    // every per-item checkIsGuardItemStack below provably returns false (same mode
+    // check it makes internally), so the whole slot scan is skippable
+    if(AbstractDisplayItem.getNowUsing() == DisplayType.VIRTUALITEM) {
       return;
     }
     final InventoryWrapperIterator iterator = inv.iterator();
