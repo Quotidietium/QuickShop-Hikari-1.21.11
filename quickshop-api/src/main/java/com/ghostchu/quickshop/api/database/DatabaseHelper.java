@@ -12,7 +12,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.sql.SQLException;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -295,4 +297,32 @@ public interface DatabaseHelper {
   CompletableFuture<Void> updateShop(@NotNull Shop shop);
 
   CompletableFuture<@NotNull ShopInventoryCountCache> queryInventoryCache(long shopId);
+
+  /**
+   * Batched variant of {@link #queryInventoryCache(long)}: one database round-trip for
+   * all given shop ids. Implementations should override with a true batched SELECT;
+   * this default composes the single-id queries so API compatibility is preserved.
+   *
+   * @param shopIds the shop ids to look up (empty input yields an empty map)
+   *
+   * @return future completing to shopId -&gt; cache; ids without a cache row are absent
+   */
+  @NotNull
+  default CompletableFuture<@NotNull Map<Long, ShopInventoryCountCache>> queryInventoryCaches(@NotNull final Collection<Long> shopIds) {
+
+    if(shopIds.isEmpty()) {
+      return CompletableFuture.completedFuture(java.util.Map.of());
+    }
+    final List<Long> ordered = List.copyOf(shopIds);
+    final List<CompletableFuture<ShopInventoryCountCache>> futures = ordered.stream()
+            .map(this::queryInventoryCache).toList();
+    return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+            .thenApply(v->{
+              final Map<Long, ShopInventoryCountCache> result = new java.util.HashMap<>();
+              for(int i = 0; i < ordered.size(); i++) {
+                result.put(ordered.get(i), futures.get(i).join());
+              }
+              return result;
+            });
+  }
 }

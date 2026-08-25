@@ -37,6 +37,7 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Date;
 import java.util.List;
@@ -1098,6 +1099,39 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
         plugin.logger().warn("Cannot handle the inventory cache lookup for shop {}", shopId, exception);
       }
       return cache;
+    });
+  }
+
+  @Override
+  public CompletableFuture<@NotNull Map<Long, ShopInventoryCountCache>> queryInventoryCaches(
+          @NotNull final Collection<Long> shopIds) {
+
+    if(shopIds.isEmpty()) {
+      return CompletableFuture.completedFuture(Map.of());
+    }
+    return CompletableFuture.supplyAsync(()->{
+      final Map<Long, ShopInventoryCountCache> result = new HashMap<>();
+      // one IN(...) round-trip for the whole page render (browse menus), instead of a
+      // SELECT per shop
+      final String placeholders = String.join(",", java.util.Collections.nCopies(shopIds.size(), "?"));
+      final String sql = "SELECT `shop`, `stock`, `space` FROM " + DataTables.EXTERNAL_CACHE.getName()
+                         + " WHERE `shop` IN (" + placeholders + ")";
+      try(final Connection connection = manager.getConnection();
+          final PreparedStatement ps = connection.prepareStatement(sql)) {
+        int index = 1;
+        for(final Long shopId : shopIds) {
+          ps.setLong(index++, shopId);
+        }
+        try(final ResultSet set = ps.executeQuery()) {
+          while(set.next()) {
+            result.put(set.getLong("shop"),
+                       new SimpleShopInventoryCountCache(set.getInt("stock"), set.getInt("space"), true));
+          }
+        }
+      } catch(final SQLException exception) {
+        plugin.logger().warn("Cannot handle the batched inventory cache lookup for {} shops", shopIds.size(), exception);
+      }
+      return result;
     });
   }
 
