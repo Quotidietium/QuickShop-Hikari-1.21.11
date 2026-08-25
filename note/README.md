@@ -14,8 +14,8 @@
 | 目标平台 | 仅 Paper（Spigot 直接拒绝启动）；Folia 兼容 |
 | 代码规模 | 663 个 Java 文件：api 177 / bukkit 357 / addon 62 / compat 52 / common 12 / platform 3 |
 | 数据库 | MySQL 或 H2(MODE=MYSQL)，schema 版本 20，EasySQL + HikariCP |
-| 测试 | quickshop-bukkit 116 个用例全绿（回归 + 查找表索引 + DB 写缓存 + 文本缓存 + QUser 驻留 + 事件快路径 + 匹配免克隆 + 迭代器快照 + 木牌调度 + 点击路径 + 交易观测 + 指标批处理 + 剩余 DB 写批处理 + 文本预解析等价 + 日志懒队列 + 展示物重送 + 菜单库存快照） |
-| 基准 | `benchmark/` 独立模块：38 用例 × 8 套件（R23 起，热点 mock 全 stubOnly）（查找表/序列化/经济/文本/H2 数据库（含指标与外部缓存插入）/交易热路径（含 action 全路径）/监听器点击与展示物/菜单库存流水），报告见 [report/perf](report/perf/) |
+| 测试 | quickshop-bukkit 118 个用例全绿（回归 + 查找表索引 + DB 写缓存 + 文本缓存 + QUser 驻留 + 事件快路径 + 匹配免克隆 + 迭代器快照 + 木牌调度 + 点击路径 + 交易观测 + 指标批处理 + 剩余 DB 写批处理 + 文本预解析等价 + 日志懒队列 + 展示物重送 + 菜单库存快照 + 开箱扫描快路径） |
+| 基准 | `benchmark/` 独立模块：39 用例 × 8 套件（R24 起，热点 mock 全 stubOnly）（查找表/序列化/经济/文本/H2 数据库（含指标与外部缓存插入）/交易热路径（含 action 全路径）/监听器点击与展示物/菜单库存流水），报告见 [report/perf](report/perf/) |
 | 本仓库定位 | 独立 fork（已移除 upstream，不再同步社区上游） |
 
 ## 一句话理解这个项目
@@ -34,6 +34,8 @@
    - **交易数量溢出/零单位刷钱漏洞**：unitSize=0 或溢出为 0 时移 0 件物品却全额转账（已修 9c88938d5）。
 5. **测试与性能基线演进**：审计循环建立了回归网（38 用例）；2026-08-16 第一轮性能优化循环（7 轮，详见 [report/perf/2026-08-16-performance-optimization.md](report/perf/2026-08-16-performance-optimization.md)）后达 56 用例全绿，并新增 `benchmark/` 基准模块（19 用例 × 5 套件）。核心收益：id/owner 查找 O(n)→O(1)（142μs/282μs→~100ns）、脏店保存不变跳写 -81%、无参消息渲染 -99%、全量读店 -38%、指标定位 SELECT -99.6%。
 6. **第二轮性能优化循环（交易与交互热路径，R8–R12 + R14，详见 [report/perf/2026-08-16-trade-path-optimization.md](report/perf/2026-08-16-trade-path-optimization.md))**：买卖全链路 -62.7%/-61.2%、库存扫描 -44%/-38%、迭代器 O(n²)→O(n)（纯迭代 -98.1%）、交易后木牌更新批处理合并、点击路径方块访问削减（R13 带参文本参数序列化尝试实测无收益已回退并记录）。测试增至 70 用例全绿、基准扩至 28 用例 × 7 套件。
+16. **第十二轮（R24·开箱守卫扫描快路径，2026-08-26，详见 [report/perf/2026-08-26-inventory-check-fastpath.md](report/perf/2026-08-26-inventory-check-fastpath.md)）**：InventoryOpenEvent 全服触发的守卫物 54 槽扫描在虚拟展示模式（默认）下可证恒假，一次模式判定整段跳过（基准 **-99.6%**，2.09ms→8.1μs，六 fork 零重叠；真实成本模型下 15~30μs→0.3μs/次开箱）。测试 118 用例全绿、基准 39 用例。
+
 15. **第十一轮（R23·浏览菜单库存快照批量化，2026-08-26，详见 [report/perf/2026-08-26-menu-inventory-snapshot.md](report/perf/2026-08-26-menu-inventory-snapshot.md)）**：菜单库存读取此前主线程必抛 IllegalStateException 被吞恒返 0（库存显示/有货过滤/库存排序三功能损坏）且每店一次阻塞往返×comparator 重查；改为整页一次「冲刷+IN(...) 批量查询」快照 Map（DatabaseHelper.queryInventoryCaches 新 API，MarketUtils 全链 Map 重载），并修复三处浏览页分页重叠缺陷（start 按 9 推进而每页 36 项）。基准 **-49.5%**（六 fork 零重叠）。测试 116 用例全绿、基准 38 用例。
 
 14. **第十轮（R22·展示物区块进入路径去冗余，2026-08-26，详见 [report/perf/2026-08-26-display-resend-dedup.md](report/perf/2026-08-26-display-resend-dedup.md)）**：五个包工厂的「显式 destroy + sendFakeItem（内部又以 destroy 开头）」统一为 manager 单入口 resendChunkDisplays/withdrawChunkDisplays（桶锁外发包），每玩家每店少 1 包+1 事件（基准 **-21.1%**、六 fork 零重叠）；顺带修复「后端启用失败 → 插件整体崩溃」稳定性缺陷（setHandler 仅选已启用后端 + Throwable 级内存降级）并补齐 R21 实机验证（packetevents 2.13.1-SNAPSHOT 下 DISPLAY-CHECK PASSED）。测试 110 用例全绿、基准 37 用例。
