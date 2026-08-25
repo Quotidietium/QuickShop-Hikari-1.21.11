@@ -19,6 +19,7 @@ package com.ghostchu.quickshop.menu.browse;
 
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.cache.ShopInventoryCountCache;
 import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.config.GuiConfig;
 import com.ghostchu.quickshop.menu.shared.ClearSearchAction;
@@ -43,6 +44,7 @@ import org.bukkit.inventory.ItemStack;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -117,13 +119,16 @@ public class GroupedItemPage {
     @SuppressWarnings("unchecked")
     final List<Shop> allShops = (ArrayList<Shop>)shopsData.get();
 
-    // Process shops into groups with current filters/sort/search
-    final List<MarketItemGroup> groups = MarketUtils.processGroups(allShops, filterMode, sortMode, searchQuery, stockOnly);
+    // Process shops into groups with current filters/sort/search; one batched cache
+    // load feeds every stock/space read of the render
+    final Map<Long, ShopInventoryCountCache> inventorySnapshot = MarketUtils.loadInventoryCaches(allShops);
+    final List<MarketItemGroup> groups = MarketUtils.processGroups(allShops, filterMode, sortMode, searchQuery, stockOnly, inventorySnapshot);
 
     // Calculate pagination (same pattern as MainPage)
     final int offset = 9;
     final int items = (menuRows - 2) * offset;
-    final int start = ((page - 1) * offset);
+    // pages advance by a full page of items (rows-2 rows of 9), not by a single row
+    final int start = ((page - 1) * items);
     final int maxPages = (groups.size() / items) + (((groups.size() % items) > 0)? 1 : 0);
     final int prev = (page <= 1)? maxPages : page - 1;
     final int next = (page >= maxPages)? 1 : page + 1;

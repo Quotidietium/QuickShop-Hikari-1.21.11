@@ -117,8 +117,9 @@ public class MainPage extends QuickShopPage {
 
         final ItemStack shopItem = shop.get().getItem();
         final int amount = shopItem.getAmount();
-        // Use cache to avoid Folia cross-region block access issues
-        final int stock = (shop.get().isBuying())? -1 : MarketUtils.getStockFromCache(shop.get());
+        // batched cache snapshot for this shop (Folia-safe: no cross-region block access)
+        final int stock = (shop.get().isBuying())? -1
+                          : MarketUtils.stockOf(shop.get(), MarketUtils.loadInventoryCaches(List.of(shop.get())));
         final String stockString = (shop.get().isUnlimited())? "Unlimited" : stock + "";
         final String priceFormatted = shop.get().format(shop.get().bukkitLocation().getWorld().getName(), shop.get().getCurrency());
 

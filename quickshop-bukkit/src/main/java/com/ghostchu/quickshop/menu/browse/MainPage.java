@@ -21,6 +21,7 @@ import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.economy.EconomyProvider;
 import com.ghostchu.quickshop.api.obj.QUser;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.cache.ShopInventoryCountCache;
 import com.ghostchu.quickshop.config.GuiConfig;
 import net.kyori.adventure.text.Component;
 import net.tnemc.item.AbstractItemStack;
@@ -40,6 +41,7 @@ import org.bukkit.inventory.ItemStack;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -106,7 +108,8 @@ public class MainPage {
         final int offset = 9;
         final int page = (Integer)viewer.get().dataOrDefault(staffPageID, 1);
         final int items = (menuRows - 2) * offset;
-        final int start = ((page - 1) * offset);
+        // pages advance by a full page of items (rows-2 rows of 9), not by a single row
+        final int start = ((page - 1) * items);
 
         final List<Shop> shops = (ArrayList<Shop>)shopsData.get();
 
@@ -153,19 +156,18 @@ public class MainPage {
                 .withSlot(pageInfoSlot)
                 .build());
 
+        // first pass: collect this page's slice, then load the inventory cache for the
+        // slice in one batched query (the old path issued one blocking query per icon)
+        final List<Shop> visible = new ArrayList<>();
+        for(int skip = 0; skip < shops.size(); skip++) {
+          if(skip < start) continue;
+          if(visible.size() >= items) break;
+          visible.add(shops.get(skip));
+        }
+        final Map<Long, ShopInventoryCountCache> inventorySnapshot = MarketUtils.loadInventoryCaches(visible);
+
         int i = 0;
-        for(final Shop shop : shops) {
-
-          //System.out.println("Menu add: id: " + shop.getShopId() + " slot: " + offset + (i - start) + "i: " + i);
-
-          if(i < start) {
-
-            i++;
-
-            continue;
-          }
-
-          if(i >= (start + items)) break;
+        for(final Shop shop : visible) {
 
           final String world = (shop.bukkitLocation().getWorld() != null)? shop.bukkitLocation().getWorld().getName() : "World";
           final String location = world + " " + shop.bukkitLocation().getBlockX() + ", " + shop.bukkitLocation().getBlockY() + ", " + shop.bukkitLocation().getBlockZ();
@@ -182,9 +184,9 @@ public class MainPage {
           final AbstractItemStack<ItemStack> stack = new BukkitItemStack().of(shop.getItem().getType().key().asString(), shop.getShopStackingAmount())
                   .lore(getConfigLore(id, shopItemConfig, shop.getOwner().getDisplay(), location,
                                       shop.shopType().identifier(), priceFormatted,
-                                      MarketUtils.getStockFromCache(shop)));
+                                      MarketUtils.stockOf(shop, inventorySnapshot)));
 
-          playerPage.addIcon(id, new IconBuilder(stack).withSlot(listStartSlot + (i - start)).build());
+          playerPage.addIcon(id, new IconBuilder(stack).withSlot(listStartSlot + i).build());
 
           i++;
         }

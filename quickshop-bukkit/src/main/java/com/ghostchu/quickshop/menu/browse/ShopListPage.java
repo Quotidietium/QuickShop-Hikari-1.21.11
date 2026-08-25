@@ -19,6 +19,7 @@ package com.ghostchu.quickshop.menu.browse;
 
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.cache.ShopInventoryCountCache;
 import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.config.GuiConfig;
 import net.kyori.adventure.text.Component;
@@ -40,6 +41,7 @@ import org.bukkit.inventory.ItemStack;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -107,10 +109,14 @@ public class ShopListPage {
 
     @SuppressWarnings("unchecked") final List<Shop> allShops = (ArrayList<Shop>)shopsData.get();
 
+    // one batched cache load for the whole render (per-shop reads would block on a
+    // database query each, and the STOCK sort comparator would re-query per comparison)
+    final Map<Long, ShopInventoryCountCache> inventorySnapshot = MarketUtils.loadInventoryCaches(allShops);
+
     // Apply filter and stock filter, then sort
     List<Shop> filteredShops = MarketUtils.filterShops(allShops, filterMode);
-    filteredShops = MarketUtils.filterByStock(filteredShops, stockOnly);
-    final List<Shop> sortedShops = MarketUtils.sortShops(filteredShops, sortMode);
+    filteredShops = MarketUtils.filterByStock(filteredShops, stockOnly, inventorySnapshot);
+    final List<Shop> sortedShops = MarketUtils.sortShops(filteredShops, sortMode, inventorySnapshot);
 
     // Calculate average price for comparison indicators
     final double avgPrice = sortedShops.isEmpty()? 0 :
@@ -119,7 +125,8 @@ public class ShopListPage {
     // Calculate pagination (same pattern as MainPage)
     final int offset = 9;
     final int items = (menuRows - 2) * offset;
-    final int start = ((page - 1) * offset);
+    // pages advance by a full page of items (rows-2 rows of 9), not by a single row
+    final int start = ((page - 1) * items);
     final int maxPages = (sortedShops.size() / items) + (((sortedShops.size() % items) > 0)? 1 : 0);
     final int prev = (page <= 1)? maxPages : page - 1;
     final int next = (page >= maxPages)? 1 : page + 1;
@@ -256,7 +263,7 @@ public class ShopListPage {
       if(i >= (start + items)) break;
 
       // Build shop lore with price indicator and click instruction
-      final List<Component> lore = buildShopLore(shop, avgPrice, canTeleport);
+      final List<Component> lore = buildShopLore(shop, avgPrice, canTeleport, inventorySnapshot);
 
       // Get display name for the item
       final String itemName = CommonUtil.prettifyText(shop.getItem().getType().name());
@@ -305,10 +312,11 @@ public class ShopListPage {
   }
 
   /**
-   * Build the lore for an individual shop. Note: Uses database cache for stock/space to avoid Folia
-   * cross-region block access issues.
+   * Build the lore for an individual shop. Note: Stock/space come from the render's
+   * preloaded inventory-cache snapshot (one batched query per page render).
    */
-  private List<Component> buildShopLore(final Shop shop, final double avgPrice, final boolean canTeleport) {
+  private List<Component> buildShopLore(final Shop shop, final double avgPrice, final boolean canTeleport,
+                                        final Map<Long, ShopInventoryCountCache> inventorySnapshot) {
 
     final List<Component> lore = new ArrayList<>();
     final var mm = QuickShop.getInstance().platform().miniMessage();
@@ -327,14 +335,14 @@ public class ShopListPage {
     final String priceColor = getPriceColor(priceIndicator);
     lore.add(mm.deserialize("<gray>Price: " + priceColor + formatPrice(shop.getPrice()) + " " + priceIndicator + "</gray>"));
 
-    // Stock/Space - Use database cache to avoid Folia cross-region block access
+    // Stock/Space - from the render's preloaded snapshot
     // The shop may be in a different region than the player viewing the menu
     if(shop.isSelling()) {
-      final int stock = getStockFromCache(shop);
+      final int stock = MarketUtils.stockOf(shop, inventorySnapshot);
       final String stockText = stock < 0? "Unlimited" : String.valueOf(stock);
       lore.add(mm.deserialize("<gray>Stock: <aqua>" + stockText + "</aqua></gray>"));
     } else {
-      final int space = getSpaceFromCache(shop);
+      final int space = MarketUtils.spaceOf(shop, inventorySnapshot);
       final String spaceText = space < 0? "Unlimited" : String.valueOf(space);
       lore.add(mm.deserialize("<gray>Space: <aqua>" + spaceText + "</aqua></gray>"));
     }
@@ -438,31 +446,5 @@ public class ShopListPage {
 
     return QuickShop.getInstance().getEconomyManager().provider()
             .format(BigDecimal.valueOf(price), null, null);
-  }
-
-  /**
-   * Get stock count from database cache. This avoids Folia cross-region block access issues by
-   * using cached data instead of directly accessing the shop's inventory.
-   *
-   * @param shop The shop to get stock for
-   *
-   * @return Stock count, or -1 for unlimited shops
-   */
-  private int getStockFromCache(final Shop shop) {
-
-    return MarketUtils.getStockFromCache(shop);
-  }
-
-  /**
-   * Get space count from database cache. This avoids Folia cross-region block access issues by
-   * using cached data instead of directly accessing the shop's inventory.
-   *
-   * @param shop The shop to get space for
-   *
-   * @return Space count, or -1 for unlimited shops
-   */
-  private int getSpaceFromCache(final Shop shop) {
-
-    return MarketUtils.getSpaceFromCache(shop);
   }
 }
