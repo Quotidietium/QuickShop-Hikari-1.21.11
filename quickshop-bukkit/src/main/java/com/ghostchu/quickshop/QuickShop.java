@@ -979,15 +979,18 @@ public class QuickShop implements QuickShopAPI, Reloadable {
         try {
 
           virtualDisplayItemManager = new VirtualDisplayItemManager(this);
-        } catch(final Exception e) {
+        } catch(final Throwable e) {
 
-          //disable displays since we don't have packet support
+          //degrade gracefully: shops trade normally, only the display items above
+          //containers are gone until a working ProtocolLib/PacketEvents is installed.
+          //in-memory only on purpose -- a transiently broken backend must not
+          //permanently rewrite the admin's display-items config. NoClassDefFoundError
+          //from a backend that failed to enable (closed classloader) is an Error, so
+          //this must catch Throwable, not Exception
           this.display = false;
-          getConfig().set("shop.display-items", false);
-          javaPlugin.saveConfig();
 
-          logger.warn("Failed to initialize Virtual Display packet factory. Please validate that you have an up-to-date ProtocolLib or PacketEvents installation.", e);
-          throw e;
+          logger.warn("Failed to initialize Virtual Display packet factory ({}). QuickShop will keep running with display items disabled; install an up-to-date ProtocolLib or PacketEvents build and restart to restore them.", e.getClass().getSimpleName());
+          logger.warn("Underlying cause:", e);
         }
       }
     }
