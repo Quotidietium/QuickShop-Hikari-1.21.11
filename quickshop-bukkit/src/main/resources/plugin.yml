@@ -12,7 +12,6 @@ softdepend:
   - CMI
   - ProtocolLib
   - packetevents
-  - packetevents
   - NBTAPI
   - NBT-API
   - ItemNBTAPI
