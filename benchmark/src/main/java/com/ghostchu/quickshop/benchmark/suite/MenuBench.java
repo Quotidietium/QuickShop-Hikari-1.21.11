@@ -89,9 +89,10 @@ public final class MenuBench {
       ctx.index++;
       if(candidate != null) {
         try {
-          final Object result = candidate.invokeExact((List<Shop>)shops, BrowseFilterMode.ALL,
-                                                      BrowseSortMode.STOCK, (String)null,
-                                                      true, (Map<Long, ShopInventoryCountCache>)snapshot);
+          // cast shapes invokeExact's expected return type (erased List)
+          final List<?> result = (List<?>)candidate.invokeExact((List<Shop>)shops, BrowseFilterMode.ALL,
+                                                                BrowseSortMode.STOCK, (String)null,
+                                                                true, (Map<Long, ShopInventoryCountCache>)snapshot);
           com.ghostchu.quickshop.benchmark.BenchHarness.consume(result);
         } catch(final Throwable t) {
           throw new IllegalStateException("snapshot pipeline failed", t);
