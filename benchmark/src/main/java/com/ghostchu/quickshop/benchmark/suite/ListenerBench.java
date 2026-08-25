@@ -171,6 +171,38 @@ public final class ListenerBench {
         }
       }
     });
+
+    benchInventoryCheck(harness);
+  }
+
+  // guard-item scan on InventoryOpenEvent (DisplayProtectionListener): virtual
+  // display backend (default) can never produce guard stacks, so the R24 candidate
+  // returns after one mode check while the baseline walks every slot with a config
+  // lookup per item. Same body on both sides — behavior differs by jar.
+  private static void benchInventoryCheck(final com.ghostchu.quickshop.benchmark.BenchHarness harness) {
+
+    Env.setConfig("shop.display-type", 2);
+    lenient().when(Env.plugin().isDisplayEnabled()).thenReturn(true);
+    final var checkInv = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.inventory.InventoryWrapper.class));
+    lenient().when(checkInv.getHolder()).thenReturn(Env.pin(Env.hotMock(org.bukkit.inventory.InventoryHolder.class)));
+    final var checkIter = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.inventory.InventoryWrapperIterator.class));
+    final int[] cursor = {0};
+    lenient().when(checkIter.hasNext()).thenAnswer(inv -> {
+      if(cursor[0] >= 54) {
+        cursor[0] = 0;
+        return false;
+      }
+      return true;
+    });
+    lenient().when(checkIter.next()).thenAnswer(inv -> {
+      cursor[0]++;
+      return Env.pin(Env.hotMock(org.bukkit.inventory.ItemStack.class));
+    });
+    lenient().when(checkInv.iterator()).thenReturn(checkIter);
+    harness.bench("listener/inventoryCheck", ctx -> {
+      ctx.index++;
+      com.ghostchu.quickshop.util.Util.inventoryCheck(checkInv);
+    });
   }
 
   /**
