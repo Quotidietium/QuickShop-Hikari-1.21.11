@@ -14,8 +14,8 @@
 | 目标平台 | 仅 Paper（Spigot 直接拒绝启动）；Folia 兼容 |
 | 代码规模 | 663 个 Java 文件：api 177 / bukkit 357 / addon 62 / compat 52 / common 12 / platform 3 |
 | 数据库 | MySQL 或 H2(MODE=MYSQL)，schema 版本 20，EasySQL + HikariCP |
-| 测试 | quickshop-bukkit 133 个用例全绿（回归 + 查找表索引 + DB 写缓存 + 文本缓存 + QUser 驻留 + 事件快路径 + 匹配免克隆 + 迭代器快照 + 木牌调度 + 点击路径 + 交易观测 + 指标批处理 + 剩余 DB 写批处理 + 文本预解析等价 + 日志懒队列 + 展示物重送 + 菜单库存快照 + 开箱扫描快路径 + 签名渲染单扫 + 区块加载快门） |
-| 基准 | `benchmark/` 独立模块：41 用例 × 8 套件（R26 起，热点 mock 全 stubOnly）（查找表/序列化/经济/文本/H2 数据库（含指标与外部缓存插入）/交易热路径（含 action 全路径）/监听器点击与展示物/菜单库存流水），报告见 [report/perf](report/perf/) |
+| 测试 | quickshop-bukkit 135 个用例全绿（回归 + 查找表索引 + DB 写缓存 + 文本缓存 + QUser 驻留 + 事件快路径 + 匹配免克隆 + 迭代器快照 + 木牌调度 + 点击路径 + 交易观测 + 指标批处理 + 剩余 DB 写批处理 + 文本预解析等价 + 日志懒队列 + 展示物重送 + 菜单库存快照 + 开箱扫描快路径 + 签名渲染单扫 + 区块加载快门 + 签名排程去重） |
+| 基准 | `benchmark/` 独立模块：42 用例 × 8 套件（R27 起，热点 mock 全 stubOnly）（查找表/序列化/经济/文本/H2 数据库（含指标与外部缓存插入）/交易热路径（含 action 全路径）/监听器点击与展示物/菜单库存流水），报告见 [report/perf](report/perf/) |
 | 本仓库定位 | 独立 fork（已移除 upstream，不再同步社区上游） |
 
 ## 一句话理解这个项目
@@ -39,6 +39,8 @@
 17. **第十三轮（R25·签名渲染管线，2026-08-27，详见 [report/perf/2026-08-27-sign-render-pipeline.md](report/perf/2026-08-27-sign-render-pipeline.md)）**：木牌刷新（每笔交易后/漏斗供料后经 SignUpdateWatcher 落主线程）的 render 对同一库存量双扫（header 的 inventoryAvailable 与 trading 行的 remainingStock 在内置类型下同源）压为单扫共享（第三方店型保持独立双查保精确）、layout 模板按店型缓存（reload 失效）、renderItem 标志快照、setSignText 每牌子 config 读取提出循环（基准 **-47.6%**，1.86ms→0.98ms，六 fork 零重叠）。测试 126 用例全绿、基准 40 用例。
 
 18. **第十四轮（R26·区块加载路径双快门，2026-08-27，详见 [report/perf/2026-08-27-chunk-load-fastgates.md](report/perf/2026-08-27-chunk-load-fastgates.md)）**：全服最高频事件之一的区块加载处理——守卫物孤儿清扫在虚拟展示后端（默认）下可证恒假整段跳过（getEntities 快照+逐实体检查→1 次后端判定，AbstractDisplayItem.canProduceGuardItems 与 checkIsGuardItemStack 早退同源）；无商店区块 isEmpty 早退（原 null 检查在 R2 返回 emptyMap 后永不触发，每次加载白付 chunkName 拼接+PerfMonitor+无条件 performance 空记录）；非虚拟模式孤儿清扫行为不变（基准 **-95.8%**，560μs→23.8μs，六 fork 零重叠）。测试 133 用例全绿、基准 41 用例。
+
+19. **第十五轮（R27·签名排程去重 O(1)，2026-08-27，详见 [report/perf/2026-08-27-sign-schedule-dedup.md](report/perf/2026-08-27-sign-schedule-dedup.md)）**：漏斗/交易触发的 scheduleSignUpdate 去重从待处理队列线性扫描（500ms 窗口内全部商店数，高频漏斗服务器 O(n²)/窗口）改为伴生 ConcurrentHashMap.newKeySet（ContainerShop 身份等价使两者语义严格一致；排空移除、可重排、首胜 locale 保持）（基准 **-98.6%**，2.25μs→32ns，六 fork 零重叠，绝对值即真实量级）。测试 135 用例全绿、基准 42 用例。
 
 15. **第十一轮（R23·浏览菜单库存快照批量化，2026-08-26，详见 [report/perf/2026-08-26-menu-inventory-snapshot.md](report/perf/2026-08-26-menu-inventory-snapshot.md)）**：菜单库存读取此前主线程必抛 IllegalStateException 被吞恒返 0（库存显示/有货过滤/库存排序三功能损坏）且每店一次阻塞往返×comparator 重查；改为整页一次「冲刷+IN(...) 批量查询」快照 Map（DatabaseHelper.queryInventoryCaches 新 API，MarketUtils 全链 Map 重载），并修复三处浏览页分页重叠缺陷（start 按 9 推进而每页 36 项）。基准 **-49.5%**（六 fork 零重叠）。测试 116 用例全绿、基准 38 用例。
 
