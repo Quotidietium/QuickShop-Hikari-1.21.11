@@ -1841,15 +1841,17 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     final ShopSignLinesEvent event = new ShopSignLinesEvent(Phase.POST, this, lines);
     event.callEvent();
 
+    // per-call constants hoisted out of the per-sign loop: config values and the dye
+    // color cannot change between two signs of the same refresh
+    final DyeColor dyeColor = Util.getDyeColor();
+    final boolean isGlowing = plugin.getConfig().getBoolean("shop.sign-glowing", false);
+    final boolean isWaxed = plugin.getConfig().getBoolean("shop.sign-wax", false);
+
     for(final Sign sign : signs) {
 
-      final DyeColor dyeColor = Util.getDyeColor();
       if(dyeColor != null) {
         sign.setColor(dyeColor);
       }
-      final boolean isGlowing = plugin.getConfig().getBoolean("shop.sign-glowing", false);
-      final boolean isWaxed = plugin.getConfig().getBoolean("shop.sign-wax", false);
-
       sign.setGlowingText(isGlowing);
       sign.setWaxed(isWaxed);
       sign.update(true);
