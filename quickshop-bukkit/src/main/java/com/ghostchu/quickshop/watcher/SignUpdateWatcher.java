@@ -10,6 +10,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.time.Instant;
 import java.util.Queue;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 public class SignUpdateWatcher implements Runnable {
@@ -17,6 +19,12 @@ public class SignUpdateWatcher implements Runnable {
   //scheduleSignUpdate is called from region threads (hopper events, chunk loads, trades)
   //while run() polls on the async timer thread - a plain LinkedList would corrupt under that
   private final Queue<SignUpdateEntry> signUpdateQueue = new ConcurrentLinkedQueue<>();
+
+  // O(1) companion of the historic queue scan: shops carry identity equality (no
+  // equals/hashCode override), so a concurrent key set answers "already scheduled"
+  // exactly like walking the queue did - hopper-fed shops schedule on every item move
+  // and the queue holds every shop of the current drain window
+  private final Set<Shop> pendingShops = ConcurrentHashMap.newKeySet();
 
   private WrappedTask task = null;
 
@@ -27,6 +35,7 @@ public class SignUpdateWatcher implements Runnable {
     final Instant endTime = startTime.plusMillis(50);
     SignUpdateEntry entry = signUpdateQueue.poll();
     while(entry != null && !Instant.now().isAfter(endTime)) {
+      pendingShops.remove(entry.shop());
       final Shop shop = entry.shop();
       final ProxiedLocale locale = entry.locale() != null? entry.locale()
               : QuickShop.getInstance().text().findRelativeLanguages(shop.getOwner(), false);
@@ -55,10 +64,8 @@ public class SignUpdateWatcher implements Runnable {
 
   private void schedule(@NotNull final Shop shop, @Nullable final ProxiedLocale locale) {
 
-    for(final SignUpdateEntry entry : signUpdateQueue) {
-      if(entry.shop().equals(shop)) {
-        return; // Ignore if schedule too frequently
-      }
+    if(!pendingShops.add(shop)) {
+      return; // Ignore if schedule too frequently
     }
     signUpdateQueue.add(new SignUpdateEntry(shop, locale));
   }
