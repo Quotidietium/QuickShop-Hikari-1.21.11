@@ -173,6 +173,7 @@ public final class ListenerBench {
     });
 
     benchInventoryCheck(harness);
+    benchSignRender(harness, shopManager);
   }
 
   // guard-item scan on InventoryOpenEvent (DisplayProtectionListener): virtual
@@ -202,6 +203,97 @@ public final class ListenerBench {
     harness.bench("listener/inventoryCheck", ctx -> {
       ctx.index++;
       com.ghostchu.quickshop.util.Util.inventoryCheck(checkInv);
+    });
+  }
+
+  // sign refresh render: what one SignUpdateWatcher drain pays per shop on the main
+  // thread — the full 4-line layout render over a 54-slot inventory. The baseline
+  // walks the inventory TWICE (header's inventoryAvailable + trading's remainingStock
+  // consult the same quantity) and re-reads the layout config per render; the R25
+  // candidate shares one scan for built-in shop types and caches the template per
+  // type. Same body on both sides — behavior differs by jar (R24 precedent).
+  private static void benchSignRender(final com.ghostchu.quickshop.benchmark.BenchHarness harness,
+                                      final SimpleShopManager shopManager) {
+
+    Env.setConfig("use-crowdin-ota", false);
+    Env.setConfig("lang-processor.papi-post-process", false);
+    Env.setConfig("lang-processor.fix-item-always-italic", false);
+    Env.setConfig("lang-processor.replace-filller-post-process", false);
+
+    final QuickShop plugin = Env.plugin();
+    final var platform = Env.pin(Env.hotMock(com.ghostchu.quickshop.platform.Platform.class));
+    when(platform.miniMessage()).thenReturn(net.kyori.adventure.text.minimessage.MiniMessage.miniMessage());
+    lenient().when(platform.getTranslation(any(org.bukkit.inventory.ItemStack.class)))
+            .thenReturn(net.kyori.adventure.text.Component.text("Diamond"));
+    when(plugin.platform()).thenReturn(platform);
+
+    final var textManager = new com.ghostchu.quickshop.localization.text.SimpleTextManager(plugin);
+    when(plugin.text()).thenReturn(textManager);
+    textManager.register("en_us", "signs.header-available", "<green>{0}'s Shop</green>");
+    textManager.register("en_us", "signs.header-unavailable", "<red>{0}'s Shop</red>");
+    textManager.register("en_us", "signs.selling", "<color_scheme:trading>Selling {0}</color_scheme>");
+    textManager.register("en_us", "signs.unlimited", "<color_scheme:trading>Unlimited</color_scheme>");
+    textManager.register("en_us", "signs.item-left", "<color_scheme:item>");
+    textManager.register("en_us", "signs.item-right", "</color_scheme>");
+    textManager.register("en_us", "signs.price", "<color_scheme:price>Price: {0}</color_scheme>");
+
+    // the layout provider exists identically on both jars; only render()'s internals
+    // differ by build
+    final var provider = new com.ghostchu.quickshop.shop.SimpleShopLayoutProvider(plugin);
+    when(shopManager.format(any(double.class), any(com.ghostchu.quickshop.api.shop.Shop.class)))
+            .thenReturn("$12.5");
+
+    final var locale = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.localization.text.ProxiedLocale.class));
+    when(locale.getLocale()).thenReturn("en_us");
+
+    final var shop = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.shop.Shop.class));
+    when(shop.shopType()).thenReturn(SimpleShopManager.SELLING_TYPE);
+    when(shop.shopState()).thenReturn(SimpleShopManager.ACTIVE_STATE);
+    when(shop.isUnlimited()).thenReturn(false);
+    when(shop.isStackingShop()).thenReturn(false);
+    when(shop.getPrice()).thenReturn(12.34d);
+    when(shop.ownerName(any(boolean.class), any(com.ghostchu.quickshop.api.localization.text.ProxiedLocale.class)))
+            .thenReturn(net.kyori.adventure.text.Component.text("owner"));
+    when(shop.getItemUnitSize()).thenReturn(1);
+    when(shop.matches(any(org.bukkit.inventory.ItemStack.class))).thenReturn(true);
+
+    final var item = Env.pin(Env.hotMock(org.bukkit.inventory.ItemStack.class));
+    when(item.hasItemMeta()).thenReturn(false);
+    when(item.getType()).thenReturn(org.bukkit.Material.DIAMOND);
+    when(shop.getItem()).thenReturn(item);
+
+    // the 54-slot inventory every scan walks: all slots hold matching stacks, the
+    // worst case where each contributes to the running count
+    final var inv = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.inventory.InventoryWrapper.class));
+    final var slots = new org.bukkit.inventory.ItemStack[54];
+    for(int i = 0; i < slots.length; i++) {
+      final var slot = Env.pin(Env.hotMock(org.bukkit.inventory.ItemStack.class));
+      when(slot.getType()).thenReturn(org.bukkit.Material.DIAMOND);
+      when(slot.getAmount()).thenReturn(64);
+      slots[i] = slot;
+    }
+    final var iterator = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.inventory.InventoryWrapperIterator.class));
+    final int[] cursor = {0};
+    lenient().when(iterator.hasNext()).thenAnswer(unused->{
+      if(cursor[0] >= slots.length) {
+        cursor[0] = 0;
+        return false;
+      }
+      return true;
+    });
+    when(iterator.next()).thenAnswer(unused->slots[cursor[0]++]);
+    when(inv.iterator()).thenReturn(iterator);
+
+    // the scans run the production counter over the mock inventory; the header
+    // availability mirrors ContainerShop's selling branch (consults the same quantity),
+    // so the baseline pays the second full walk
+    when(shop.getRemainingStock()).thenAnswer(unused->com.ghostchu.quickshop.util.Util.countItems(inv, shop));
+    when(shop.getRemainingSpace()).thenAnswer(unused->com.ghostchu.quickshop.util.Util.countSpace(inv, shop));
+    when(shop.inventoryAvailable()).thenAnswer(unused->shop.getRemainingStock() > 0);
+
+    harness.bench("listener/signRender", ctx->{
+      ctx.index++;
+      com.ghostchu.quickshop.benchmark.BenchHarness.consume(provider.render(shop, locale));
     });
   }
 

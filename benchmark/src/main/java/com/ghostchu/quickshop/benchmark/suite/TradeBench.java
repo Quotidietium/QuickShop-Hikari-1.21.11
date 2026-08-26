@@ -333,7 +333,10 @@ public final class TradeBench {
             .thenAnswer(inv -> inv.getArgument(0, Component.class));
 
     final var shopManager = Env.hotMock(SimpleShopManager.class);
-    lenient().when(shopManager.shopLayoutProvider()).thenReturn(new SimpleShopLayoutProvider(plugin));
+    // constructed before the stubbing opens: the provider's constructor registers with
+    // the reload manager, a mock call that must not nest inside when(...)
+    final var layoutProvider = new SimpleShopLayoutProvider(plugin);
+    lenient().when(shopManager.shopLayoutProvider()).thenReturn(layoutProvider);
     lenient().when(plugin.getShopManager()).thenReturn(shopManager);
 
     lenient().when(plugin.getSignUpdateWatcher()).thenReturn(new SignUpdateWatcher());
@@ -361,7 +364,9 @@ public final class TradeBench {
     final SimpleShopManager manager = mock(SimpleShopManager.class,
             org.mockito.Mockito.withSettings().stubOnly().defaultAnswer(org.mockito.Mockito.CALLS_REAL_METHODS));
     when(plugin.getShopManager()).thenReturn(manager);
-    lenient().when(manager.shopLayoutProvider()).thenReturn(new SimpleShopLayoutProvider(plugin));
+    // same mid-stubbing hazard as installTradeServiceEnvironment: construct first
+    final var actionLayoutProvider = new SimpleShopLayoutProvider(plugin);
+    lenient().when(manager.shopLayoutProvider()).thenReturn(actionLayoutProvider);
     lenient().when(manager.tradeService()).thenReturn(tradeService);
     // Objenesis skips AbstractShopManager's constructor, so its fields start null
     injectField(manager, "plugin", plugin);
