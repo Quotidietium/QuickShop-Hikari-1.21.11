@@ -174,6 +174,7 @@ public final class ListenerBench {
 
     benchInventoryCheck(harness);
     benchSignRender(harness, shopManager);
+    benchChunkLoad(harness, shopManager);
   }
 
   // guard-item scan on InventoryOpenEvent (DisplayProtectionListener): virtual
@@ -294,6 +295,51 @@ public final class ListenerBench {
     harness.bench("listener/signRender", ctx->{
       ctx.index++;
       com.ghostchu.quickshop.benchmark.BenchHarness.consume(provider.render(shop, locale));
+    });
+  }
+
+  // chunk load handler (ChunkListener.onChunkLoad) for the dominant server-wide shape:
+  // a shop-less chunk carrying a batch of item entities under the default virtual
+  // display backend. The baseline pays the getEntities() snapshot plus one guard-item
+  // check per entity (constant-false under VIRTUALITEM) and a PerfMonitor span whose
+  // performance record measures an empty loop; the R26 candidate returns after one
+  // backend check and the empty-shops check. Same body on both sides — behavior
+  // differs by jar.
+  private static void benchChunkLoad(final com.ghostchu.quickshop.benchmark.BenchHarness harness,
+                                     final SimpleShopManager shopManager) {
+
+    Env.setConfig("shop.display-type", 2);
+    lenient().when(Env.plugin().isDisplayEnabled()).thenReturn(true);
+
+    final QuickShop plugin = Env.plugin();
+    // shop-less chunk: the overwhelmingly common case for chunk loads server-wide
+    when(shopManager.getShops(any(org.bukkit.Chunk.class))).thenReturn(new java.util.HashMap<>());
+
+    final var world = Env.pin(Env.hotMock(World.class));
+    lenient().when(world.getName()).thenReturn("world");
+    final var chunk = Env.pin(Env.hotMock(org.bukkit.Chunk.class));
+    lenient().when(chunk.getWorld()).thenReturn(world);
+    lenient().when(chunk.getX()).thenReturn(7);
+    lenient().when(chunk.getZ()).thenReturn(-3);
+    // a farm-chunk-like entity load: 40 item entities, none carrying guard marks
+    final var entities = new org.bukkit.entity.Entity[40];
+    for(int i = 0; i < entities.length; i++) {
+      final var itemEntity = Env.pin(Env.hotMock(org.bukkit.entity.Item.class));
+      final var stack = Env.pin(Env.hotMock(org.bukkit.inventory.ItemStack.class));
+      lenient().when(stack.hasItemMeta()).thenReturn(false);
+      lenient().when(itemEntity.getItemStack()).thenReturn(stack);
+      entities[i] = itemEntity;
+    }
+    when(chunk.getEntities()).thenReturn(entities);
+
+    final var event = Env.pin(Env.hotMock(org.bukkit.event.world.ChunkLoadEvent.class));
+    lenient().when(event.isNewChunk()).thenReturn(false);
+    lenient().when(event.getChunk()).thenReturn(chunk);
+
+    final var listener = new com.ghostchu.quickshop.listener.ChunkListener(plugin);
+    harness.bench("listener/chunkLoad", ctx->{
+      ctx.index++;
+      listener.onChunkLoad(event);
     });
   }
 
