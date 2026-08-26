@@ -175,6 +175,7 @@ public final class ListenerBench {
     benchInventoryCheck(harness);
     benchSignRender(harness, shopManager);
     benchChunkLoad(harness, shopManager);
+    benchSignScheduleDedup(harness);
   }
 
   // guard-item scan on InventoryOpenEvent (DisplayProtectionListener): virtual
@@ -340,6 +341,28 @@ public final class ListenerBench {
     harness.bench("listener/chunkLoad", ctx->{
       ctx.index++;
       listener.onChunkLoad(event);
+    });
+  }
+
+  // sign-update queue dedup (SignUpdateWatcher.schedule): the hopper-fed shape where
+  // the same shop is scheduled again on every InventoryMoveItemEvent of the current
+  // drain window. The baseline walks the whole pending queue per call (O(shops in
+  // window)); the R27 candidate answers from a concurrent key set. Same body on both
+  // sides — behavior differs by jar.
+  private static void benchSignScheduleDedup(final com.ghostchu.quickshop.benchmark.BenchHarness harness) {
+
+    final var watcher = new com.ghostchu.quickshop.watcher.SignUpdateWatcher();
+    // a full drain window of pending shops
+    for(int i = 0; i < 500; i++) {
+      final var shop = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.shop.Shop.class));
+      watcher.scheduleSignUpdate(shop, null);
+    }
+    final var fedShop = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.shop.Shop.class));
+    watcher.scheduleSignUpdate(fedShop, null);
+
+    harness.bench("listener/signScheduleDedup", ctx->{
+      ctx.index++;
+      watcher.scheduleSignUpdate(fedShop, null);
     });
   }
 
