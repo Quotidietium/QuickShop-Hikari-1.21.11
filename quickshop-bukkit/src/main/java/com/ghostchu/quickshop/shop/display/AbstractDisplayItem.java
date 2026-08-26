@@ -78,6 +78,20 @@ public abstract class AbstractDisplayItem implements Reloadable {
   }
 
   /**
+   * Whether the active backend can ever produce guard item stacks (the marker stacks
+   * real-item displays carry to prevent pickup). Mirrors the early exits of
+   * {@link #checkIsGuardItemStack(ItemStack)}: disabled displays and the virtual-item
+   * backend never create guard stacks, so bulk sweeps gated on this predicate can
+   * skip scanning entirely — every skipped call is provably constant-false.
+   *
+   * @return true when guard item stacks can exist and sweeps must scan
+   */
+  public static boolean canProduceGuardItems() {
+
+    return PLUGIN.isDisplayEnabled() && getNowUsing() != DisplayType.VIRTUALITEM;
+  }
+
+  /**
    * Check the itemStack is contains protect flag.
    *
    * @param itemStack Target ItemStack
@@ -86,11 +100,7 @@ public abstract class AbstractDisplayItem implements Reloadable {
    */
   public static boolean checkIsGuardItemStack(@Nullable final ItemStack itemStack) {
 
-    if(!PLUGIN.isDisplayEnabled()) {
-      return false;
-    }
-
-    if(getNowUsing() == DisplayType.VIRTUALITEM) {
+    if(!canProduceGuardItems()) {
       return false;
     }
 

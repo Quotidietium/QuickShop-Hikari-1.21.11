@@ -33,11 +33,21 @@ public class ChunkListener extends AbstractQSListener {
     if(e.isNewChunk()) {
       return;
     }
+    // the orphan sweep only ever acts when a non-virtual backend can produce guard
+    // stacks; under the default VIRTUALITEM backend (and when displays are disabled)
+    // checkIsGuardItemStack is constant-false, making the per-chunk getEntities()
+    // snapshot and per-entity checks a provable no-op
+    if(AbstractDisplayItem.canProduceGuardItems()) {
+      cleanDisplayItems(e.getChunk());
+    }
     final Map<Location, Shop> inChunk = plugin.getShopManager().getShops(e.getChunk());
-    if(inChunk == null) {
+    if(inChunk.isEmpty()) {
+      // the historic null guard never fired (getShops hands out an empty map), so
+      // shop-less chunks previously also paid the chunk-name string build and a
+      // PerfMonitor span — whose unconditional performance record measured an empty
+      // loop — on every chunk load server-wide
       return;
     }
-    cleanDisplayItems(e.getChunk());
     final String chunkName = e.getChunk().getWorld().getName() + ", X=" + e.getChunk().getX() + ", Z=" + e.getChunk().getZ();
     try(PerfMonitor ignored = new PerfMonitor("Load shops in chunk [" + chunkName + "]", Duration.of(500, ChronoUnit.MILLIS))) {
       for(final Shop shop : inChunk.values()) {
@@ -62,7 +72,8 @@ public class ChunkListener extends AbstractQSListener {
   public void onChunkUnload(final ChunkUnloadEvent e) {
 
     final Map<Location, Shop> inChunk = plugin.getShopManager().getShops(e.getChunk());
-    if(inChunk == null) {
+    if(inChunk.isEmpty()) {
+      // same dead null guard as onChunkLoad: getShops never returns null
       return;
     }
     for(final Shop shop : inChunk.values()) {
