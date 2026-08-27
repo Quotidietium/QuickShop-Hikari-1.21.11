@@ -19,15 +19,27 @@ public class ChatListener extends AbstractQSListener {
 
   private static final String LITEBANS_CANCELLED = "[event cancelled by LiteBans]";
 
+  // hot-path snapshot: every chat message on the server passes this handler, and
+  // cancelled ones (mute/filter plugins) walked the config tree for the gate; read on
+  // construction and reload instead
+  private boolean ignoreCancelChatEvent;
+
   public ChatListener(final QuickShop plugin) {
 
     super(plugin);
+    init();
+  }
+
+  private void init() {
+
+    // no explicit default: mirrors getBoolean(path), where an absent key means false
+    this.ignoreCancelChatEvent = plugin.getConfig().getBoolean("shop.ignore-cancel-chat-event");
   }
 
   @EventHandler(priority = EventPriority.LOWEST)
   public void onChat(final AsyncPlayerChatEvent e) {
 
-    if(e.isCancelled() && plugin.getConfig().getBoolean("shop.ignore-cancel-chat-event")) {
+    if(e.isCancelled() && ignoreCancelChatEvent) {
       Log.debug("Ignored a chat event (Cancelled by another plugin, you can force process by turn on ignore-cancel-chat-event)");
       return;
     }
@@ -57,6 +69,7 @@ public class ChatListener extends AbstractQSListener {
   @Override
   public ReloadResult reloadModule() {
 
+    init();
     return ReloadResult.builder().status(ReloadStatus.SUCCESS).build();
   }
 }

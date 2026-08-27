@@ -27,6 +27,7 @@ import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.world.StructureGrowEvent;
+import org.bukkit.inventory.InventoryHolder;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -136,7 +137,10 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
   public void onHopperMoveItem(final InventoryMoveItemEvent event) {
 
-    if(!this.hopperProtect || !(event.getDestination().getHolder() instanceof Hopper)) {
+    // the holder fetch snapshots the block state; resolve it once and reuse it in the
+    // owner-exclude branch instead of re-resolving
+    final InventoryHolder destinationHolder = event.getDestination().getHolder();
+    if(!this.hopperProtect || !(destinationHolder instanceof Hopper)) {
       return;
     }
 
@@ -151,7 +155,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
       return;
     }
 
-    if(this.hopperOwnerExclude && event.getDestination().getHolder() instanceof final Hopper hopper) {
+    if(this.hopperOwnerExclude && destinationHolder instanceof final Hopper hopper) {
       final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
       if(hopperPersistentData != null) {
         if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
@@ -165,7 +169,9 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
   public void onDropperMoveItem(final InventoryMoveItemEvent event) {
 
-    if(!this.dropperProtect || !(event.getInitiator().getHolder() instanceof Dropper)) {
+    // same single-resolve as the hopper handler
+    final InventoryHolder initiatorHolder = event.getInitiator().getHolder();
+    if(!this.dropperProtect || !(initiatorHolder instanceof Dropper)) {
       return;
     }
 
@@ -180,7 +186,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
       return;
     }
 
-    if(this.dropperOwnerExclude && event.getInitiator().getHolder() instanceof final Dropper dropper) {
+    if(this.dropperOwnerExclude && initiatorHolder instanceof final Dropper dropper) {
       final HopperPersistentData hopperPersistentData = dropper.getPersistentDataContainer().get(dropperKey, HopperPersistentDataType.INSTANCE);
       if(hopperPersistentData != null) {
         if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {

@@ -99,6 +99,11 @@ public class Util {
   public static final int VANILLA_MAX_STACK_SIZE = 99;
   private static Yaml yaml = null;
   private static Boolean devMode = null;
+  // hot-path snapshots of the item-name flags (consulted on every getItemStackName /
+  // getItemCustomName call — sign lines, receipts, menu icons); refreshed by
+  // initialize(), which is the reload-manager-registered hook
+  private static volatile boolean forceUseItemOriginalName = false;
+  private static volatile boolean useEnchantmentForEnchantedBook = false;
   @Setter
   private static QuickShop plugin;
   @Getter
@@ -888,7 +893,7 @@ public class Util {
     }
 
 
-    if(!itemStack.hasItemMeta() || QuickShop.getInstance().getConfig().getBoolean("shop.force-use-item-original-name")) {
+    if(!itemStack.hasItemMeta() || forceUseItemOriginalName) {
 
       return null;
     }
@@ -1005,7 +1010,7 @@ public class Util {
 
   public static boolean useEnchantmentForEnchantedBook() {
 
-    return plugin.getConfig().getBoolean("shop.use-enchantment-for-enchanted-book");
+    return useEnchantmentForEnchantedBook;
   }
 
   @NotNull
@@ -1258,6 +1263,8 @@ public class Util {
     SHOPABLES.clear();
     CUSTOM_STACKSIZE.clear();
     devMode = plugin.getConfig().getBoolean("dev-mode");
+    forceUseItemOriginalName = plugin.getConfig().getBoolean("shop.force-use-item-original-name", false);
+    useEnchantmentForEnchantedBook = plugin.getConfig().getBoolean("shop.use-enchantment-for-enchanted-book", false);
 
     for(final String s : plugin.getConfig().getStringList("shop-blocks")) {
       Material mat = Material.matchMaterial(s.toUpperCase());
