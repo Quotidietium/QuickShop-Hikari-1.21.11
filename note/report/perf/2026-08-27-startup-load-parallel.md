@@ -1,8 +1,11 @@
 # QuickShop-Hikari 性能优化报告·第十九轮（启动装载并行化，2026-08-27）
 
 > 基准程序与方法论同前（本轮起 46 用例 × 8 套件——database 套件新增
-> startup/shopLoadChain 启动全链 wall-clock 计量面）；同态交替 A/B，基线 commit
-> `75fc6d02e` = R30 闭合并提交文档后的 HEAD，各 3 fork 取中位数。
+> startup/shopLoadChain 启动全链 wall-clock 计量面；text 套件增补
+> fallbackYamlParse 解析单价面，47 用例）；同态交替 A/B，基线 commit
+> `34ba5fb20` = R30 闭合并提交文档后的 HEAD，各 3 fork 取中位数。
+> 本轮覆盖启用链路全部三个方面：I 装载相位（见下）、II 语言包相位（本报告补充）、
+> III 管理器装配序列（甄别证据入册）。
 
 ## R31：loadShops 读店循环并行化（commit ff583e3de..d9fa43fc8）
 
@@ -54,6 +57,39 @@ mock 成本说明：decodeStack 桩为 400B Base64+对象重建（接近真实 N
   （保守服务器可设 1 完全复原旧行为——此时新版仅省去 per-record join 的移交开销）；
 - 内存峰值增幅上界 = 同时在解码的店数 × 单店解码产物 ≤ 并行度 × 数 KB（记录本体
   本就已全部在内存），1000 店级实测无 OOM；H2 fetch 相位不变仍先行完成。
+
+## 补充·分段 II：语言包相位（commit 23a8fc5ae；计量面 fallbackYamlParse）
+
+### 甄别
+
+- **fallback 双解析**：`SimpleTextManager.load()` 对 110KB `lang/messages.yml` 解析
+  **两次**——en_us deploy 与 fillMissing 各自 fresh 调用 `loadBuiltInFallback()`。
+  经证 `fillMissing` 只读 fallback（`mergeMissing` 仅写被补语言；en_us 自补分支因
+  键集相同全 skip），单实例共享与双实例逐字节等价 → 实现为局部变量复用。
+- **bundled 相位无可优化面（甄别证据）**：`loadBundled()` 扫描 jar 内
+  `lang/<region>/messages.yml`，但本仓库 `src/main/resources/lang/` 仅含根级 en_us
+  与 example 文件、**零个子目录翻译**——发行包中该扫描匹配 0~1 条目，多语言实际
+  依赖 Crowdin OTA（网络可选项）或 override 文件。串行解析零条目无从并行，
+  不实现（实现即死代码并行化）。
+
+### 结果
+
+| 项目 | 数据 | 结论 |
+|---|---|---|
+| text/fallbackYamlParse（110KB 单次解析单价，两侧同码） | 基线 5,725,761 vs 候选 4,588,520（-19.9%，fork 区间大重叠） | 单次解析成本 P≈**4.6ms**；结构性 2×→1× 即每启用/每次 `/qs reload` 省 ≈P，同码零回归符合预期 |
+| round31b A/B 其余 47 共享用例 | 全部噪声带（47/47 重叠） | 零回归背书 |
+
+## 补充·分段 III：管理器装配序列（甄别证据，无改动）
+
+onEnable/onLoad 装配清单逐项核查后的结论：
+
+| 装配段 | 状态 |
+|---|---|
+| initDatabase | 启用链最大同步段之一（HikariCP+建表迁移），为全部 DB 能力前置，不可延后；已有 PerfMonitor 标记 |
+| shopLoader.loadShops | 分段 I 已并行化（-65.9%） |
+| playerFinder.bakeCaches / bakeShopsOwnerCache / economyLoader.load(1tick) | 已异步或延迟 ✓ |
+| tagManager.loadAllFromDB | 同步 DB 读但维持"启用返回即全功能可用"的 Paper 插件契约；异步化将使 tag 命令在启动窗口期报错 = 行为变化，红线边缘放弃并留证 |
+| 各管理器构造器（PermissionManager/RankLimiter/Watcher 等） | O(对象) 轻量装配，无顺序约束收益 |
 
 ## 结论
 
