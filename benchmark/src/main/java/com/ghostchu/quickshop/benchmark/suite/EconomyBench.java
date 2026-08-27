@@ -77,6 +77,18 @@ public final class EconomyBench {
               .build();
       consume(tx.safeCommit());
     });
+
+    // internal price format fallback (BuiltInEconomyFormatter.getInternalFormat): the
+    // symbol rendering behind every sign price line, receipt and menu entry when Vault
+    // formatting is unavailable or bypassed. The R29 candidate reads the currency
+    // symbol from a reload-refreshed snapshot; the baseline walks the config tree per
+    // call. Same body on both sides — behavior differs by jar.
+    Env.setConfig("shop.alternate-currency-symbol", "$");
+    final var builtInFormatter = new com.ghostchu.quickshop.util.economyformatter.BuiltInEconomyFormatter(plugin);
+    harness.bench("economy/formatInternalPrice", ctx -> {
+      ctx.index++;
+      consume(builtInFormatter.getInternalFormat(12.34d, null));
+    });
   }
 
   /**
