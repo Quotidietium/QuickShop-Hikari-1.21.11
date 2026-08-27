@@ -176,6 +176,7 @@ public final class ListenerBench {
     benchSignRender(harness, shopManager);
     benchChunkLoad(harness, shopManager);
     benchSignScheduleDedup(harness);
+    benchChatGate(harness, shopManager);
   }
 
   // guard-item scan on InventoryOpenEvent (DisplayProtectionListener): virtual
@@ -363,6 +364,40 @@ public final class ListenerBench {
     harness.bench("listener/signScheduleDedup", ctx->{
       ctx.index++;
       watcher.scheduleSignUpdate(fedShop, null);
+    });
+  }
+
+  // cancelled-chat gate (ChatListener.onChat): every chat message passes the handler,
+  // and cancelled ones (mute/filter plugins) previously walked the config tree for the
+  // gate flag before the interactive-manager check short-circuits. The R28 candidate
+  // snapshots the flag at construction. Same body on both sides — behavior differs by
+  // jar.
+  private static void benchChatGate(final com.ghostchu.quickshop.benchmark.BenchHarness harness,
+                                    final SimpleShopManager shopManager) {
+
+    final QuickShop plugin = Env.plugin();
+    final var listener = new com.ghostchu.quickshop.listener.ChatListener(plugin);
+    // non-interactive player: the handler's second gate short-circuits the run
+    final var interactive = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.shop.ShopManager.InteractiveManager.class));
+    lenient().when(shopManager.getInteractiveManager()).thenReturn(interactive);
+
+    final var player = Env.pin(Env.hotMock(org.bukkit.entity.Player.class));
+    lenient().when(player.getUniqueId()).thenReturn(UUID.nameUUIDFromBytes(new byte[]{9}));
+    final var event = Env.pin(Env.hotMock(org.bukkit.event.player.AsyncPlayerChatEvent.class));
+    when(event.isCancelled()).thenReturn(true);
+    // PlayerEvent.getPlayer() is final: the subclass mock maker cannot intercept it,
+    // so inject the real protected field instead of stubbing
+    try {
+      final var playerField = org.bukkit.event.player.PlayerEvent.class.getDeclaredField("player");
+      playerField.setAccessible(true);
+      playerField.set(event, player);
+    } catch(final ReflectiveOperationException e) {
+      throw new IllegalStateException("player field injection failed", e);
+    }
+
+    harness.bench("listener/chatGate", ctx->{
+      ctx.index++;
+      listener.onChat(event);
     });
   }
 

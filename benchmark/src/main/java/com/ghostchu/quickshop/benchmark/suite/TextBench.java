@@ -9,6 +9,8 @@ import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.World;
 
 import static com.ghostchu.quickshop.benchmark.BenchHarness.consume;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -55,6 +57,15 @@ public final class TextBench {
     harness.bench("text/findRelativeLanguages", ctx -> {
       ctx.index++;
       consume(textManager.findRelativeLanguages("en_us"));
+    });
+
+    // the two item-name gates themselves (Util.useEnchantmentForEnchantedBook et al):
+    // consulted per getItemStackName call server-wide (sign lines, receipts, menu
+    // icons). The R28 candidate returns a volatile snapshot; the baseline walks the
+    // config tree every call. Same body on both sides — behavior differs by jar.
+    harness.bench("text/itemNameFlags", ctx -> {
+      ctx.index++;
+      consume(com.ghostchu.quickshop.util.Util.useEnchantmentForEnchantedBook()? 1 : 0);
     });
   }
 }
