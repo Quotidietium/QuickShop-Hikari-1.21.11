@@ -15,7 +15,7 @@
 | 代码规模 | 663 个 Java 文件：api 177 / bukkit 357 / addon 62 / compat 52 / common 12 / platform 3 |
 | 数据库 | MySQL 或 H2(MODE=MYSQL)，schema 版本 20，EasySQL + HikariCP |
 | 测试 | quickshop-bukkit 144 个用例全绿（回归 + 查找表索引 + DB 写缓存 + 文本缓存 + QUser 驻留 + 事件快路径 + 匹配免克隆 + 迭代器快照 + 木牌调度 + 点击路径 + 交易观测 + 指标批处理 + 剩余 DB 写批处理 + 文本预解析等价 + 日志懒队列 + 展示物重送 + 菜单库存快照 + 开箱扫描快路径 + 签名渲染单扫 + 区块加载快门 + 签名排程去重 + 杂项热路径快照 + 价格格式化快照） |
-| 基准 | `benchmark/` 独立模块：45 用例 × 8 套件（R29 起，热点 mock 全 stubOnly）（查找表/序列化/经济/文本/H2 数据库（含指标与外部缓存插入）/交易热路径（含 action 全路径）/监听器点击与展示物/菜单库存流水），报告见 [report/perf](report/perf/) |
+| 基准 | `benchmark/` 独立模块：46 用例 × 8 套件（R31 起，热点 mock 全 stubOnly）（查找表/序列化/经济/文本/H2 数据库（含指标与外部缓存插入）/交易热路径（含 action 全路径）/监听器点击与展示物/菜单库存流水），报告见 [report/perf](report/perf/) |
 | 本仓库定位 | 独立 fork（已移除 upstream，不再同步社区上游） |
 
 ## 一句话理解这个项目
@@ -47,6 +47,8 @@
 21. **第十七轮（R29·价格显示链，2026-08-27，详见 [report/perf/2026-08-27-price-chain.md](report/perf/2026-08-27-price-chain.md)）**：EconomyFormatter/BuiltInEconomyFormatter 的 alternate-currency-symbol 快照（内部格式化兜底路径每次 getString → reload 刷新字段；签名/收据/菜单价格与 Vault 空返回兜底均经此路，构件基准 **-98.4%** 六 fork 零重叠）+ MsgUtil.decimalFormat 共享 DecimalFormat 改 ThreadLocal（**红线内稳定性修复**：Folia 区域线程并发渲染价格时共享非线程安全 NumberFormat 有错乱风险）。测试 144 用例全绿、基准 45 用例。至此库内已知热点均有结论。
 
 22. **第十八轮（R30·交易链配置访问清扫，2026-08-27，详见 [report/perf/2026-08-27-trade-chain-config-sweep.md](report/perf/2026-08-27-trade-chain-config-sweep.md)）**：系统性 grep 甄别法替代定向发现——actionBuying/actionSelling 每笔交易的 pay-unlimited-shop-owners 改用既有快照字段、店主通知 show-tax 新增独立快照字段（与 shop-tax.show 不同源易错点）、ShopUtil「all」计算路径静态快照挂 Util.initialize 钩子；每笔交易省 2-3 次 config 树行走（千分位级低于噪声底，以紧邻交替六 fork 的 44 共享用例零回归入册）；双侧同窗处置时段型污染的方法学留档。
+
+23. **第十九轮（R31·启动装载并行化，2026-08-27，详见 [report/perf/2026-08-27-startup-load-parallel.md](report/perf/2026-08-27-startup-load-parallel.md)）**：ShopLoader.loadShops 读店循环「supplyAsync 后逐店 join」的伪异步串行流水（CPU 核数级线程池退化为单线程+每店移交开销）改为全量收集 futures 后 allOf 聚合等待——计数器/列表/异常隔离/nextTick 时序全保持，仅日志交错真实并行化；2000 店全链 wall-clock **-65.9%**（98ms→33ms，六 fork 零重叠），`database.loader-threads=1` 可完全复原旧行为。新增 startup/shopLoadChain wall-clock 计量面。基准 46 用例。
 
 15. **第十一轮（R23·浏览菜单库存快照批量化，2026-08-26，详见 [report/perf/2026-08-26-menu-inventory-snapshot.md](report/perf/2026-08-26-menu-inventory-snapshot.md)）**：菜单库存读取此前主线程必抛 IllegalStateException 被吞恒返 0（库存显示/有货过滤/库存排序三功能损坏）且每店一次阻塞往返×comparator 重查；改为整页一次「冲刷+IN(...) 批量查询」快照 Map（DatabaseHelper.queryInventoryCaches 新 API，MarketUtils 全链 Map 重载），并修复三处浏览页分页重叠缺陷（start 按 9 推进而每页 36 项）。基准 **-49.5%**（六 fork 零重叠）。测试 116 用例全绿、基准 38 用例。
 
