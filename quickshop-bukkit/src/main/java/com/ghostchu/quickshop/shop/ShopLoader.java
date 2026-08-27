@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 
 import java.lang.reflect.Type;
 import java.sql.ResultSet;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,14 +98,18 @@ public class ShopLoader implements SubPasteItem {
     final AtomicInteger successCounter = new AtomicInteger(0);
     final AtomicInteger chunkNotLoaded = new AtomicInteger(0);
     final List<Shop> shopsLoadInNextTick = new CopyOnWriteArrayList<>();
+    // submit every shop before waiting: joining per record serialized the pipeline and
+    // turned the worker pool into a single-threaded executor with extra hand-off cost
+    final List<CompletableFuture<Void>> futures = new ArrayList<>(records.size());
     for(final ShopRecord record : records) {
-      loadShopFromShopRecord(worldName, record, deleteCorruptShops,
-                             shopsLoadInNextTick, successCounter, chunkNotLoaded)
-              .exceptionally(e->{
-                plugin.logger().warn("Failed to load shop {}", record, e);
-                return null;
-              }).join();
+      futures.add(loadShopFromShopRecord(worldName, record, deleteCorruptShops,
+                                         shopsLoadInNextTick, successCounter, chunkNotLoaded)
+                          .exceptionally(e->{
+                            plugin.logger().warn("Failed to load shop {}", record, e);
+                            return null;
+                          }));
     }
+    CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
     Util.mainThreadRun(()->shopsLoadInNextTick.forEach(shop->{
       try {
         plugin.getShopManager().loadShop(shop);
