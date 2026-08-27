@@ -7,6 +7,8 @@ import com.ghostchu.quickshop.platform.Platform;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.World;
+import java.nio.file.Path;
+import java.util.List;
 
 import static com.ghostchu.quickshop.benchmark.BenchHarness.consume;
 import static org.mockito.ArgumentMatchers.any;
@@ -67,5 +69,38 @@ public final class TextBench {
       ctx.index++;
       consume(com.ghostchu.quickshop.util.Util.useEnchantmentForEnchantedBook()? 1 : 0);
     });
+
+    // single-parse unit price of the ~110KB built-in fallback (lang/messages.yml), the
+    // file SimpleTextManager.load() parses once per enable/reload in the R31 candidate
+    // and TWICE in the baseline (deploy + fillMissing each parsed a fresh copy). Both
+    // jars run the identical parse here: the case pins the per-parse cost P that the
+    // structural 2x -> 1x change converts into -P per startup (report framing).
+    harness.bench("text/fallbackYamlParse", ctx -> {
+      ctx.index++;
+      final var configuration = new org.bukkit.configuration.file.YamlConfiguration();
+      try {
+        configuration.loadFromString(FALLBACK_YAML);
+      } catch(final org.bukkit.configuration.InvalidConfigurationException e) {
+        throw new IllegalStateException(e);
+      }
+      consume(configuration.getKeys(true).size());
+    });
+  }
+
+  /** Read once per JVM from the sibling module's real bundled resource. */
+  private static final String FALLBACK_YAML = readFallbackYaml();
+
+  private static String readFallbackYaml() {
+
+    for(final Path candidate : List.of(
+            Path.of("../quickshop-bukkit/src/main/resources/lang/messages.yml"),
+            Path.of("quickshop-bukkit/src/main/resources/lang/messages.yml"))) {
+      try {
+        return java.nio.file.Files.readString(candidate);
+      } catch(final Exception ignored) {
+        // try the next layout
+      }
+    }
+    throw new IllegalStateException("bundled lang/messages.yml not found on disk");
   }
 }
