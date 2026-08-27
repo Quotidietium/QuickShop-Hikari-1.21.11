@@ -50,7 +50,19 @@ import java.util.regex.Pattern;
 public class MsgUtil {
 
   private static final QuickShop PLUGIN = QuickShop.getInstance();
-  private static DecimalFormat decimalFormat;
+  // DecimalFormat is NOT thread-safe: price rendering runs on region threads (sign
+  // broadcasts) and the main thread concurrently, so a shared instance risks corrupted
+  // output. One formatter per thread, lazily built from the same config; as before,
+  // changes to decimal-format take effect on each thread's next first touch only.
+  private static final ThreadLocal<DecimalFormat> DECIMAL_FORMAT = ThreadLocal.withInitial(()->{
+    try {
+      final String format = PLUGIN.getConfig().getString("decimal-format");
+      return format == null? new DecimalFormat() : new DecimalFormat(format);
+    } catch(final Exception e) {
+      QuickShop.getInstance().logger().warn("Error when processing decimal format, using system default!", e);
+      return new DecimalFormat();
+    }
+  });
   private static volatile Entry<String, String> cachedGameLanguageCode = null;
 
   @NotNull
@@ -107,32 +119,12 @@ public class MsgUtil {
 
   public static String decimalFormat(final double value) {
 
-    if(decimalFormat == null) {
-      //lazy initialize
-      try {
-        final String format = PLUGIN.getConfig().getString("decimal-format");
-        decimalFormat = format == null? new DecimalFormat() : new DecimalFormat(format);
-      } catch(final Exception e) {
-        QuickShop.getInstance().logger().warn("Error when processing decimal format, using system default!", e);
-        decimalFormat = new DecimalFormat();
-      }
-    }
-    return decimalFormat.format(value);
+    return DECIMAL_FORMAT.get().format(value);
   }
 
   public static String decimalFormat(final BigDecimal value) {
 
-    if(decimalFormat == null) {
-      //lazy initialize
-      try {
-        final String format = PLUGIN.getConfig().getString("decimal-format");
-        decimalFormat = format == null? new DecimalFormat() : new DecimalFormat(format);
-      } catch(final Exception e) {
-        QuickShop.getInstance().logger().warn("Error when processing decimal format, using system default!", e);
-        decimalFormat = new DecimalFormat();
-      }
-    }
-    return decimalFormat.format(value);
+    return DECIMAL_FORMAT.get().format(value);
   }
 
   //todo:

@@ -19,6 +19,9 @@ public class BuiltInEconomyFormatter implements Reloadable {
   private final QuickShop plugin;
   private boolean useDecimalFormat;
   private boolean currencySymbolOnRight;
+  // hot-path snapshot: every fallback format consulted the config tree for the symbol;
+  // refreshed on reload
+  private String currencySymbol = "$";
 
   public BuiltInEconomyFormatter(final QuickShop plugin) {
 
@@ -33,6 +36,7 @@ public class BuiltInEconomyFormatter implements Reloadable {
     CURRENCY_SYMBOL_MAPPING.clear();
     this.useDecimalFormat = plugin.getConfig().getBoolean("use-decimal-format", false);
     this.currencySymbolOnRight = plugin.getConfig().getBoolean("shop.currency-symbol-on-right", false);
+    this.currencySymbol = plugin.getConfig().getString("shop.alternate-currency-symbol", "$");
     final List<String> symbols = plugin.getConfig().getStringList("shop.alternate-currency-symbol-list");
     symbols.forEach(entry->{
       final String[] splits = entry.split(";", 2);
@@ -50,7 +54,7 @@ public class BuiltInEconomyFormatter implements Reloadable {
     if(CommonUtil.isEmptyString(currency)) {
       Log.debug("Format: Currency is null");
       final String formatted = useDecimalFormat? MsgUtil.decimalFormat(amount) : Double.toString(amount);
-      return currencySymbolOnRight? formatted + plugin.getConfig().getString("shop.alternate-currency-symbol", "$") : plugin.getConfig().getString("shop.alternate-currency-symbol", "$") + formatted;
+      return currencySymbolOnRight? formatted + currencySymbol : currencySymbol + formatted;
     } else {
       Log.debug("Format: Currency is: [" + currency + "]");
       final String formatted = useDecimalFormat? MsgUtil.decimalFormat(amount) : Double.toString(amount);
