@@ -139,7 +139,10 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     this.reset();
     initTagResolvers();
     // first, we need load built-in fallback translation.
-    languageFilesManager.deploy("en_us", loadBuiltInFallback());
+    // the fallback is read-only for both consumers (fillMissing only writes into the
+    // per-locale copies it tops up), so a single parse of the ~110KB file serves both
+    final FileConfiguration builtInFallback = loadBuiltInFallback();
+    languageFilesManager.deploy("en_us", builtInFallback);
     // second, load the bundled language files
     loadBundled().forEach(languageFilesManager::deploy);
     // then, load the translations from Crowdin
@@ -170,7 +173,7 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
       plugin.logger().warn("Unable to load Crowdin OTA translations", e);
     }
     // and don't forget fix missing
-    languageFilesManager.fillMissing(loadBuiltInFallback());
+    languageFilesManager.fillMissing(builtInFallback);
     // finally, load override translations
     final Collection<String> pending = getOverrideLocales(languageFilesManager.getDistributions().keySet());
     Log.debug("Pending: " + Arrays.toString(pending.toArray()));
