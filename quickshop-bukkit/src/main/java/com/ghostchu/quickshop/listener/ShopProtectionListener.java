@@ -41,6 +41,8 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   private boolean hopperOwnerExclude;
   private boolean dropperProtect;
   private boolean dropperOwnerExclude;
+  private boolean entityProtect;
+  private boolean explodeProtect;
 
   public ShopProtectionListener(@NotNull final QuickShop plugin) {
 
@@ -54,6 +56,8 @@ public class ShopProtectionListener extends AbstractProtectionListener {
     this.hopperOwnerExclude = plugin.getConfig().getBoolean("protect.hopper-owner-exclude", false);
     this.dropperProtect = plugin.getConfig().getBoolean("protect.dropper", true);
     this.dropperOwnerExclude = plugin.getConfig().getBoolean("protect.dropper-owner-exclude", false);
+    this.entityProtect = plugin.getConfig().getBoolean("protect.entity", true);
+    this.explodeProtect = plugin.getConfig().getBoolean("protect.explode");
   }
 
   @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -66,7 +70,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
         shop = getShopNextTo(b.getLocation());
       }
       if(shop != null) {
-        if(plugin.getConfig().getBoolean("protect.explode")) {
+        if(this.explodeProtect) {
           e.setCancelled(true);
         } else {
           plugin.logEvent(new ShopRemoveLog(QUserImpl.createFullFilled(CommonUtil.getNilUniqueId(), "Exploding", false), "BlockBreak(explode)", shop.saveToInfoStorage()));
@@ -101,7 +105,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
   public void onEntityBlockChange(final EntityChangeBlockEvent e) {
 
-    if(!plugin.getConfig().getBoolean("protect.entity", true)) {
+    if(!this.entityProtect) {
       return;
     }
     if(getShopNature(e.getBlock().getLocation(), true) != null) {
@@ -125,7 +129,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
         continue;
       }
 
-      if(plugin.getConfig().getBoolean("protect.explode")) {
+      if(this.explodeProtect) {
         e.setCancelled(true);
       } else {
         plugin.logEvent(new ShopRemoveLog(QUserImpl.createFullFilled(CommonUtil.getNilUniqueId(), "EntityExploding", false), "BlockBreak(explode)", shop.saveToInfoStorage()));

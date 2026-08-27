@@ -104,6 +104,10 @@ public class Util {
   // initialize(), which is the reload-manager-registered hook
   private static volatile boolean forceUseItemOriginalName = false;
   private static volatile boolean useEnchantmentForEnchantedBook = false;
+  // price-input shortcut suffix matcher (Util.parse); compiled once, consulted on
+  // every non-decimal price a player types
+  private static final String PRICE_SHORTCUTS = "kMGTPEZYXWVUN₮";
+  private static final Pattern PRICE_SHORTCUTS_PATTERN = Pattern.compile("([0-9]+(?:\\.[0-9]*)?)[" + PRICE_SHORTCUTS + "]$");
   @Setter
   private static QuickShop plugin;
   @Getter
@@ -676,13 +680,12 @@ public class Util {
       return new BigDecimal(input);
     } catch(final Exception ignore) {
 
-      final String shortcuts = "kMGTPEZYXWVUN₮";
-      final Matcher matcher = Pattern.compile("([0-9]+(?:\\.[0-9]*)?)[" + shortcuts + "]$").matcher(input);
+      final Matcher matcher = PRICE_SHORTCUTS_PATTERN.matcher(input);
       if(matcher.find()) {
 
         final BigDecimal baseValue = new BigDecimal(matcher.group(1));
         final char suffix = input.charAt(input.length() - 1);
-        final int exponent = (shortcuts.indexOf(suffix) + 1) * 3; // Exponent based on position in the string
+        final int exponent = (PRICE_SHORTCUTS.indexOf(suffix) + 1) * 3; // Exponent based on position in the string
 
         if(exponent > 0) {
 
@@ -1266,6 +1269,7 @@ public class Util {
     forceUseItemOriginalName = plugin.getConfig().getBoolean("shop.force-use-item-original-name", false);
     useEnchantmentForEnchantedBook = plugin.getConfig().getBoolean("shop.use-enchantment-for-enchanted-book", false);
     ShopUtil.refreshConfigSnapshots();
+    com.ghostchu.quickshop.shop.display.AbstractDisplayItem.refreshConfigSnapshots();
 
     for(final String s : plugin.getConfig().getStringList("shop-blocks")) {
       Material mat = Material.matchMaterial(s.toUpperCase());

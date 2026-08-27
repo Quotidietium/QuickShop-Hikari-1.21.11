@@ -38,9 +38,17 @@ import org.jetbrains.annotations.NotNull;
  */
 public class PlayerLockClickListener extends AbstractProtectionListener {
 
+  private boolean lockProtect;
+
   public PlayerLockClickListener(final @NotNull QuickShop plugin) {
 
     super(plugin);
+    init();
+  }
+
+  private void init() {
+
+    this.lockProtect = plugin.getConfig().getBoolean("shop.lock");
   }
 
   @EventHandler(ignoreCancelled = true)
@@ -68,7 +76,7 @@ public class PlayerLockClickListener extends AbstractProtectionListener {
       return;
     }
 
-    if(plugin.getConfig().getBoolean("shop.lock") && !shop.playerAuthorize(p.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)) {
+    if(this.lockProtect && !shop.playerAuthorize(p.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)) {
       if(plugin.perm().hasPermission(p, "quickshop.other.open")) {
         if(LockListener.lockCoolDown.getIfPresent(p.getUniqueId()) == null) {
           plugin.text().of(p, "bypassing-lock").send();
@@ -94,6 +102,7 @@ public class PlayerLockClickListener extends AbstractProtectionListener {
   @Override
   public ReloadResult reloadModule() {
 
+    init();
     register();
     return ReloadResult.builder().status(ReloadStatus.SUCCESS).build();
   }

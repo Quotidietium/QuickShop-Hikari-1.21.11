@@ -29,6 +29,9 @@ import com.ghostchu.quickshop.shop.SimpleShopChunk;
 import com.ghostchu.quickshop.shop.display.virtual.packet.PacketEventsHandler;
 import com.ghostchu.quickshop.shop.display.virtual.packet.ProtocolLibHandler;
 import com.ghostchu.quickshop.util.logger.Log;
+import com.ghostchu.simplereloadlib.ReloadResult;
+import com.ghostchu.simplereloadlib.ReloadStatus;
+import com.ghostchu.simplereloadlib.Reloadable;
 import lombok.Getter;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -44,7 +47,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class VirtualDisplayItemManager {
+public class VirtualDisplayItemManager implements Reloadable {
 
   private static VirtualDisplayItemManager instance;
   public final Map<Long, Integer> shopEntities = new ConcurrentHashMap<>();
@@ -56,6 +59,10 @@ public class VirtualDisplayItemManager {
   private PacketHandler<?> packetHandler;
   private PacketFactory<?> packetFactory;
   private boolean testPassed = true;
+  // per-packet-builder flags consulted on every display spawn/meta rebuild; snapshot
+  // keeps packet assembly free of config-tree walks, refreshed by load()/reload
+  private volatile boolean allowEnchantsSnapshot = true;
+  private volatile boolean useItemNameSnapshot = false;
 
   public VirtualDisplayItemManager(final QuickShop plugin) {
 
@@ -82,6 +89,7 @@ public class VirtualDisplayItemManager {
       this.entityIdCounter = new AtomicInteger(Integer.MAX_VALUE);
 
       load();
+      this.plugin.getReloadManager().register(this);
     } else {
 
       throw new IllegalStateException("No suitable packet handler found for virtual display item management. Please make sure either PacketEvents or ProtocolLib is installed.");
@@ -135,6 +143,20 @@ public class VirtualDisplayItemManager {
       packetFactory.registerSendChunk();
       packetFactory.registerUnloadChunk();
     }
+    refreshFlagSnapshots();
+  }
+
+  private void refreshFlagSnapshots() {
+
+    this.allowEnchantsSnapshot = plugin.getConfig().getBoolean("shop.display-allow-enchants", true);
+    this.useItemNameSnapshot = plugin.getConfig().getBoolean("shop.display-item-use-name");
+  }
+
+  @Override
+  public ReloadResult reloadModule() {
+
+    refreshFlagSnapshots();
+    return ReloadResult.builder().status(ReloadStatus.SUCCESS).build();
   }
 
   public void put(@NotNull final ShopChunk key, @NotNull final VirtualDisplayItem<?> value) {
@@ -267,11 +289,11 @@ public class VirtualDisplayItemManager {
   }
 
   public boolean allowEnchants() {
-    return plugin.getConfig().getBoolean("shop.display-allow-enchants", true);
+    return allowEnchantsSnapshot;
   }
 
   public boolean useItemName() {
-    return plugin.getConfig().getBoolean("shop.display-item-use-name");
+    return useItemNameSnapshot;
   }
 
   public Map<String, PacketHandler<?>> packetHandlers() {

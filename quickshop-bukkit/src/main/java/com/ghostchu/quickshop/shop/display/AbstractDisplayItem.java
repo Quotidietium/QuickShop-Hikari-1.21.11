@@ -36,6 +36,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -48,6 +49,15 @@ public abstract class AbstractDisplayItem implements Reloadable {
   protected static final QuickShop PLUGIN = QuickShop.getInstance();
   private static final NamespacedKey DISPLAY_MARK_NAMESPACE = new NamespacedKey(QuickShop.getInstance().getJavaPlugin(), "display_protection");
   private static boolean virtualDisplayDoesntWork = false;
+  // hot-path snapshots consulted per guard-check, guard-stack creation and display
+  // spawn; null coords/displayType until refreshConfigSnapshots runs, in which state
+  // the getters keep the original fresh-read semantics (Util.initialize wires the
+  // refresh before any server event can reach these paths)
+  private static volatile DisplayType displayTypeSnapshot = null;
+  private static volatile boolean guardItemUseName = false;
+  private static volatile double coordX = Double.NaN;
+  private static volatile double coordY = Double.NaN;
+  private static volatile double coordZ = Double.NaN;
   protected final ItemStack originalItemStack;
   protected final Shop shop;
   @Nullable
@@ -63,6 +73,21 @@ public abstract class AbstractDisplayItem implements Reloadable {
   }
 
   /**
+   * Refreshes the hot-path config snapshots of this class. Internal wiring hook,
+   * called by {@link com.ghostchu.quickshop.util.Util#initialize()} (the
+   * reload-manager-registered entry) right beside ShopUtil.refreshConfigSnapshots.
+   */
+  @ApiStatus.Internal
+  public static void refreshConfigSnapshots() {
+
+    displayTypeSnapshot = DisplayType.fromID(PLUGIN.getConfig().getInt("shop.display-type"));
+    guardItemUseName = PLUGIN.getConfig().getBoolean("shop.display-item-use-name");
+    coordX = PLUGIN.getConfig().getDouble("shop.display-coords.x", 0.5);
+    coordY = PLUGIN.getConfig().getDouble("shop.display-coords.y", 0.8);
+    coordZ = PLUGIN.getConfig().getDouble("shop.display-coords.z", 0.5);
+  }
+
+  /**
    * Get PLUGIN now is using which one DisplayType
    *
    * @return Using displayType.
@@ -70,7 +95,8 @@ public abstract class AbstractDisplayItem implements Reloadable {
   @NotNull
   public static DisplayType getNowUsing() {
 
-    final DisplayType displayType = DisplayType.fromID(PLUGIN.getConfig().getInt("shop.display-type"));
+    final DisplayType snapshot = displayTypeSnapshot;
+    final DisplayType displayType = snapshot != null ? snapshot : DisplayType.fromID(PLUGIN.getConfig().getInt("shop.display-type"));
     if(displayType == DisplayType.VIRTUALITEM && virtualDisplayDoesntWork) {
       return DisplayType.CUSTOM;
     }
@@ -138,7 +164,7 @@ public abstract class AbstractDisplayItem implements Reloadable {
       Log.debug("ItemStack " + itemStack + " cannot getting or creating ItemMeta, failed to create guarded ItemStack.");
       return itemStack;
     }
-    if(!PLUGIN.getConfig().getBoolean("shop.display-item-use-name")) {
+    if(!guardItemUseName) {
       iMeta.setDisplayName(null);
     }
     final ShopProtectionFlag shopProtectionFlag = createShopProtectionFlag(itemStack, shop);
@@ -232,11 +258,13 @@ public abstract class AbstractDisplayItem implements Reloadable {
    */
   public @Nullable Location getDisplayLocation() {
 
-    final double x = PLUGIN.getConfig().getDouble("shop.display-coords.x", 0.5);
-    final double y = PLUGIN.getConfig().getDouble("shop.display-coords.y", 0.8);
-    final double z = PLUGIN.getConfig().getDouble("shop.display-coords.z", 0.5);
+    final double x = coordX;
+    final double y = coordY;
+    final double z = coordZ;
 
-    return this.shop.bukkitLocation().clone().add(x, y, z);
+    return this.shop.bukkitLocation().clone().add(Double.isNaN(x) ? PLUGIN.getConfig().getDouble("shop.display-coords.x", 0.5) : x,
+                                                  Double.isNaN(y) ? PLUGIN.getConfig().getDouble("shop.display-coords.y", 0.8) : y,
+                                                  Double.isNaN(z) ? PLUGIN.getConfig().getDouble("shop.display-coords.z", 0.5) : z);
   }
 
   /**

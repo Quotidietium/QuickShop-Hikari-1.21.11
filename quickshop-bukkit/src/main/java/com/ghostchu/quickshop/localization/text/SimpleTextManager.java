@@ -1000,7 +1000,13 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     @NotNull
     private List<Component> postProcess(@NotNull final List<Component> text) {
 
-      return text.stream().map(this::postProcess).toList();
+      // indexed copy instead of stream().map().toList(): this runs on every localized
+      // message send, same order and null-handling, no per-send stream scaffolding
+      final List<Component> processed = new ArrayList<>(text.size());
+      for(final Component component : text) {
+        processed.add(postProcess(component));
+      }
+      return processed;
     }
 
     private Component postProcess(Component component) {

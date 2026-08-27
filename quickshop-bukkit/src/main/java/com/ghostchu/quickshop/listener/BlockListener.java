@@ -39,6 +39,8 @@ import org.jetbrains.annotations.Nullable;
 public class BlockListener extends AbstractProtectionListener {
 
   private boolean updateSignWhenInventoryMoving;
+  private boolean disableSuperTool;
+  private boolean allowOwnerBreakShopSign;
 
   public BlockListener(@NotNull final QuickShop plugin) {
 
@@ -49,6 +51,8 @@ public class BlockListener extends AbstractProtectionListener {
   private void init() {
 
     this.updateSignWhenInventoryMoving = super.getPlugin().getConfig().getBoolean("shop.update-sign-when-inventory-moving", true);
+    this.disableSuperTool = super.getPlugin().getConfig().getBoolean("shop.disable-super-tool");
+    this.allowOwnerBreakShopSign = super.getPlugin().getConfig().getBoolean("shop.allow-owner-break-shop-sign");
   }
 
   /*
@@ -70,7 +74,7 @@ public class BlockListener extends AbstractProtectionListener {
          && (shop.playerAuthorize(p.getUniqueId(), BuiltInShopPermission.DELETE) || plugin.perm().hasPermission(p, "quickshop.other.destory"))) {
         // Check SuperTool
         if(p.getInventory().getItemInMainHand().getType() == Material.GOLDEN_AXE) {
-          if(getPlugin().getConfig().getBoolean("shop.disable-super-tool")) {
+          if(this.disableSuperTool) {
             e.setCancelled(true);
             plugin.text().of(p, "supertool-is-disabled").send();
             return;
@@ -107,7 +111,7 @@ public class BlockListener extends AbstractProtectionListener {
              || plugin.perm().hasPermission(p, "quickshop.other.destory"))) {
         // Check SuperTool
         if(p.getInventory().getItemInMainHand().getType() == Material.GOLDEN_AXE) {
-          if(getPlugin().getConfig().getBoolean("shop.disable-super-tool")) {
+          if(this.disableSuperTool) {
             e.setCancelled(true);
             plugin.text().of(p, "supertool-is-disabled").send();
             return;
@@ -123,7 +127,7 @@ public class BlockListener extends AbstractProtectionListener {
         return;
       }
       //Allow Shop owner break the shop sign(for sign replacement)
-      if(getPlugin().getConfig().getBoolean("shop.allow-owner-break-shop-sign") && p.getUniqueId().equals(shop.getOwner().getUniqueId())) {
+      if(this.allowOwnerBreakShopSign && p.getUniqueId().equals(shop.getOwner().getUniqueId())) {
         return;
       }
       Log.debug("Player cannot break the shop information sign.");
