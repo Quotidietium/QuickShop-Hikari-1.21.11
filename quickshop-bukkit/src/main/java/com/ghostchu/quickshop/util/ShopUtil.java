@@ -45,6 +45,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -62,6 +63,20 @@ import static com.ghostchu.quickshop.QuickShop.taskCache;
  * @since 6.2.0.8
  */
 public class ShopUtil {
+
+  // hot-path snapshot of shop.pay-unlimited-shop-owners for the "all"-amount
+  // calculations (otherwise one config-tree walk per player "all" input); refreshed by
+  // Util.initialize(), the registered reload hook. Default mirrors an absent key.
+  private static volatile boolean payUnlimitedShopOwners = false;
+
+  /**
+   * Internal refresh hook for the config snapshots; invoked from {@link Util#initialize()}.
+   */
+  @ApiStatus.Internal
+  public static void refreshConfigSnapshots() {
+
+    payUnlimitedShopOwners = QuickShop.getInstance().getConfig().getBoolean("shop.pay-unlimited-shop-owners");
+  }
 
   public static boolean allowed(final Shop shop, final ItemStack itemStack) {
 
@@ -348,7 +363,7 @@ public class ShopUtil {
       items = Math.min(items, shop.getRemainingSpace());
       // Amount check player selling item total cost and the shop owner's balance
       items = Math.min(items, ownerCanAfford);
-    } else if(QuickShop.getInstance().getConfig().getBoolean("shop.pay-unlimited-shop-owners")) {
+    } else if(payUnlimitedShopOwners) {
       // even if the shop is unlimited, the config option pay-unlimited-shop-owners is set to
       // true,
       // the unlimited shop owner should have enough money.
@@ -384,7 +399,7 @@ public class ShopUtil {
       // even if the shop is unlimited, the config option pay-unlimited-shop-owners is set to
       // true,
       // the unlimited shop owner should have enough money.
-      if(QuickShop.getInstance().getConfig().getBoolean("shop.pay-unlimited-shop-owners")) {
+      if(payUnlimitedShopOwners) {
         amount = Math.min(amount, ownerCanAfford);
       }
     }

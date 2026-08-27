@@ -129,6 +129,8 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
   private double shopCreateCost;
   private boolean useShopLock;
   private boolean showTax;
+  // gates the tax line in owner notifications ("show-tax"), distinct from shop-tax.show
+  private boolean notifyShowTax;
   private boolean payUnlimitedShopOwner;
   private String tradeAllKeyword;
   private boolean disableCreativePurchase;
@@ -204,6 +206,8 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     this.shopCreateCost = plugin.getConfig().getDouble("shop.cost");
     this.useShopLock = plugin.getConfig().getBoolean("shop.lock");
     this.showTax = plugin.getConfig().getBoolean("shop-tax.show");
+    // distinct from shop-tax.show: gates the tax line in owner notifications
+    this.notifyShowTax = plugin.getConfig().getBoolean("show-tax");
     this.payUnlimitedShopOwner = plugin.getConfig().getBoolean("shop.pay-unlimited-shop-owners");
     this.tradeAllKeyword = plugin.getConfig().getString("shop.word-for-trade-all-items", "all");
     this.disableCreativePurchase = plugin.getConfig().getBoolean("shop.disable-creative-mode-trading");
@@ -383,7 +387,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     final QSEconomyTransaction transaction;
     final QSEconomyTransactionBuilder builder = QSEconomyTransaction.builder().amount(BigDecimal.valueOf(total)).toTax(new BigDecimal(taxEvent.getTax().interactorRate())).taxer(taxAccount).currency(shop.getCurrency()).world(shop.bukkitLocation().getWorld().getName()).to(buyerQUser);
 
-    if(!shop.isUnlimited() || (plugin.getConfig().getBoolean("shop.pay-unlimited-shop-owners") && shop.isUnlimited())) {
+    if(!shop.isUnlimited() || (this.payUnlimitedShopOwner && shop.isUnlimited())) {
       fromTax = new BigDecimal(taxEvent.getTax().shopRate());
       transaction = builder.from(shop.getOwner()).fromTax(fromTax).build();
     } else {
@@ -621,7 +625,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     final BigDecimal fromTax = new BigDecimal(taxEvent.getTax().interactorRate());
     final QSEconomyTransactionBuilder builder = QSEconomyTransaction.builder().from(sellerQUser).amount(BigDecimal.valueOf(total)).fromTax(fromTax).taxer(taxAccount).benefitManager(shop.getShopBenefit()).world(shop.bukkitLocation().getWorld().getName()).currency(shop.getCurrency());
 
-    if(!shop.isUnlimited() || (plugin.getConfig().getBoolean("shop.pay-unlimited-shop-owners") && shop.isUnlimited())) {
+    if(!shop.isUnlimited() || (this.payUnlimitedShopOwner && shop.isUnlimited())) {
       transaction = builder.to(shop.getOwner()).toTax(new BigDecimal(taxEvent.getTax().shopRate())).build();
     } else {
       transaction = builder.to(null).build();
@@ -1203,7 +1207,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       // one fetch for the whole notification (getItem clones + fires RETRIEVE per call)
       final ItemStack notifyItem = shop.getItem();
       final Component itemName = Util.getItemStackName(notifyItem);
-      if(plugin.getConfig().getBoolean("show-tax")) {
+      if(this.notifyShowTax) {
         notify = langCode->plugin.text().of("player-bought-from-your-store-tax", seller, amount * notifyItem.getAmount(), itemName, this.formatter.format(ownerPayment, shop), this.formatter.format(tax, shop)).forLocale(langCode);
       } else {
         notify = langCode->plugin.text().of("player-bought-from-your-store", seller, amount * notifyItem.getAmount(), itemName, this.formatter.format(ownerPayment, shop)).forLocale(langCode);

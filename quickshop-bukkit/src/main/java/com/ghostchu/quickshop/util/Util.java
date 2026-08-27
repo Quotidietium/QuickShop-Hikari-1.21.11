@@ -1265,6 +1265,7 @@ public class Util {
     devMode = plugin.getConfig().getBoolean("dev-mode");
     forceUseItemOriginalName = plugin.getConfig().getBoolean("shop.force-use-item-original-name", false);
     useEnchantmentForEnchantedBook = plugin.getConfig().getBoolean("shop.use-enchantment-for-enchanted-book", false);
+    ShopUtil.refreshConfigSnapshots();
 
     for(final String s : plugin.getConfig().getStringList("shop-blocks")) {
       Material mat = Material.matchMaterial(s.toUpperCase());
