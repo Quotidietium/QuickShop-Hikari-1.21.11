@@ -46,6 +46,8 @@
 
 21. **第十七轮（R29·价格显示链，2026-08-27，详见 [report/perf/2026-08-27-price-chain.md](report/perf/2026-08-27-price-chain.md)）**：EconomyFormatter/BuiltInEconomyFormatter 的 alternate-currency-symbol 快照（内部格式化兜底路径每次 getString → reload 刷新字段；签名/收据/菜单价格与 Vault 空返回兜底均经此路，构件基准 **-98.4%** 六 fork 零重叠）+ MsgUtil.decimalFormat 共享 DecimalFormat 改 ThreadLocal（**红线内稳定性修复**：Folia 区域线程并发渲染价格时共享非线程安全 NumberFormat 有错乱风险）。测试 144 用例全绿、基准 45 用例。至此库内已知热点均有结论。
 
+22. **第十八轮（R30·交易链配置访问清扫，2026-08-27，详见 [report/perf/2026-08-27-trade-chain-config-sweep.md](report/perf/2026-08-27-trade-chain-config-sweep.md)）**：系统性 grep 甄别法替代定向发现——actionBuying/actionSelling 每笔交易的 pay-unlimited-shop-owners 改用既有快照字段、店主通知 show-tax 新增独立快照字段（与 shop-tax.show 不同源易错点）、ShopUtil「all」计算路径静态快照挂 Util.initialize 钩子；每笔交易省 2-3 次 config 树行走（千分位级低于噪声底，以紧邻交替六 fork 的 44 共享用例零回归入册）；双侧同窗处置时段型污染的方法学留档。
+
 15. **第十一轮（R23·浏览菜单库存快照批量化，2026-08-26，详见 [report/perf/2026-08-26-menu-inventory-snapshot.md](report/perf/2026-08-26-menu-inventory-snapshot.md)）**：菜单库存读取此前主线程必抛 IllegalStateException 被吞恒返 0（库存显示/有货过滤/库存排序三功能损坏）且每店一次阻塞往返×comparator 重查；改为整页一次「冲刷+IN(...) 批量查询」快照 Map（DatabaseHelper.queryInventoryCaches 新 API，MarketUtils 全链 Map 重载），并修复三处浏览页分页重叠缺陷（start 按 9 推进而每页 36 项）。基准 **-49.5%**（六 fork 零重叠）。测试 116 用例全绿、基准 38 用例。
 
 14. **第十轮（R22·展示物区块进入路径去冗余，2026-08-26，详见 [report/perf/2026-08-26-display-resend-dedup.md](report/perf/2026-08-26-display-resend-dedup.md)）**：五个包工厂的「显式 destroy + sendFakeItem（内部又以 destroy 开头）」统一为 manager 单入口 resendChunkDisplays/withdrawChunkDisplays（桶锁外发包），每玩家每店少 1 包+1 事件（基准 **-21.1%**、六 fork 零重叠）；顺带修复「后端启用失败 → 插件整体崩溃」稳定性缺陷（setHandler 仅选已启用后端 + Throwable 级内存降级）并补齐 R21 实机验证（packetevents 2.13.1-SNAPSHOT 下 DISPLAY-CHECK PASSED）。测试 110 用例全绿、基准 37 用例。
