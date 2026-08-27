@@ -7,6 +7,9 @@ import com.ghostchu.quickshop.benchmark.Env;
 import com.ghostchu.quickshop.common.util.QuickExecutor;
 import com.ghostchu.quickshop.database.SimpleDatabaseHelperV2;
 import com.ghostchu.quickshop.shop.ContainerShop;
+import com.ghostchu.quickshop.shop.SimpleShopManager;
+import org.bukkit.Bukkit;
+import org.bukkit.World;
 import org.h2.jdbcx.JdbcDataSource;
 
 import java.nio.charset.StandardCharsets;
@@ -18,6 +21,7 @@ import static com.ghostchu.quickshop.benchmark.BenchHarness.consume;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -141,6 +145,57 @@ public final class DbBench {
     } catch(final NoSuchMethodException absentInBaseline) {
       // baseline jar: batched method not present, case intentionally unregistered
     }
+
+    // startup shop-load chain (ShopLoader.loadShops): the real end-to-end enable path —
+    // H2 fetch of every seeded shop plus the full memory-materialization phase
+    // (decodeStack, extra/permissions parsing, ContainerShop construction, registry
+    // registration). The R31 candidate submits all worker tasks before joining; the
+    // baseline joins per record, serializing the pool. Same body on both sides —
+    // behavior differs by jar.
+    final World world = Env.pin(Env.hotMock(World.class));
+    when(Bukkit.getWorld(anyString())).thenReturn(world);
+    lenient().when(world.isChunkLoaded(org.mockito.ArgumentMatchers.anyInt(),
+                                       org.mockito.ArgumentMatchers.anyInt())).thenReturn(true);
+    lenient().when(world.getName()).thenReturn("world");
+    final var loadManager = Env.pin(Env.hotMock(SimpleShopManager.class));
+    lenient().when(plugin.getShopManager()).thenReturn(loadManager);
+    final var wrapperRegistry = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.inventory.InventoryWrapperRegistry.class));
+    when(wrapperRegistry.get(anyString())).thenReturn(Env.hotMock(com.ghostchu.quickshop.api.inventory.InventoryWrapperManager.class));
+    lenient().when(plugin.getInventoryWrapperRegistry()).thenReturn(wrapperRegistry);
+
+    final var folia = Env.hotMock(com.tcoded.folialib.FoliaLib.class);
+    final var scheduler = Env.hotMock(com.tcoded.folialib.impl.PlatformScheduler.class);
+    lenient().when(folia.getScheduler()).thenReturn(scheduler);
+    lenient().when(scheduler.runLater(any(Runnable.class), org.mockito.ArgumentMatchers.anyLong()))
+            .thenAnswer(inv -> {
+              final Runnable runnable = inv.getArgument(0, Runnable.class);
+              runnable.run();
+              return Env.hotMock(com.tcoded.folialib.wrapper.task.WrappedTask.class);
+            });
+    injectField(plugin, "folia", folia);
+
+    final com.ghostchu.quickshop.shop.ShopLoader loader = new com.ghostchu.quickshop.shop.ShopLoader(plugin);
+    harness.bench("startup/shopLoadChain", ctx -> {
+      ctx.index++;
+      loader.loadShops((String)null);
+      consume(loader.genBody());
+    });
+  }
+
+  /** Walks the class hierarchy for the field (TradeBench precedent). */
+  private static void injectField(final Object target, final String field, final Object value) throws Exception {
+
+    for(Class<?> type = target.getClass(); type != null; type = type.getSuperclass()) {
+      try {
+        final java.lang.reflect.Field declared = type.getDeclaredField(field);
+        declared.setAccessible(true);
+        declared.set(target, value);
+        return;
+      } catch(final NoSuchFieldException deeper) {
+        // walk up the hierarchy
+      }
+    }
+    throw new NoSuchFieldException(field + " not found on " + target.getClass());
   }
 
   private static com.ghostchu.quickshop.api.database.ShopMetricRecord metricRecord(final long shopId, final long seq) {
