@@ -14,6 +14,7 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -26,6 +27,13 @@ public class BukkitInventoryWrapper implements InventoryWrapper {
   private final InventoryWrapperManager manager;
   private final Supplier<String> eigenCodeProvider;
   private final String eigenCode;
+  /**
+   * Write-time journal attached between {@link #beginMutationJournal()} and
+   * {@link MutationJournal#capture()}. Wrappers are documented main-thread/region-thread
+   * only, so a plain field is safe; it is only ever non-null while one of this wrapper's
+   * own mutating methods runs inside an active journaling phase.
+   */
+  private WriteTimeJournal activeJournal;
 
   public BukkitInventoryWrapper(@NotNull final Inventory inventory) {
 
@@ -115,10 +123,83 @@ public class BukkitInventoryWrapper implements InventoryWrapper {
     return true;
   }
 
+  /**
+   * Slot-level mirror of CraftBukkit's {@code Inventory.addItem}: merge into partially
+   * filled similar stacks first (slot order, capped by the stack's max size, mutated in
+   * place exactly like the upstream mirror does), then fill empty slots (slot order,
+   * capped by the inventory's max stack size), leftover map unchanged. Doing it at this
+   * level lets a {@link MutationJournal} record every touched slot at write time — the
+   * blind bulk call was unverifiable, which forced callers to snapshot the whole
+   * inventory for rollback.
+   */
   @Override
   public @NotNull Map<Integer, ItemStack> addItem(final ItemStack... itemStacks) {
 
-    return inventory.addItem(itemStacks);
+    if(itemStacks.length == 0) {
+      return Collections.emptyMap();
+    }
+    final ItemStack[] work = this.inventory.getStorageContents();
+    // a non-positive max stack size (never produced by real inventories; it is the default
+    // value of a partially-stubbed mock) would degenerate the placement loop below into
+    // zero-sized stacks — treat it as the vanilla default instead
+    final int rawMax = this.inventory.getMaxStackSize();
+    final int inventoryMax = rawMax <= 0? 64 : rawMax;
+    final Map<Integer, ItemStack> leftover = new HashMap<>();
+    for(int i = 0; i < itemStacks.length; i++) {
+      final ItemStack item = itemStacks[i];
+      while(true) {
+        // first partial stack: non-null, similar, with room left (upstream firstPartial)
+        int firstPartial = -1;
+        for(int slot = 0; slot < work.length; slot++) {
+          final ItemStack stack = work[slot];
+          if(stack != null && stack.getAmount() < stack.getMaxStackSize() && stack.isSimilar(item)) {
+            firstPartial = slot;
+            break;
+          }
+        }
+        if(firstPartial == -1) {
+          // no partial stack: first empty slot (upstream firstEmpty)
+          int firstFree = -1;
+          for(int slot = 0; slot < work.length; slot++) {
+            if(work[slot] == null) {
+              firstFree = slot;
+              break;
+            }
+          }
+          if(firstFree == -1) {
+            leftover.put(i, item);
+            break;
+          }
+          if(item.getAmount() > inventoryMax) {
+            final ItemStack placed = item.clone();
+            placed.setAmount(inventoryMax);
+            journalWrite(firstFree, work[firstFree]);
+            this.inventory.setItem(firstFree, placed);
+            work[firstFree] = placed;
+            item.setAmount(item.getAmount() - inventoryMax);
+          } else {
+            journalWrite(firstFree, work[firstFree]);
+            this.inventory.setItem(firstFree, item);
+            work[firstFree] = item;
+            break;
+          }
+        } else {
+          final ItemStack partial = work[firstPartial];
+          final int amount = item.getAmount();
+          final int partialAmount = partial.getAmount();
+          final int maxAmount = partial.getMaxStackSize();
+          journalWrite(firstPartial, partial);
+          if(amount + partialAmount <= maxAmount) {
+            // fully fits: grow the live stack in place, exactly like upstream
+            partial.setAmount(amount + partialAmount);
+            break;
+          }
+          partial.setAmount(maxAmount);
+          item.setAmount(amount + partialAmount - maxAmount);
+        }
+      }
+    }
+    return leftover;
   }
 
   /**
@@ -149,6 +230,7 @@ public class BukkitInventoryWrapper implements InventoryWrapper {
         if(itemStack != null && matcher.matches(itemStackToRemove, itemStack)) {
           final int couldRemove = itemStack.getAmount();
           final int actuallyRemove = Math.min(itemStackToRemove.getAmount(), couldRemove);
+          journalWrite(slot, itemStack);
           itemStack.setAmount(couldRemove - actuallyRemove);
           itemStackToRemove.setAmount(itemStackToRemove.getAmount() - actuallyRemove);
           this.inventory.setItem(slot, itemStack);
@@ -164,94 +246,10 @@ public class BukkitInventoryWrapper implements InventoryWrapper {
     return integerItemStackMap;
   }
 
-  @Override
-  public boolean supportsMutationJournal() {
+  private void journalWrite(final int slot, final ItemStack previous) {
 
-    return true;
-  }
-
-  @Override
-  public @NotNull MutationJournal beginMutationJournal() {
-
-    return new BukkitMutationJournal(this.inventory);
-  }
-
-  /**
-   * Journal over the storage-contents mirrors: begin records the pre-mutation array plus
-   * each slot's amount (mirrors are live, so amounts must be read immediately), capture
-   * diffs against a fresh array and keeps only the touched slots, restore rewrites exactly
-   * those slots. Detection covers both real CraftItemStack mirrors (equals includes the
-   * amount) and in-place mutations of the very same instance (amount vs the recorded
-   * pre-value), so no per-slot clone is ever taken.
-   */
-  private static final class BukkitMutationJournal implements MutationJournal {
-
-    private final Inventory inventory;
-    private final ItemStack[] before;
-    private final int[] beforeAmounts;
-    private int[] touchedSlots = new int[8];
-    private int touchedCount;
-    private boolean captured;
-
-    private BukkitMutationJournal(final Inventory inventory) {
-
-      this.inventory = inventory;
-      this.before = inventory.getStorageContents();
-      this.beforeAmounts = new int[before.length];
-      for(int i = 0; i < before.length; i++) {
-        beforeAmounts[i] = before[i] == null? -1 : before[i].getAmount();
-      }
-    }
-
-    @Override
-    public void capture() {
-
-      if(captured) {
-        return;
-      }
-      captured = true;
-      final ItemStack[] after = inventory.getStorageContents();
-      for(int i = 0; i < before.length && i < after.length; i++) {
-        if(slotChanged(i, after[i])) {
-          if(touchedCount == touchedSlots.length) {
-            touchedSlots = java.util.Arrays.copyOf(touchedSlots, touchedSlots.length * 2);
-          }
-          touchedSlots[touchedCount++] = i;
-        }
-      }
-    }
-
-    private boolean slotChanged(final int slot, final ItemStack current) {
-
-      final ItemStack original = before[slot];
-      if(original == current) {
-        // same instance: an in-place amount mutation is only visible against the recorded
-        // pre-mutation amount (mock stacks use identity equals, real mirrors fast-path it)
-        return original != null && original.getAmount() != beforeAmounts[slot];
-      }
-      return !Objects.equals(original, current);
-    }
-
-    @Override
-    public boolean restore() {
-
-      for(int k = 0; k < touchedCount; k++) {
-        final int slot = touchedSlots[k];
-        final ItemStack original = before[slot];
-        if(original == null) {
-          inventory.setItem(slot, null);
-        } else {
-          original.setAmount(beforeAmounts[slot]);
-          inventory.setItem(slot, original);
-        }
-      }
-      return true;
-    }
-
-    @Override
-    public int touchedSlots() {
-
-      return touchedCount;
+    if(activeJournal != null) {
+      activeJournal.record(slot, previous);
     }
   }
 
@@ -262,11 +260,88 @@ public class BukkitInventoryWrapper implements InventoryWrapper {
   }
 
   @Override
+  public boolean supportsMutationJournal() {
+
+    return true;
+  }
+
+  @Override
+  public @NotNull MutationJournal beginMutationJournal() {
+
+    final WriteTimeJournal journal = new WriteTimeJournal();
+    this.activeJournal = journal;
+    return journal;
+  }
+
+  @Override
   public String toString() {
 
     final Map<String, Object> map = new HashMap<>();
     map.put("inventory", inventory.toString());
     map.put("inventoryType", inventory.getClass().getName());
     return JsonUtil.getGson().toJson(map);
+  }
+
+  /**
+   * Journal whose records are appended by {@link #journalWrite} at the moment a slot is
+   * about to be modified — the previous stack reference and its pre-mutation amount are
+   * captured per touched slot only (no whole-inventory scan, no per-slot clone). Mirrors
+   * are live, so the amount must be read before the in-place mutation; restore re-applies
+   * the records in reverse (LIFO) so a slot touched twice rolls back to its original
+   * state even when the journal holds the same mirror reference twice.
+   */
+  private final class WriteTimeJournal implements MutationJournal {
+
+    private int[] slots = new int[8];
+    private ItemStack[] previous = new ItemStack[8];
+    private int[] previousAmounts = new int[8];
+    private int count;
+    private boolean captured;
+
+    @Override
+    public void capture() {
+
+      captured = true;
+      if(activeJournal == this) {
+        activeJournal = null;
+      }
+    }
+
+    void record(final int slot, final ItemStack prev) {
+
+      if(captured) {
+        return;
+      }
+      if(count == slots.length) {
+        slots = Arrays.copyOf(slots, slots.length * 2);
+        previous = Arrays.copyOf(previous, previous.length * 2);
+        previousAmounts = Arrays.copyOf(previousAmounts, previousAmounts.length * 2);
+      }
+      slots[count] = slot;
+      previous[count] = prev;
+      previousAmounts[count] = prev == null? -1 : prev.getAmount();
+      count++;
+    }
+
+    @Override
+    public boolean restore() {
+
+      for(int k = count - 1; k >= 0; k--) {
+        final ItemStack prev = previous[k];
+        if(prev == null) {
+          inventory.setItem(slots[k], null);
+        } else {
+          prev.setAmount(previousAmounts[k]);
+          inventory.setItem(slots[k], prev);
+        }
+      }
+      return true;
+    }
+
+    @Override
+    public int touchedSlots() {
+
+      return count;
+    }
   }
 }

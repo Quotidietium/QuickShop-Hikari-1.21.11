@@ -6,21 +6,22 @@ import org.jetbrains.annotations.NotNull;
  * Slot-level inverse journal for one inventory mutation phase.
  * <p>
  * Created by {@link InventoryWrapper#beginMutationJournal()} before the mutating calls
- * (e.g. {@link InventoryWrapper#removeItem}, {@link InventoryWrapper#addItem}), frozen by
- * {@link #capture()} after they finished, and applied by {@link #restore()} to undo exactly
- * the slots the phase touched — instead of cloning and rewriting the whole inventory the
- * way {@link InventoryWrapper#createSnapshot()}/{@link InventoryWrapper#restoreSnapshot(ItemStack[])}
- * does. Wrappers that cannot diff cheaply simply keep reporting
+ * (e.g. {@link InventoryWrapper#removeItem}, {@link InventoryWrapper#addItem}). The
+ * wrapper records every slot it is about to modify — the previous stack reference and its
+ * pre-mutation amount — at write time, so no whole-inventory scan or per-slot clone ever
+ * happens; {@link #capture()} simply freezes the journal and
+ * {@link #restore()} undoes exactly the recorded slots. This replaces the
+ * {@link InventoryWrapper#createSnapshot()}/{@link InventoryWrapper#restoreSnapshot(ItemStack[])}
+ * pair around a mutation phase. Wrappers that cannot record writes simply keep reporting
  * {@link InventoryWrapper#supportsMutationJournal()} {@code false}; callers then fall back
  * to snapshots, so both paths must restore an equivalent pre-mutation state.
  */
 public interface MutationJournal {
 
   /**
-   * Freezes the journal: diffs the inventory against the state captured at begin time and
-   * records the restore plan for every slot the mutation phase touched. Must be called
-   * once after the phase finished — including failed phases, so partial mutations can be
-   * undone. Calling it more than once is a no-op.
+   * Freezes the journal: after this call no further mutations are recorded. Must be
+   * called once after the phase finished — including failed phases, so partial mutations
+   * can be undone. Calling it more than once is a no-op.
    */
   void capture();
 

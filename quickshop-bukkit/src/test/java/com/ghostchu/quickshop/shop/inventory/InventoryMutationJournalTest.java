@@ -85,6 +85,7 @@ class InventoryMutationJournalTest {
       this.backing = contents.clone();
       this.inventory = mock(Inventory.class);
       when(inventory.getStorageContents()).thenAnswer(inv -> backing.clone());
+      when(inventory.getMaxStackSize()).thenReturn(64);
       org.mockito.Mockito.doAnswer(inv -> {
         backing[inv.getArgument(0, Integer.class)] = inv.getArgument(1, ItemStack.class);
         return null;
@@ -109,6 +110,10 @@ class InventoryMutationJournalTest {
       return null;
     }).when(item).setAmount(anyInt());
     when(item.getMaxStackSize()).thenReturn(64);
+    when(item.isSimilar(any(ItemStack.class))).thenAnswer(inv -> {
+      final ItemStack other = inv.getArgument(0, ItemStack.class);
+      return other != null && other.getType() == material;
+    });
     when(item.clone()).thenAnswer(inv -> stack(material, amt[0]));
     return item;
   }
@@ -196,43 +201,77 @@ class InventoryMutationJournalTest {
   }
 
   @Test
-  void journalDetectsInPlaceAmountChangesAndRestoresThem() {
+  void journalRecordsRemovalsAtWriteTimeAndRestoresExactlyThoseSlots() {
 
     final StatefulInventory inv = new StatefulInventory(
-            stack(Material.DIAMOND, 17), stack(Material.IRON_INGOT, 7), null);
+            stack(Material.DIAMOND, 17), stack(Material.DIAMOND, 17), stack(Material.DIAMOND, 17),
+            stack(Material.IRON_INGOT, 7), null);
     final BukkitInventoryWrapper wrapper = inv.wrapper();
 
     final MutationJournal journal = wrapper.beginMutationJournal();
-    // simulate a removal: slot 0 partially drained in place, written back
-    inv.backing[0].setAmount(5);
-    inv.inventory.setItem(0, inv.backing[0]);
+    assertTrue(wrapper.removeItem(stack(Material.DIAMOND, 40)).isEmpty());
     journal.capture();
 
-    assertEquals(1, journal.touchedSlots(), "only the drained slot is journaled");
+    assertEquals(0, amount(inv.backing[0]));
+    assertEquals(0, amount(inv.backing[1]));
+    assertEquals(11, amount(inv.backing[2]));
+    assertEquals(3, journal.touchedSlots(), "only the three drained slots are journaled");
+
     assertTrue(journal.restore());
-    assertEquals(17, amount(inv.backing[0]), "pre-mutation amount must return");
-    assertEquals(7, amount(inv.backing[1]), "untouched slots must not be rewritten");
-    verify(inv.inventory, times(2)).setItem(eq(0), any());
-    verify(inv.inventory, never()).setItem(eq(1), any());
-    verify(inv.inventory, never()).setItem(eq(2), any());
+    assertEquals(17, amount(inv.backing[0]), "pre-mutation amounts return");
+    assertEquals(17, amount(inv.backing[1]));
+    assertEquals(17, amount(inv.backing[2]));
+    assertEquals(7, amount(inv.backing[3]), "untouched slots must not be rewritten");
+    verify(inv.inventory, never()).setItem(eq(3), any());
+    verify(inv.inventory, never()).setItem(eq(4), any());
+    // the success path never touches snapshot machinery
+    verify(inv.inventory, never()).getContents();
   }
 
   @Test
-  void journalDetectsEmptiedAndFilledSlots() {
+  void addItemMirrorsCraftBukkitLayoutAndJournalsBothMergeAndFill() {
 
-    final StatefulInventory inv = new StatefulInventory(stack(Material.DIAMOND, 17), null);
+    // upstream addItem: merge into partials first (slot order), then fill empties
+    final StatefulInventory inv = new StatefulInventory(
+            null, stack(Material.DIAMOND, 17), null);
     final BukkitInventoryWrapper wrapper = inv.wrapper();
 
     final MutationJournal journal = wrapper.beginMutationJournal();
-    inv.inventory.setItem(0, null);
-    final ItemStack filled = stack(Material.DIAMOND, 10);
-    inv.inventory.setItem(1, filled);
+    assertTrue(wrapper.addItem(stack(Material.DIAMOND, 50)).isEmpty());
     journal.capture();
 
-    assertEquals(2, journal.touchedSlots());
-    journal.restore();
-    assertEquals(17, amount(inv.backing[0]), "emptied slot regains its stack and amount");
-    assertNull(inv.backing[1], "filled slot returns to empty");
+    // 50: 47 merge into the partial (slot 1 grows to a full stack), 3 fill slot 0
+    assertEquals(3, amount(inv.backing[0]));
+    assertEquals(64, amount(inv.backing[1]));
+    assertEquals(2, journal.touchedSlots(), "merge + fill are both journaled");
+
+    assertTrue(journal.restore());
+    assertNull(inv.backing[0], "filled slot returns to empty");
+    assertEquals(17, amount(inv.backing[1]), "journal restores the merged-away partial amount");
+    assertNull(inv.backing[2]);
+  }
+
+  @Test
+  void addItemSplitsOversizedStacksAndReportsLeftovers() {
+
+    // 100 diamonds into a 2-slot inventory: 64-fill + 36-fill across the empties
+    final StatefulInventory inv = new StatefulInventory(null, null, stack(Material.IRON_INGOT, 7));
+    final Map<Integer, ItemStack> leftover = inv.wrapper().addItem(stack(Material.DIAMOND, 100));
+
+    assertTrue(leftover.isEmpty());
+    assertEquals(64, amount(inv.backing[0]), "first placement caps at the inventory max stack");
+    assertEquals(36, amount(inv.backing[1]));
+    assertEquals(7, amount(inv.backing[2]), "dissimilar slots are never touched");
+
+    // full inventory of dissimilar stacks: everything stays leftover
+    final StatefulInventory full = new StatefulInventory(
+            stack(Material.IRON_INGOT, 7), stack(Material.GOLD_INGOT, 7));
+    final ItemStack wanted = stack(Material.DIAMOND, 5);
+    final Map<Integer, ItemStack> unfit = full.wrapper().addItem(wanted);
+    assertEquals(1, unfit.size());
+    assertEquals(5, amount(unfit.get(0)), "leftover carries the unfittable amount");
+    assertEquals(7, amount(full.backing[0]));
+    assertEquals(7, amount(full.backing[1]));
   }
 
   @Test
@@ -260,48 +299,15 @@ class InventoryMutationJournalTest {
   }
 
   @Test
-  void addItemOperationRollbackClearsExactlyTheFilledSlots() {
+  void addItemOperationRollbackClearsExactlyTheTouchedSlots() {
 
     final StatefulInventory inv = new StatefulInventory(
             null, stack(Material.DIAMOND, 17), null);
-    // Bukkit-side addItem semantics, mirrored: merge into partials, then fill empties
-    org.mockito.Mockito.doAnswer(call -> {
-      // varargs may arrive expanded (one element per arg) or as the raw array
-      final Object[] raw = call.getArguments();
-      final ItemStack[] incoming;
-      if(raw.length == 1 && raw[0] instanceof final ItemStack[] array) {
-        incoming = array;
-      } else {
-        incoming = new ItemStack[raw.length];
-        for(int i = 0; i < raw.length; i++) {
-          incoming[i] = (ItemStack)raw[i];
-        }
-      }
-      for(final ItemStack in : incoming) {
-        int remaining = in.getAmount();
-        for(int i = 0; i < inv.backing.length && remaining > 0; i++) {
-          final ItemStack slot = inv.backing[i];
-          if(slot != null && slot.getType() == in.getType() && slot.getAmount() < 64) {
-            final int add = Math.min(remaining, 64 - slot.getAmount());
-            slot.setAmount(slot.getAmount() + add);
-            remaining -= add;
-          }
-        }
-        for(int i = 0; i < inv.backing.length && remaining > 0; i++) {
-          if(inv.backing[i] == null) {
-            final int placed = Math.min(remaining, 64);
-            inv.backing[i] = stack(in.getType(), placed);
-            remaining -= placed;
-          }
-        }
-      }
-      return new HashMap<Integer, ItemStack>();
-    }).when(inv.inventory).addItem(any(ItemStack[].class));
     final BukkitInventoryWrapper wrapper = inv.wrapper();
 
     final AddItemOperation operation = new AddItemOperation(stack(Material.DIAMOND, 64), 50, wrapper);
     assertTrue(operation.commit());
-    // 50: 47 merge into the partial (slot 1), the remaining 3 fill the first empty slot (0)
+    // slot-level addItem: 47 merge into the partial (slot 1 to a full stack), 3 fill slot 0
     assertEquals(3, amount(inv.backing[0]));
     assertEquals(64, amount(inv.backing[1]));
 
@@ -309,6 +315,8 @@ class InventoryMutationJournalTest {
     assertNull(inv.backing[0], "filled slot returns to empty");
     assertEquals(17, amount(inv.backing[1]), "journal restores the merged-away partial amount");
     assertNull(inv.backing[2]);
+    // the success path never touches snapshot machinery
+    verify(inv.inventory, never()).getContents();
   }
 
   @Test

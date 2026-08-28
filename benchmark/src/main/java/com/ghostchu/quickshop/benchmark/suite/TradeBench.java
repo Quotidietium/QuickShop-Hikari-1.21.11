@@ -262,6 +262,7 @@ public final class TradeBench {
     // mirror CraftInventory: every accessor call copies the array
     when(chestInventory.getStorageContents()).thenAnswer(inv -> chestContents.clone());
     when(chestInventory.getContents()).thenAnswer(inv -> chestContents.clone());
+    when(chestInventory.getMaxStackSize()).thenReturn(64);
     when(chestInventory.addItem(any(ItemStack[].class))).thenReturn(new HashMap<>());
     lenient().when(chestInventory.getHolder(false)).thenReturn(Env.hotMock(InventoryHolder.class));
 
@@ -444,6 +445,7 @@ public final class TradeBench {
     // mirror CraftInventory: every accessor call copies the array
     when(inventory.getStorageContents()).thenAnswer(inv -> contents.clone());
     when(inventory.getContents()).thenAnswer(inv -> contents.clone());
+    when(inventory.getMaxStackSize()).thenReturn(64);
     when(inventory.addItem(any(ItemStack[].class))).thenReturn(new HashMap<>());
     return new BukkitInventoryWrapper(inventory);
   }
