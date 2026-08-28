@@ -26,7 +26,7 @@ public class SubCommand_Empty implements CommandHandler<Player> {
     if(shop instanceof final ContainerShop cs) {
       if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)
          && !plugin.perm().hasPermission(sender, "quickshop.other.empty")) {
-        plugin.text().of(sender, "not-permission").send();
+        plugin.text().of(sender, "no-permission").send();
         return;
       }
       final InventoryWrapper inventory = cs.getInventory();

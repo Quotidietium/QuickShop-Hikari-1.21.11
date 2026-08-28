@@ -39,7 +39,7 @@ public class SubCommand_Refill implements CommandHandler<Player> {
     // managers even for holders of the base command node.
     if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)
        && !plugin.perm().hasPermission(sender, "quickshop.other.refill")) {
-      plugin.text().of(sender, "not-permission").send();
+      plugin.text().of(sender, "no-permission").send();
       return;
     }
     if(CommonUtil.isNumeric(parser.getArgs().getFirst())) {

@@ -734,6 +734,13 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         return;
       }
       final InventoryWrapper chest = shop.isUnlimited()? null : shop.getInventory();
+      if(!shop.isUnlimited() && chest == null) {
+        // the chest could not be resolved in the same tick the forward leg just used it;
+        // a one-sided rollback would fabricate or destroy items instead of reverting, so
+        // leave this to manual reconciliation
+        plugin.logger().error("TRADE RECONCILIATION REQUIRED: economy leg failed and the shop container could not be resolved for rollback (shopId={}, items={}). Please verify the affected container and inventories.", shop.getShopId(), unitSize * amount);
+        return;
+      }
       final SimpleInventoryTransaction rollback = SimpleInventoryTransaction.builder()
               .from(traderToShop? traderInventory : chest)
               .to(traderToShop? chest : traderInventory)

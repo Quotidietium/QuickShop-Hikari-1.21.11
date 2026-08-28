@@ -150,6 +150,8 @@ permissions:
       quickshop.other.staff: true
       quickshop.other.currency: true
       quickshop.other.taxaccount: true
+      quickshop.other.empty: true
+      quickshop.other.refill: true
       quickshop.other.toggledisplay: true
       quickshop.purge: true
       quickshop.other.setowner: true

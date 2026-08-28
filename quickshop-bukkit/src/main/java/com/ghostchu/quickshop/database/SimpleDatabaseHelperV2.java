@@ -575,7 +575,13 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
     for(final ShopMetricRecord record : metricRecords) {
       final long shopId = record.getShopId();
       if(lookupsScheduled.add(shopId)) {
-        lookups.add(locateShopDataId(shopId).thenAccept(dataId->dataIds.put(shopId, dataId)));
+        // null dataId (shop row deleted between trade and flush) must stay absent, not
+        // poison the CHM: a null put would fail the whole batch and re-queue it forever
+        lookups.add(locateShopDataId(shopId).thenAccept(dataId->{
+          if(dataId != null) {
+            dataIds.put(shopId, dataId);
+          }
+        }));
       }
     }
     final CompletableFuture<Integer> future = new CompletableFuture<>();

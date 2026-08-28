@@ -24,7 +24,7 @@ public class SubCommand_SilentEmpty extends SubCommand_SilentBase {
 
     if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)
        && !plugin.perm().hasPermission(sender, "quickshop.other.empty")) {
-      plugin.text().of(sender, "not-permission").send();
+      plugin.text().of(sender, "no-permission").send();
       return;
     }
 

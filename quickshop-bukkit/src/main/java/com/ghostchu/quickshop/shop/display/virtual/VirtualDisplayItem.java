@@ -217,6 +217,9 @@ public class VirtualDisplayItem<T> extends AbstractDisplayItem implements Reload
               "Canceled the displayItem spawning because a plugin setCancelled the spawning event, usually this is a QuickShop Add on");
       return;
     }
+    // remove() (also used as the hide step of respawn/re-enable cycles) drops the entity-id
+    // index entry; repopulate it here so the public map always tracks the live fake entity
+    manager.shopEntities.put(shop.getShopId(), entityID);
     load();
 
     // Can't rely on the attachedShop cache to be accurate
