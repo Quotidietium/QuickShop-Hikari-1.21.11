@@ -31,16 +31,26 @@ public class SignUpdateWatcher implements Runnable {
   @Override
   public void run() {
 
-    final Instant startTime = Instant.now();
-    final Instant endTime = startTime.plusMillis(50);
-    SignUpdateEntry entry = signUpdateQueue.poll();
-    while(entry != null && !Instant.now().isAfter(endTime)) {
-      pendingShops.remove(entry.shop());
-      final Shop shop = entry.shop();
-      final ProxiedLocale locale = entry.locale() != null? entry.locale()
-              : QuickShop.getInstance().text().findRelativeLanguages(shop.getOwner(), false);
-      shop.setSignText(locale);
-      entry = signUpdateQueue.poll();
+    // async repeating tasks die silently on an uncaught throwable — contain failures so
+    // one broken shop/sign cannot stop sign updates server-wide until restart
+    try {
+      final Instant startTime = Instant.now();
+      final Instant endTime = startTime.plusMillis(50);
+      SignUpdateEntry entry = signUpdateQueue.poll();
+      while(entry != null && !Instant.now().isAfter(endTime)) {
+        pendingShops.remove(entry.shop());
+        try {
+          final Shop shop = entry.shop();
+          final ProxiedLocale locale = entry.locale() != null? entry.locale()
+                  : QuickShop.getInstance().text().findRelativeLanguages(shop.getOwner(), false);
+          shop.setSignText(locale);
+        } catch(final Throwable t) {
+          QuickShop.getInstance().logger().warn("Failed to update sign for shop {}; entry dropped.", entry.shop().getShopId(), t);
+        }
+        entry = signUpdateQueue.poll();
+      }
+    } catch(final Throwable t) {
+      QuickShop.getInstance().logger().warn("Sign update watcher cycle failed; task kept alive.", t);
     }
   }
 

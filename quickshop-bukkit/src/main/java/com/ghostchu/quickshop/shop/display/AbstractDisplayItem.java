@@ -62,7 +62,8 @@ public abstract class AbstractDisplayItem implements Reloadable {
   protected final Shop shop;
   @Nullable
   protected ItemStack guardedStack;
-  private boolean pendingRemoval;
+  // volatile: mutated on the main/region thread, consulted by packet-listener threads
+  private volatile boolean pendingRemoval;
 
   protected AbstractDisplayItem(final Shop shop) {
 

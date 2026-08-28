@@ -38,6 +38,18 @@ public class OngoingFeeWatcher implements Runnable {
   @Override
   public void run() {
 
+    // async repeating tasks are silently cancelled by an uncaught throwable (CraftAsyncTask
+    // semantics) — one transient NPE (e.g. a world unloading mid-iteration) would otherwise
+    // stop ongoing-fee billing until restart, so contain everything here
+    try {
+      runTick();
+    } catch(final Throwable t) {
+      plugin.logger().warn("Ongoing fee watcher cycle failed; task kept alive.", t);
+    }
+  }
+
+  private void runTick() {
+
     Log.debug("Run task for ongoing fee...");
     if(plugin.getEconomyManager().provider() == null) {
       Log.debug("Economy hadn't get ready.");

@@ -40,10 +40,13 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * A Util to execute all SQLs.
@@ -562,13 +565,16 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
       return CompletableFuture.completedFuture(0);
     }
     // resolve each distinct shop's data id once, then insert every row through a single
-    // JDBC batch statement
-    final Map<Long, Long> dataIds = new HashMap<>();
+    // JDBC batch statement. Concurrent map: cache-miss lookups complete on different
+    // DB-worker threads and each writes its entry here — a plain HashMap can lose puts
+    // (rows silently skipped) or corrupt itself under concurrent writes. Null values are
+    // not allowed in a CHM, so unresolved ids simply stay absent until their lookup lands.
+    final Map<Long, Long> dataIds = new ConcurrentHashMap<>();
+    final Set<Long> lookupsScheduled = new HashSet<>();
     final List<CompletableFuture<Void>> lookups = new ArrayList<>(metricRecords.size());
     for(final ShopMetricRecord record : metricRecords) {
       final long shopId = record.getShopId();
-      if(!dataIds.containsKey(shopId)) {
-        dataIds.put(shopId, null);
+      if(lookupsScheduled.add(shopId)) {
         lookups.add(locateShopDataId(shopId).thenAccept(dataId->dataIds.put(shopId, dataId)));
       }
     }

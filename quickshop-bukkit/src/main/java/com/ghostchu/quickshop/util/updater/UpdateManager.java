@@ -52,9 +52,10 @@ public class UpdateManager implements SubPasteItem {
   @Getter
   private UpdateProvider activeProvider;
 
-  private UpdateMetadata cachedMetadata;
-  private boolean cachedResult = true;
-  private long lastCheck = 0;
+  // read/written from both the update cron's async thread and player-join async callbacks
+  private volatile UpdateMetadata cachedMetadata;
+  private volatile boolean cachedResult = true;
+  private volatile long lastCheck = 0;
 
   // Same 1 hour cache you used before
   private static final long CACHE_MS = TimeUnit.HOURS.toMillis(1);

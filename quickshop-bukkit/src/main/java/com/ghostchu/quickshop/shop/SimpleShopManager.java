@@ -93,9 +93,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -111,7 +112,9 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
   protected final Map<UUID, Long> cooldowns = Maps.newConcurrentMap();
   protected final Map<Integer, IShopType> shopTypes = Maps.newConcurrentMap();
   protected final Map<String, ShopState> shopStates = Maps.newConcurrentMap();
-  protected final ConcurrentLinkedQueue<Long> inDeletion = new ConcurrentLinkedQueue<>();
+  // atomic re-entry guard: add()'s return value decides ownership, so two concurrent
+  // deleteShop() calls can never both pass the old check-then-act (double refund hazard)
+  protected final Set<Long> inDeletion = ConcurrentHashMap.newKeySet();
 
   protected final InteractiveManager interactiveManager;
   protected final TaxManager taxManager;
@@ -1435,28 +1438,31 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
   @Override
   public void deleteShop(@NotNull final Shop shop) {
 
-    if(inDeletion.contains(shop.getShopId())) {
+    if(!inDeletion.add(shop.getShopId())) {
 
       //if we're already in deletion, don't do anything
       return;
     }
 
-    inDeletion.add(shop.getShopId());
-    ShopDeleteEvent shopDeleteEvent = new ShopDeleteEvent(shop, false);
-    if(shopDeleteEvent.callCancellableEvent()) {
+    try {
+      ShopDeleteEvent shopDeleteEvent = new ShopDeleteEvent(shop, false);
+      if(shopDeleteEvent.callCancellableEvent()) {
+        Log.debug("Shop delete was cancelled by 3rd-party plugin");
+        return;
+      }
+      for(final Sign s : shop.getSigns()) {
+        s.getBlock().setType(Material.AIR);
+      }
+      refundShop(shop);
+      unloadShop(shop);
+      unregisterShop(shop, true);
+      shopDeleteEvent = shopDeleteEvent.clone(Phase.POST);
+      shopDeleteEvent.callEvent();
+    } finally {
+      // always release the guard: a stranded id would block re-deletion of this shop
+      // until restart (refund/unregister paths can throw through third-party listeners)
       inDeletion.remove(shop.getShopId());
-      Log.debug("Shop delete was cancelled by 3rd-party plugin");
-      return;
     }
-    for(final Sign s : shop.getSigns()) {
-      s.getBlock().setType(Material.AIR);
-    }
-    refundShop(shop);
-    unloadShop(shop);
-    unregisterShop(shop, true);
-    shopDeleteEvent = shopDeleteEvent.clone(Phase.POST);
-    shopDeleteEvent.callEvent();
-    inDeletion.remove(shop.getShopId());
   }
 
 

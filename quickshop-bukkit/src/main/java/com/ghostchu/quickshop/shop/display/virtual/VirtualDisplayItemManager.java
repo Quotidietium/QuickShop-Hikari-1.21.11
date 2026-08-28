@@ -174,7 +174,8 @@ public class VirtualDisplayItemManager implements Reloadable {
 
     chunksMapping.computeIfPresent(key, (mapOldKey, mapOldVal)->{
       mapOldVal.remove(value);
-      return mapOldVal;
+      // drop emptied lists so chunk churn cannot accumulate empty ArrayList keys forever
+      return mapOldVal.isEmpty()? null : mapOldVal;
     });
   }
 

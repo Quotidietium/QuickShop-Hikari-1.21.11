@@ -29,7 +29,9 @@ public class BukkitSkullProvider implements SkullProvider {
 
     return CompletableFuture.supplyAsync(()->{
       try {
-        return profileCache.get(owner, ()->load(owner));
+        // hand out clones: the cache keeps one template instance per owner and menu code
+        // routinely mutates (rename/amount) the stacks it receives
+        return profileCache.get(owner, ()->load(owner)).clone();
       } catch(ExecutionException e) {
         e.printStackTrace();
         return new ItemStack(Material.PLAYER_HEAD);
@@ -43,7 +45,7 @@ public class BukkitSkullProvider implements SkullProvider {
 
     return CompletableFuture.supplyAsync(()->{
       try {
-        return profileCache.get(owner, ()->load(owner));
+        return profileCache.get(owner, ()->load(owner)).clone();
       } catch(ExecutionException e) {
         e.printStackTrace();
         return new ItemStack(Material.PLAYER_HEAD);

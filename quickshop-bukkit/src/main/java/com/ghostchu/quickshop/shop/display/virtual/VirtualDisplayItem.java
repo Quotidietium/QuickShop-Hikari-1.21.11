@@ -64,7 +64,9 @@ public class VirtualDisplayItem<T> extends AbstractDisplayItem implements Reload
   private ShopChunk chunkLocation;
 
   //If packet initialized
-  private boolean isSpawned = false;
+  // volatile: written on the main/region thread in spawn()/remove(), read from Netty
+  // event-loop threads in the chunk resend/withdraw packet listeners
+  private volatile boolean isSpawned = false;
   //packets
 
   VirtualDisplayItem(final VirtualDisplayItemManager manager, final PacketFactory<T> packetFactory, final Shop shop) {
@@ -179,6 +181,9 @@ public class VirtualDisplayItem<T> extends AbstractDisplayItem implements Reload
       unload();
       isSpawned = false;
     }
+    // drop the entity-id index entry regardless of spawn state so shop ids churn
+    // (create/delete cycles) cannot grow the manager map without bound
+    manager.shopEntities.remove(shop.getShopId());
   }
 
   @Override

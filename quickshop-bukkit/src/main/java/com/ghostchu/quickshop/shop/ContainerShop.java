@@ -114,12 +114,15 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @EqualsAndHashCode.Exclude
   private final boolean isDeleted = false;
   private YamlConfiguration extra;
-  private long shopId;
-  private QUser owner;
-  private double price;
-  private IShopType shopType;
-  private ShopState shopState;
-  private boolean unlimited;
+  // volatile on state mutated main-thread but read from async watcher threads
+  // (OngoingFeeWatcher reads owner/unlimited/taxAccount, SignUpdateWatcher renders price,
+  // ShopDataSaveWatcher reads dirty from its timer thread)
+  private volatile long shopId;
+  private volatile QUser owner;
+  private volatile double price;
+  private volatile IShopType shopType;
+  private volatile ShopState shopState;
+  private volatile boolean unlimited;
   @NotNull
   private ItemStack item;
   @NotNull
@@ -133,14 +136,13 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   private volatile boolean createBackup = false;
   @EqualsAndHashCode.Exclude
   private InventoryPreview inventoryPreview = null;
+  // written on the DB executor inside update()'s callback, polled by ShopDataSaveWatcher
   @EqualsAndHashCode.Exclude
-  private boolean dirty;
-  @EqualsAndHashCode.Exclude
-  private boolean updating = false;
+  private volatile boolean dirty;
   @Nullable
-  private String currency;
-  private boolean disableDisplay;
-  private QUser taxAccount;
+  private volatile String currency;
+  private volatile boolean disableDisplay;
+  private volatile QUser taxAccount;
   @NotNull
   private String inventoryWrapperProvider;
   @NotNull
@@ -1979,10 +1981,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   public CompletableFuture<Void> update() {
 
     //Warning! This method can be run in async thread.
-    if(updating) {
-      return CompletableFuture.completedFuture(null);
-    }
-
     if(this.shopId == -1) {
       Log.debug("Skip shop database update because it not fully setup!");
       return CompletableFuture.completedFuture(null);
@@ -2005,8 +2003,11 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     }
 
     //Start a new update
-    final CompletableFuture<Void> f = plugin.getDatabaseHelper().updateShop(this)
-            .whenComplete((r, th) -> {
+    // publish the future BEFORE attaching the completing callback: a concurrent caller
+    // that fails the CAS must observe the real in-flight future, not a completed one
+    final CompletableFuture<Void> f = plugin.getDatabaseHelper().updateShop(this);
+    inFlightUpdate = f;
+    f.whenComplete((r, th) -> {
               updatingAtomic.set(false);
               if (th == null) {
                 dirty = false;
@@ -2014,8 +2015,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
                 plugin.logger().warn("Could not update shop in DB!", th);
               }
             });
-
-    inFlightUpdate = f;
     return f;
   }
 
@@ -2152,7 +2151,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
            ", createBackup=" + createBackup +
            ", inventoryPreview=" + inventoryPreview +
            ", dirty=" + dirty +
-           ", updating=" + updating +
            ", currency='" + currency + '\'' +
            ", disableDisplay=" + disableDisplay +
            ", taxAccount=" + taxAccount +
