@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# R35 A/B comparison: round35-baseline (84e88d04a, pre-R35 scan layer)
-# vs round35 (dc60e1bc5, scan pre-gate and hoisted counters).
+# R34 A/B comparison: round34-baseline (af395aacb, snapshot-based inventory operations)
+# vs round34 (c5efc353e, journaled slot-level operations).
 # Median ns/op across all forks.
 import json, pathlib, statistics
 
@@ -19,12 +19,12 @@ def load(label):
 def dist(values):
     return "[" + ", ".join(f"{v:,.0f}" for v in sorted(values)) + "]"
 
-a, b = load("round35-baseline"), load("round35")
+a, b = load("round34-baseline"), load("round34")
 common = sorted(set(a) & set(b))
 only_a, only_b = sorted(set(a) - set(b)), sorted(set(b) - set(a))
 
 overlaps = []
-print(f"{'case':40s} {'baseline ns/op':>15s} {'R35 ns/op':>15s} {'delta':>8s}   fork values (base | cand)")
+print(f"{'case':40s} {'baseline ns/op':>15s} {'R34 ns/op':>15s} {'delta':>8s}   fork values (base | cand)")
 for name in common:
     ma, mb = statistics.median(a[name]), statistics.median(b[name])
     sa, sb = sorted(a[name]), sorted(b[name])
