@@ -89,6 +89,8 @@ public class LogWatcher implements AutoCloseable, Runnable {
 
   public void start(final int i, final int i2) {
 
+    // idempotent: config reloads can call start() on an already-running watcher
+    stop();
     task = QuickShop.folia().getScheduler().runTimerAsync(this, i, i2);
   }
 

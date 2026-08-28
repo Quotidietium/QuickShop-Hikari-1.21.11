@@ -144,7 +144,8 @@ public class PermissionChecker implements Reloadable {
       beMainHand.setExpToDrop(0);
 
       //register a listener to cancel test event
-      Bukkit.getPluginManager().registerEvents(new Listener() {
+      final Listener[] probeListener = new Listener[1];
+      probeListener[0] = new Listener() {
         @EventHandler(priority = EventPriority.HIGHEST)
         public void onTestEvent(final BlockBreakEvent event) {
 
@@ -161,17 +162,25 @@ public class PermissionChecker implements Reloadable {
             HandlerList.unregisterAll(this);
           }
         }
-      }, plugin.getJavaPlugin());
-      this.eventManager.callEvent(beMainHand, (event)->{
-        if(plugin.getConfig().getBoolean("shop.cancel-protection-fake-event-before-reach-monitor-listeners")) {
-          if(event instanceof BlockBreakEvent blockBreakEvent) {
-            qsCancelling.set(true);
-            blockBreakEvent.setCancelled(true);
-            blockBreakEvent.setDropItems(false);
-            qsCancelling.set(false);
+      };
+      Bukkit.getPluginManager().registerEvents(probeListener[0], plugin.getJavaPlugin());
+      try {
+        this.eventManager.callEvent(beMainHand, (event)->{
+          if(plugin.getConfig().getBoolean("shop.cancel-protection-fake-event-before-reach-monitor-listeners")) {
+            if(event instanceof BlockBreakEvent blockBreakEvent) {
+              qsCancelling.set(true);
+              blockBreakEvent.setCancelled(true);
+              blockBreakEvent.setDropItems(false);
+              qsCancelling.set(false);
+            }
           }
-        }
-      });
+        });
+      } finally {
+        // if the synthetic event never reached our HIGHEST listener (aborted dispatch,
+        // throwing listener above it), the probe must not linger in the BlockBreakEvent
+        // HandlerList forever — it pins the Player/Block/ItemStack of this check
+        HandlerList.unregisterAll(probeListener[0]);
+      }
       return isCanBuild;
     }
   }

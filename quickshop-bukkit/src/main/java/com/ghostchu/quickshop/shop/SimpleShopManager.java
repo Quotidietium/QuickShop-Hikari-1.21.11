@@ -1453,6 +1453,15 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       for(final Sign s : shop.getSigns()) {
         s.getBlock().setType(Material.AIR);
       }
+      // in-memory tag indexes reference shop ids forever unless deleted shops are evicted
+      // here (shutdown unloads go through unregisterShop directly and keep their tags)
+      try {
+        if(shop.getShopId() > 0) {
+          plugin.tagManager().removeAllShopTags(shop.getShopId());
+        }
+      } catch(final Throwable t) {
+        plugin.logger().warn("Failed to clean tags of deleted shop " + shop.getShopId(), t);
+      }
       refundShop(shop);
       unloadShop(shop);
       unregisterShop(shop, true);

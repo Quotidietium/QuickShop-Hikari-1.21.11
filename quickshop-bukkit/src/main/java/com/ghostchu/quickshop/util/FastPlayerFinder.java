@@ -64,7 +64,7 @@ public class FastPlayerFinder implements PlayerFinder, SubPasteItem {
 
     this.plugin = plugin;
     this.resolver = new PlayerFinderResolver(this, plugin);
-    cleanupTimer = new Timer("Failure lookup clean timer");
+    cleanupTimer = new Timer("Failure lookup clean timer", true);
     plugin.getPasteManager().register(plugin.getJavaPlugin(), this);
     cleanupTimer.scheduleAtFixedRate(new TimerTask() {
       @Override
@@ -74,6 +74,12 @@ public class FastPlayerFinder implements PlayerFinder, SubPasteItem {
         handling.entrySet().removeIf(entry->entry.getKey().get() == null);
       }
     }, 0, 1000 * 60 * 60);
+  }
+
+  /** Plugin-disable cleanup: the timer thread would otherwise survive disable. */
+  public void stop() {
+
+    cleanupTimer.cancel();
   }
 
   public void bakeCaches() {

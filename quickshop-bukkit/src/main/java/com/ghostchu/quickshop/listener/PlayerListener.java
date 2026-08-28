@@ -228,11 +228,16 @@ public class PlayerListener extends AbstractQSListener {
 
     final UUID id = e.getPlayer().getUniqueId();
 
-    if(MenuManager.instance().inMenu(id) || !QuickShop.inShop.contains(id)) {
+    if(!QuickShop.inShop.contains(id)) {
       return;
     }
 
     try {
+      if(MenuManager.instance().inMenu(id)) {
+        // the menu flow owns the session below this view; still fall through to the
+        // finally so the UUID cannot strand in the queue (it used to return above it)
+        return;
+      }
       final Location location = e.getInventory().getLocation();
       if(location == null) {
         return; /// ignored as workaround, GH-303
@@ -316,6 +321,9 @@ public class PlayerListener extends AbstractQSListener {
   public void onPlayerQuit(final PlayerQuitEvent e) {
     // Remove them from the menu
     plugin.getShopManager().getInteractiveManager().remove(e.getPlayer().getUniqueId());
+    // a player holding the inShop marker (opened shop chest, never closed a view) must not
+    // pin the UUID in the unbounded queue after leaving
+    QuickShop.inShop.remove(e.getPlayer().getUniqueId());
     plugin.getDatabaseHelper().updatePlayerProfile(e.getPlayer().getUniqueId(), e.getPlayer().getLocale(), e.getPlayer().getName())
             .exceptionally(throwable->{
               Log.debug("Failed to set player locale: " + throwable.getMessage());

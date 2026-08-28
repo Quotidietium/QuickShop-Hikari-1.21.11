@@ -18,6 +18,9 @@ public abstract class AbstractQSListener implements Listener, Reloadable {
 
   public void register() {
 
+    // idempotent: reloadModule() implementations call register() again and Bukkit does not
+    // deduplicate - without unregistering first, every /qs reload doubles our handlers
+    HandlerList.unregisterAll(this);
     Bukkit.getPluginManager().registerEvents(this, plugin.getJavaPlugin());
   }
 

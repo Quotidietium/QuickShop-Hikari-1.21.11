@@ -579,10 +579,22 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     if(CommonUtil.isEmptyString(this.currency)) {
       this.currency = null;
     }
+    // swap the log watcher safely on config reload: the old instance's PrintWriter must be
+    // closed and its task stopped (leaks the file handle otherwise), and a replacement
+    // created by a reload must actually be started — start() was only called from
+    // registerTasks() at boot, so after /qs reload the new watcher never drained its queue
+    // (unbounded memory growth plus total log loss)
+    if(logWatcher != null) {
+      logWatcher.stop();
+      logWatcher.close();
+      logWatcher = null;
+    }
     if(this.getConfig().getBoolean("logging.enable")) {
       logWatcher = new LogWatcher(this, new File(javaPlugin.getDataFolder(), "qs.log"));
-    } else {
-      logWatcher = null;
+      if(javaPlugin.isEnabled()) {
+        // during boot (onLoad) registerTasks() will start it; only reloads start here
+        logWatcher.start(10, 10);
+      }
     }
     // Schedule this event can be run in next tick.
     //Util.mainThreadRun(() -> new QSConfigurationReloadEvent(javaPlugin).callEvent());
@@ -1170,7 +1182,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
 
   private void registerTasks() {
 
-    calendarWatcher = new CalendarWatcher(this);
     signUpdateWatcher.start(1, 10);
     if(metricBatcher != null) {
       metricBatcher.start();
@@ -1183,7 +1194,9 @@ public class QuickShop implements QuickShopAPI, Reloadable {
       logger.info("Log actions is enabled. Actions will be logged in the qs.log file!");
     }
     this.registerOngoingFee();
-    calendarWatcher = new CalendarWatcher(this);
+    if(calendarWatcher == null) {
+      calendarWatcher = new CalendarWatcher(this);
+    }
     calendarWatcher.start();
     this.shopPurger = new ShopPurger(this);
     if(getConfig().getBoolean("purge.at-server-startup")) {
@@ -1395,10 +1408,16 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     }
     logger.info("Shutting down 3rd-party integrations...");
     unload3rdParty();
+    if(this.playerFinder instanceof final FastPlayerFinder finder) {
+      logger.info("Stopping player lookup caches...");
+      finder.stop();
+    }
     if(this.getSqlManager() != null) {
       logger.info("Shutting down database connections...");
       EasySQL.shutdownManager(this.getSqlManager());
     }
+    logger.info("Shutting down worker pools...");
+    QuickExecutor.shutdownAll();
   }
 
   private void unload3rdParty() {
@@ -1417,6 +1436,18 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     if(this.virtualDisplayItemManager != null) {
 
       this.virtualDisplayItemManager.unload();
+    }
+
+    // hooks are enable()-d at boot but were never disabled: WorldEdit/FAWE adapters stay
+    // subscribed on their own EventBus (outside Bukkit HandlerList) pinning this plugin
+    for(final Hook hook : this.hooks.values()) {
+      try {
+        if(hook.disable()) {
+          logger.info("Unload hook {} successfully!", hook.identifier());
+        }
+      } catch(final Throwable t) {
+        logger.warn("Failed to unload hook {}", hook.identifier(), t);
+      }
     }
   }
 

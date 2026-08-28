@@ -88,6 +88,10 @@ public class VaultUnlockedProvider implements EconomyProvider, Listener {
       QuickShop.getInstance().logger().info("Using economy system: " + this.economy.getName());
     }
 
+    // re-registration safety: setup() re-runs on every economy ServiceRegister/-Unregister
+    // event and Bukkit does not deduplicate listener registrations — unregister first or
+    // each service churn doubles our handlers exponentially
+    org.bukkit.event.HandlerList.unregisterAll(this);
     Bukkit.getPluginManager().registerEvents(this, QuickShop.getInstance().getJavaPlugin());
     Log.debug("Economy service listener was registered.");
     return true;

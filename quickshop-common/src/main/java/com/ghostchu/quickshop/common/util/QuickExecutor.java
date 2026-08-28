@@ -94,4 +94,43 @@ public class QuickExecutor {
 
     SHOP_HISTORY_QUERY_EXECUTOR = shopHistoryQueryExecutor;
   }
+
+  /**
+   * Shuts every static pool down (plugin disable) and immediately re-arms fresh pools:
+   * without this, surviving worker threads pin the plugin classloader through hot reloads
+   * (PlugMan-style disable/enable), and re-arming keeps a same-classloader re-enable
+   * working. Call only after EasySQL has shut down - the SQL layer runs on
+   * HIKARICP_EXECUTOR.
+   */
+  public static void shutdownAll() {
+
+    shutdownQuietly(HIKARICP_EXECUTOR);
+    shutdownQuietly(SHOP_HISTORY_QUERY_EXECUTOR);
+    shutdownQuietly(SHOP_SAVE_EXECUTOR);
+    shutdownQuietly(COMMON_EXECUTOR);
+    shutdownQuietly(PRIMARY_PROFILE_IO_EXECUTOR);
+    shutdownQuietly(SECONDARY_PROFILE_IO_EXECUTOR);
+    HIKARICP_EXECUTOR = provideHikariCPExecutor();
+    SHOP_HISTORY_QUERY_EXECUTOR = provideShopHistoryQueryExecutor();
+    SHOP_SAVE_EXECUTOR = Executors.newWorkStealingPool(2);
+    COMMON_EXECUTOR = Executors.newCachedThreadPool();
+    PRIMARY_PROFILE_IO_EXECUTOR = Executors.newWorkStealingPool(16);
+    SECONDARY_PROFILE_IO_EXECUTOR = Executors.newWorkStealingPool(2);
+  }
+
+  private static void shutdownQuietly(final ExecutorService executor) {
+
+    if(executor == null) {
+      return;
+    }
+    executor.shutdown();
+    try {
+      if(!executor.awaitTermination(2, TimeUnit.SECONDS)) {
+        executor.shutdownNow();
+      }
+    } catch(final InterruptedException e) {
+      Thread.currentThread().interrupt();
+      executor.shutdownNow();
+    }
+  }
 }
