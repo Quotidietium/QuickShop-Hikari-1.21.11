@@ -1430,6 +1430,92 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     return matcher.matches(shopItem, givenItem);
   }
 
+  /**
+   * Full-inventory stock count over this shop's prototype with everything the generic
+   * {@link Util#countItems(InventoryWrapper, Shop)} loop would re-resolve per slot hoisted
+   * out: matcher dispatch, the live prototype, and the unit size. Results are identical to
+   * the generic loop — the builtin branch matches exactly like {@link #matches(ItemStack)},
+   * the third-party branch IS the generic loop.
+   *
+   * @param inv the inventory to scan (null-safe, mirrors Util)
+   *
+   * @return the number of shop-item units in stock
+   */
+  public int countStockItems(@Nullable final InventoryWrapper inv) {
+
+    if(inv == null) {
+      return 0;
+    }
+    final com.ghostchu.quickshop.api.shop.ItemMatcher matcher = plugin.getItemMatcher();
+    if(matcher instanceof final com.ghostchu.quickshop.util.matcher.item.QuickShopItemMatcherImpl builtin) {
+      int items = 0;
+      for(final ItemStack iStack : inv) {
+        if(iStack == null || iStack.getType() == org.bukkit.Material.AIR) {
+          continue;
+        }
+        if(builtin.matches(this.item, iStack)) {
+          items += iStack.getAmount();
+        }
+      }
+      return items / getItemUnitSize();
+    }
+    int items = 0;
+    for(final ItemStack iStack : inv) {
+      if(iStack == null || iStack.getType() == org.bukkit.Material.AIR) {
+        continue;
+      }
+      if(matches(iStack)) {
+        items += iStack.getAmount();
+      }
+    }
+    return items / getItemUnitSize();
+  }
+
+  /**
+   * Full-inventory free-space count over this shop's prototype, same hoisting contract as
+   * {@link #countStockItems(InventoryWrapper)} and identical results to the generic
+   * {@link Util#countSpace(InventoryWrapper, Shop)} loop (prototype/rewrites/divisor all
+   * resolved from the same sources: live item without listeners, event-visible item with).
+   *
+   * @param inv the inventory to scan (null-safe, mirrors Util)
+   *
+   * @return the number of shop-item units that still fit
+   */
+  public int countStockSpaces(@Nullable final InventoryWrapper inv) {
+
+    if(inv == null) {
+      return 0;
+    }
+    final com.ghostchu.quickshop.api.shop.ItemMatcher matcher = plugin.getItemMatcher();
+    if(matcher instanceof final com.ghostchu.quickshop.util.matcher.item.QuickShopItemMatcherImpl builtin) {
+      // with listeners the generic loop reads the prototype through the retrieval event;
+      // keep that exact source, otherwise the live field is what the event clones anyway
+      final ItemStack proto = com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()
+              ? getItem() : this.item;
+      final int itemMaxStackSize = proto.getMaxStackSize();
+      int space = 0;
+      for(final ItemStack iStack : inv) {
+        if(iStack == null || iStack.getType() == org.bukkit.Material.AIR) {
+          space += itemMaxStackSize;
+        } else if(builtin.matches(this.item, iStack)) {
+          space += iStack.getAmount() >= itemMaxStackSize? 0 : itemMaxStackSize - iStack.getAmount();
+        }
+      }
+      return space / proto.getAmount();
+    }
+    final ItemStack item = getItem();
+    int space = 0;
+    final int itemMaxStackSize = item.getMaxStackSize();
+    for(final ItemStack iStack : inv) {
+      if(iStack == null || iStack.getType() == org.bukkit.Material.AIR) {
+        space += itemMaxStackSize;
+      } else if(matches(iStack)) {
+        space += iStack.getAmount() >= itemMaxStackSize? 0 : itemMaxStackSize - iStack.getAmount();
+      }
+    }
+    return space / item.getAmount();
+  }
+
   @Override
   public void onClick(@NotNull final Player clicker) {
 

@@ -3,6 +3,7 @@ package com.ghostchu.quickshop.shop;
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.event.AbstractQSEvent;
 import com.ghostchu.quickshop.api.event.general.ShopItemMatchEvent;
+import com.ghostchu.quickshop.api.inventory.InventoryWrapper;
 import com.ghostchu.quickshop.util.matcher.item.QuickShopItemMatcherImpl;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -363,5 +364,119 @@ class ContainerShopMatchesTest {
     }
     // listeners may mutate stacks between calls, so every call re-reads
     assertEquals(3, lookups[0]);
+  }
+
+  @Test
+  void crossTypePreGateSkipsSimilarityEntirely() {
+
+    assertEquals(0, AbstractQSEvent.getHandlerList().getRegisteredListeners().length);
+    final var platform = mock(com.ghostchu.quickshop.platform.Platform.class);
+    when(plugin.platform()).thenReturn(platform);
+    when(platform.getItemShopId(any(ItemStack.class))).thenReturn(null);
+
+    final QuickShopItemMatcherImpl matcher = new QuickShopItemMatcherImpl(plugin);
+    when(plugin.getItemMatcher()).thenReturn(matcher);
+
+    final ItemStack require = slot(Material.DIAMOND);
+    final ItemStack given = slot(Material.IRON_INGOT);
+
+    assertFalse(matcher.matches(require, given));
+
+    // the pre-gate must settle cross-type mismatches without the (per-slot expensive)
+    // similarity comparison — full scans hit this path for every foreign slot
+    verify(require, never()).isSimilar(any(ItemStack.class));
+    verify(given, never()).isSimilar(any(ItemStack.class));
+  }
+
+  @Test
+  void crossTypeWithShopIdStillComparedAndCanMatch() {
+
+    assertEquals(0, AbstractQSEvent.getHandlerList().getRegisteredListeners().length);
+    final var platform = mock(com.ghostchu.quickshop.platform.Platform.class);
+    when(plugin.platform()).thenReturn(platform);
+    // both stacks carry the same external shop id: the shopId path may accept them
+    when(platform.getItemShopId(any(ItemStack.class))).thenReturn("shop-1");
+
+    final QuickShopItemMatcherImpl matcher = new QuickShopItemMatcherImpl(plugin);
+    when(plugin.getItemMatcher()).thenReturn(matcher);
+
+    final ItemStack require = slot(Material.DIAMOND);
+    final ItemStack given = slot(Material.IRON_INGOT);
+
+    assertTrue(matcher.matches(require, given), "a shared shopId outranks the type gate");
+  }
+
+  @Test
+  void containerShopFastCountsMatchTheGenericLoop() {
+
+    assertEquals(0, AbstractQSEvent.getHandlerList().getRegisteredListeners().length);
+    final QuickShopItemMatcherImpl matcher = new QuickShopItemMatcherImpl(plugin);
+    when(plugin.getItemMatcher()).thenReturn(matcher);
+
+    // prototype: one diamond = one unit (fully stubbed: family matching + max stack 64)
+    final ItemStack proto = stack(Material.DIAMOND, 1);
+    final ContainerShop shop = shop(proto);
+
+    final ItemStack[] contents = {
+            stack(Material.DIAMOND, 17), stack(Material.DIAMOND, 64), stack(Material.IRON_INGOT, 7),
+            null, stack(Material.DIAMOND, 30), stack(Material.GOLD_INGOT, 3)};
+    final InventoryWrapper inv = invOf(contents);
+
+    // stock: only diamond stacks count
+    assertEquals(17 + 64 + 30, com.ghostchu.quickshop.util.Util.countItems(inv, shop));
+
+    // space: empty slots and room in matching stacks count, foreign stacks don't
+    // (64-max: 17->47, 64->0, 30->34, one empty slot->64 => 145 units)
+    assertEquals(47 + 34 + 64, com.ghostchu.quickshop.util.Util.countSpace(inv, shop));
+
+    // third-party matcher: Util must fall back to the per-slot contract (shop.matches)
+    final java.util.concurrent.atomic.AtomicInteger slotsSeen = new java.util.concurrent.atomic.AtomicInteger();
+    final com.ghostchu.quickshop.api.shop.ItemMatcher thirdParty =
+            new com.ghostchu.quickshop.api.shop.ItemMatcher() {
+              @Override
+              public boolean matches(@Nullable final ItemStack requireStack, @Nullable final ItemStack givenStack) {
+
+                slotsSeen.incrementAndGet();
+                return givenStack != null && givenStack.getType() == Material.DIAMOND;
+              }
+
+              @Override
+              public @NotNull String getName() {
+
+                return "third-party";
+              }
+
+              @Override
+              public @NotNull Plugin getPlugin() {
+
+                return mock(Plugin.class);
+              }
+            };
+    when(plugin.getItemMatcher()).thenReturn(thirdParty);
+    assertEquals(17 + 64 + 30, com.ghostchu.quickshop.util.Util.countItems(inv, shop));
+    assertEquals(5, slotsSeen.get(), "the fallback loop consults the matcher per non-empty slot");
+  }
+
+  /** Fully-stubbed slot stack (material, amount, similarity family, max stack). */
+  private static ItemStack stack(final Material material, final int amount) {
+
+    final ItemStack item = mock(ItemStack.class);
+    lenient().when(item.getType()).thenReturn(material);
+    lenient().when(item.getAmount()).thenReturn(amount);
+    lenient().when(item.getMaxStackSize()).thenReturn(64);
+    lenient().when(item.hasItemMeta()).thenReturn(false);
+    lenient().when(item.isSimilar(any(ItemStack.class))).thenAnswer(
+            inv -> inv.getArgument(0, ItemStack.class).getType() == material);
+    lenient().when(item.clone()).thenReturn(item);
+    return item;
+  }
+
+  /** Non-countable wrapper over a fixed array (exercises the ContainerShop fast path). */
+  private static InventoryWrapper invOf(final ItemStack... contents) {
+
+    final InventoryWrapper wrapper = mock(InventoryWrapper.class);
+    when(wrapper.iterator()).thenAnswer(
+            inv -> com.ghostchu.quickshop.api.inventory.InventoryWrapperIterator.ofItemStacks(contents));
+    return wrapper;
   }
 }

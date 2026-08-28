@@ -10,6 +10,7 @@ import com.ghostchu.simplereloadlib.ReloadStatus;
 import com.ghostchu.simplereloadlib.Reloadable;
 import dev.dejvokep.boostedyaml.block.implementation.Section;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.Material;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.block.ShulkerBox;
 import org.bukkit.enchantments.Enchantment;
@@ -161,6 +162,20 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
       return false; // One of them is null (Can't be both, see above)
     }
 
+    // cross-type pre-gate: with no listener registered and no shopId on the prototype,
+    // differing materials can never match — every remaining path (isSimilar, both work
+    // types, the meta matcher) requires equal types, which the type gate further down
+    // already enforces. Full-inventory scans hit this for every foreign slot, so the
+    // gate must stay cheaper than the isSimilar call it skips (prototype type and shopId
+    // come from the single-entry cache when the scan reuses one requireStack instance).
+    if(!com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final Material requireType = prototypeType(requireStack);
+      if(requireType != givenStack.getType() && lookupShopId(requireStack) == null) {
+        Log.debug(() -> "Fail: Item type mismatch!");
+        return false;
+      }
+    }
+
     if(requireStack.isSimilar(givenStack)) {
       return true;
     }
@@ -228,11 +243,22 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
    * re-reads exactly as before. The stack identity key also invalidates naturally when
    * the shop item is replaced (new instance).
    */
-  private record ShopIdCacheEntry(@NotNull ItemStack stack, @Nullable String shopId) {
+  private record ShopIdCacheEntry(@NotNull ItemStack stack, @Nullable String shopId,
+                                  @NotNull Material type) {
 
   }
 
   private volatile ShopIdCacheEntry shopIdCache;
+
+  /** The prototype's material, served from the single-entry cache on scan repeats. */
+  private Material prototypeType(@NotNull final ItemStack requireStack) {
+
+    final ShopIdCacheEntry cached = this.shopIdCache;
+    if(cached != null && cached.stack() == requireStack) {
+      return cached.type();
+    }
+    return requireStack.getType();
+  }
 
   private String lookupShopId(@NotNull final ItemStack requireStack) {
 
@@ -244,7 +270,7 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
       return cached.shopId();
     }
     final String shopId = plugin.platform().getItemShopId(requireStack);
-    this.shopIdCache = new ShopIdCacheEntry(requireStack, shopId);
+    this.shopIdCache = new ShopIdCacheEntry(requireStack, shopId, requireStack.getType());
     return shopId;
   }
 

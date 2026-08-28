@@ -549,18 +549,21 @@ public class Util {
     }
     if(inv instanceof final CountableInventoryWrapper ciw) {
       return ciw.countItem(shop::matches);
-    } else {
-      int items = 0;
-      for(final ItemStack iStack : inv) {
-        if(iStack == null || iStack.getType() == Material.AIR) {
-          continue;
-        }
-        if(shop.matches(iStack)) {
-          items += iStack.getAmount();
-        }
-      }
-      return items / shop.getItemUnitSize();
     }
+    // container shops resolve matcher/prototype/unit-size once per scan instead of per slot
+    if(shop instanceof final com.ghostchu.quickshop.shop.ContainerShop containerShop) {
+      return containerShop.countStockItems(inv);
+    }
+    int items = 0;
+    for(final ItemStack iStack : inv) {
+      if(iStack == null || iStack.getType() == Material.AIR) {
+        continue;
+      }
+      if(shop.matches(iStack)) {
+        items += iStack.getAmount();
+      }
+    }
+    return items / shop.getItemUnitSize();
   }
 
   /**
@@ -580,19 +583,22 @@ public class Util {
 
     if(inv instanceof final CountableInventoryWrapper ciw) {
       return ciw.countSpace(shop::matches);
-    } else {
-      final ItemStack item = shop.getItem();
-      int space = 0;
-      final int itemMaxStackSize = item.getMaxStackSize();
-      for(final ItemStack iStack : inv) {
-        if(iStack == null || iStack.getType() == Material.AIR) {
-          space += itemMaxStackSize;
-        } else if(shop.matches(iStack)) {
-          space += iStack.getAmount() >= itemMaxStackSize? 0 : itemMaxStackSize - iStack.getAmount();
-        }
-      }
-      return space / item.getAmount();
     }
+    // same once-per-scan resolution as countItems above
+    if(shop instanceof final com.ghostchu.quickshop.shop.ContainerShop containerShop) {
+      return containerShop.countStockSpaces(inv);
+    }
+    final ItemStack item = shop.getItem();
+    int space = 0;
+    final int itemMaxStackSize = item.getMaxStackSize();
+    for(final ItemStack iStack : inv) {
+      if(iStack == null || iStack.getType() == Material.AIR) {
+        space += itemMaxStackSize;
+      } else if(shop.matches(iStack)) {
+        space += iStack.getAmount() >= itemMaxStackSize? 0 : itemMaxStackSize - iStack.getAmount();
+      }
+    }
+    return space / item.getAmount();
   }
 
   /**
