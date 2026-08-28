@@ -147,6 +147,8 @@ public interface InventoryWrapper extends Iterable<ItemStack> {
       return Collections.emptyMap();
     }
     final InventoryWrapperIterator iterator = iterator();
+    // resolved once per call instead of once per slot; the matcher cannot change mid-call
+    final var matcher = QuickShopAPI.getInstance().getItemMatcher();
     final Map<Integer, ItemStack> integerItemStackMap = new HashMap<>();
     RemoveProcess:
     for(int i = 0; i < itemStacks.length; i++) {
@@ -154,7 +156,7 @@ public interface InventoryWrapper extends Iterable<ItemStack> {
       while(iterator.hasNext()) {
         final ItemStack itemStack = iterator.next();
         // TODO: Need lots of verification, it cause mismatch between items under non-Bukkit item matcher
-        if(itemStack != null && QuickShopAPI.getInstance().getItemMatcher().matches(itemStackToRemove, itemStack)) {
+        if(itemStack != null && matcher.matches(itemStackToRemove, itemStack)) {
           final int couldRemove = itemStack.getAmount();
           final int actuallyRemove = Math.min(itemStackToRemove.getAmount(), couldRemove);
           itemStack.setAmount(itemStack.getAmount() - actuallyRemove);
@@ -244,6 +246,35 @@ public interface InventoryWrapper extends Iterable<ItemStack> {
    * @param itemStacks the contents you want to set
    */
   void setContents(ItemStack[] itemStacks);
+
+  /**
+   * Whether this wrapper can produce {@link MutationJournal}s. When {@code true}, callers
+   * may replace the createSnapshot/restoreSnapshot pair around a mutation phase with a
+   * slot-level journal; when {@code false} (the default) they must keep using snapshots.
+   *
+   * @return whether {@link #beginMutationJournal()} is supported
+   */
+  default boolean supportsMutationJournal() {
+
+    return false;
+  }
+
+  /**
+   * Begins a slot-level mutation journal: captures the inventory state so that
+   * {@link MutationJournal#capture()} can later diff it against the post-mutation state
+   * and {@link MutationJournal#restore()} can undo exactly the touched slots.
+   * <p>
+   * Only valid when {@link #supportsMutationJournal()} reports {@code true}; the default
+   * implementation throws because unsupported wrappers use snapshots instead.
+   *
+   * @return the journal to freeze with {@link MutationJournal#capture()} after the phase
+   */
+  @NotNull
+  default MutationJournal beginMutationJournal() {
+
+    throw new UnsupportedOperationException("InventoryWrapper provider " + getWrapperManager().getClass().getName()
+            + " didn't override InventoryWrapper#beginMutationJournal method.");
+  }
 
   /**
    * Change the item from Inventory

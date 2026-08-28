@@ -1,6 +1,7 @@
 package com.ghostchu.quickshop.shop.operation;
 
 import com.ghostchu.quickshop.api.inventory.InventoryWrapper;
+import com.ghostchu.quickshop.api.inventory.MutationJournal;
 import com.ghostchu.quickshop.api.operation.Operation;
 import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.logger.Log;
@@ -21,6 +22,7 @@ public class RemoveItemOperation implements Operation {
   private boolean committed;
   private boolean rollback;
   private ItemStack[] snapshot;
+  private MutationJournal journal;
 
   /**
    * Constructor
@@ -42,7 +44,29 @@ public class RemoveItemOperation implements Operation {
   public boolean commit() {
 
     committed = true;
-    this.snapshot = inv.createSnapshot();
+    // rollback insurance: a slot-level journal when the wrapper supports one, otherwise
+    // the historic full-inventory snapshot. Both restore the pre-commit state of whatever
+    // this operation mutated; the journal just never clones (it diffs at capture time).
+    final boolean journaling = inv.supportsMutationJournal();
+    if(journaling) {
+      this.journal = inv.beginMutationJournal();
+    } else {
+      this.snapshot = inv.createSnapshot();
+    }
+    boolean success;
+    try {
+      success = removeItems();
+    } finally {
+      // freeze the journal even on failure/exception so partial mutations are undoable
+      if(journaling) {
+        journal.capture();
+      }
+    }
+    return success;
+  }
+
+  private boolean removeItems() {
+
     int remains = amount;
     int lastRemains = -1;
     while(remains > 0) {
@@ -80,6 +104,10 @@ public class RemoveItemOperation implements Operation {
   public boolean rollback() {
 
     rollback = true;
+    if(journal != null) {
+      return journal.restore();
+    }
     return inv.restoreSnapshot(snapshot);
   }
+
 }

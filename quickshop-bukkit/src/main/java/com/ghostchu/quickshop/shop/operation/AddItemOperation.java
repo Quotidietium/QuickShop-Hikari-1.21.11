@@ -1,6 +1,7 @@
 package com.ghostchu.quickshop.shop.operation;
 
 import com.ghostchu.quickshop.api.inventory.InventoryWrapper;
+import com.ghostchu.quickshop.api.inventory.MutationJournal;
 import com.ghostchu.quickshop.api.operation.Operation;
 import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.logger.Log;
@@ -21,6 +22,7 @@ public class AddItemOperation implements Operation {
   private boolean committed;
   private boolean rollback;
   private ItemStack[] snapshot;
+  private MutationJournal journal;
 
 
   /**
@@ -42,7 +44,28 @@ public class AddItemOperation implements Operation {
   public boolean commit() {
 
     committed = true;
-    this.snapshot = inv.createSnapshot();
+    // rollback insurance: a slot-level journal when the wrapper supports one, otherwise
+    // the historic full-inventory snapshot (see RemoveItemOperation for the contract)
+    final boolean journaling = inv.supportsMutationJournal();
+    if(journaling) {
+      this.journal = inv.beginMutationJournal();
+    } else {
+      this.snapshot = inv.createSnapshot();
+    }
+    boolean success;
+    try {
+      success = addItems();
+    } finally {
+      // freeze the journal even on failure/exception so partial mutations are undoable
+      if(journaling) {
+        journal.capture();
+      }
+    }
+    return success;
+  }
+
+  private boolean addItems() {
+
     int remains = this.amount;
     int lastRemains = -1;
     final ItemStack target = this.item.clone();
@@ -81,6 +104,9 @@ public class AddItemOperation implements Operation {
   public boolean rollback() {
 
     rollback = true;
+    if(journal != null) {
+      return journal.restore();
+    }
     return inv.restoreSnapshot(this.snapshot);
   }
 
