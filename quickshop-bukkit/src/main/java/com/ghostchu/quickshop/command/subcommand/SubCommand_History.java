@@ -18,9 +18,11 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -107,10 +109,14 @@ public class SubCommand_History implements CommandHandler<Player> {
 
         final Map<Long, DataRecord> dataRecords = new ConcurrentHashMap<>();
         final List<CompletableFuture<Void>> futures = new ArrayList<>();
+        // one lookup per distinct data id: many records share the same shop item snapshot
+        final Set<Long> seenDataIds = new HashSet<>();
 
         for(final ShopHistory.ShopHistoryRecord record : queryResult) {
           final long id = record.dataId();
-
+          if(!seenDataIds.add(id)) {
+            continue;
+          }
           futures.add(QuickShop.getInstance()
                           .getDatabaseHelper()
                           .getDataRecord(id)

@@ -61,18 +61,19 @@ public class MetricQuery {
             .inTable(databaseHelper.getPrefix() + "log_transaction")
             .addTimeCondition("time", startTime, null)
             .selectColumns()
-            .setLimit(1000)
+            .setLimit((int)Math.max(1, limit))
             .orderBy("id", !descending).build().execute()) {
       final ResultSet set = query.getResultSet();
       while(set.next()) {
         //"time", "shop", "data", "buyer", "type", "amount", "money", "tax"
+        final String taxAccount = set.getString("tax_account");
         final ShopTransactionRecord record = new ShopTransactionRecord(
                 set.getDate("time"),
                 UUID.fromString(set.getString("from")),
                 UUID.fromString(set.getString("to")),
                 set.getString("currency"),
                 set.getDouble("amount"),
-                UUID.fromString(set.getString("tax_currency")),
+                taxAccount == null? null : UUID.fromString(taxAccount),
                 set.getDouble("tax_amount"),
                 set.getString("error")
         );

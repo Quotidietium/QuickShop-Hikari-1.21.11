@@ -23,6 +23,13 @@ import java.util.function.Function;
  */
 public class BatchingQueue<T> {
 
+  /**
+   * Re-queue ceiling after a failed flush. Without it a long DB outage turns the queue
+   * into unbounded memory growth; at the ceiling the oldest-lossy option is taken —
+   * drop with a loud error log — instead of an OOM that takes the whole server down.
+   */
+  private static final int MAX_PENDING = 10_000;
+
   private final QuickShop plugin;
   private final String name;
   private final int threshold;
@@ -66,7 +73,43 @@ public class BatchingQueue<T> {
       return CompletableFuture.completedFuture(null);
     }
     size.addAndGet(-drained.size());
-    return flusher.apply(drained).thenApply(v->null);
+    final CompletableFuture<?> flushed;
+    try {
+      flushed = flusher.apply(drained);
+    } catch(final Exception syncError) {
+      // the flusher may also throw synchronously (e.g. statement build failures)
+      reoffer(drained);
+      return CompletableFuture.failedFuture(syncError);
+    }
+    return flushed
+            .thenApply(v->(Void)null)
+            .whenComplete((v, err)->{
+              if(err != null) {
+                reoffer(drained);
+              }
+            });
+  }
+
+  /**
+   * Puts a failed batch back for the next timer cycle without re-triggering the size
+   * threshold (that would spin retry loops while the database is down).
+   */
+  private void reoffer(final List<T> drained) {
+
+    int requeued = 0;
+    for(final T item : drained) {
+      if(size.get() >= MAX_PENDING) {
+        final int dropped = drained.size() - requeued;
+        plugin.logger().error("Batching queue '" + name + "' flush failed and the re-queue ceiling (" + MAX_PENDING
+                                      + ") is reached; dropping " + dropped + " items to protect server memory.");
+        return;
+      }
+      pending.add(item);
+      size.incrementAndGet();
+      requeued++;
+    }
+    plugin.logger().warn("Batching queue '" + name + "' flush failed; re-queued " + requeued
+                                 + " items for the next flush cycle.");
   }
 
   private List<T> drain() {

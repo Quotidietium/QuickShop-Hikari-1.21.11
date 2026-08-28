@@ -1351,9 +1351,17 @@ public class QuickShop implements QuickShopAPI, Reloadable {
       } catch(final CompletionException ex) {
 
         logger.info("Timed out, running saving synchronously to determine shop with issue.", ex);
+        // overall budget: each updateSync() can block up to 15s on an unreachable DB, and
+        // N dirty shops must not multiply the shutdown hang into 15*N seconds
+        final long fallbackDeadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(20);
         for(final Shop shop : shopManager.getAllShops()) {
 
           if(shop.isDirty()) {
+            if(System.currentTimeMillis() > fallbackDeadline) {
+              final long remaining = shopManager.getAllShops().stream().filter(Shop::isDirty).count();
+              logger.warn("Shutdown save budget exhausted; " + remaining + " shop(s) remain dirty and will be retried on next startup. Server is likely still stopping with the database unreachable.");
+              break;
+            }
             try {
 
               shop.updateSync();

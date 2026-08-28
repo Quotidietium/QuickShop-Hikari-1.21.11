@@ -365,10 +365,17 @@ public class ShopLoader implements SubPasteItem {
       if(dataRecord.getEncoded() != null && !dataRecord.getEncoded().isEmpty()) {
         Log.debug("Shop has correct encoded item type, loaded as usual.");
 
-        this.item = QuickShop.getInstance().platform().decodeStack(dataRecord.getEncoded());
-        this.newItem = item;
+        try {
+          this.item = QuickShop.getInstance().platform().decodeStack(dataRecord.getEncoded());
+          this.newItem = item;
 
-        encodedLoaded = true;
+          encodedLoaded = this.item != null;
+        } catch(final Exception e) {
+          // corrupt base64/NBT payload: fall through to the legacy item column instead of
+          // letting the exception escape — an escaping decode failure bypassed the
+          // delete-corrupt-shops switch and re-failed on every startup forever
+          QuickShop.getInstance().logger().warn("Failed to decode the encoded shop item (corrupt payload?), falling back to the legacy item column.", e);
+        }
       }
 
       if(!encodedLoaded || this.item == null) {

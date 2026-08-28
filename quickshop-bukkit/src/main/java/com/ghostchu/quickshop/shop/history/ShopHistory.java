@@ -27,6 +27,9 @@ import java.util.concurrent.CompletableFuture;
 
 public class ShopHistory {
 
+  /** Safety cap for the record query; see {@link #query()}. */
+  private static final int MAX_RECORDS = 1000;
+
   protected final List<Shop> shops;
   protected final Map<Long, Shop> shopsMapping = new HashMap<>();
   private final String shopIdsPlaceHolders;
@@ -301,8 +304,11 @@ public class ShopHistory {
 
     Util.ensureThread(true);
     final List<ShopHistoryRecord> historyRecords = new ArrayList<>();
-    //String SQL = "SELECT * FROM %s WHERE `shop` IN (" + shopIdsPlaceHolders + ") ORDER BY `time` DESC LIMIT " + (page - 1) * pageSize + "," + pageSize;
-    String SQL = "SELECT * FROM %s WHERE `shop` IN (" + shopIdsPlaceHolders + ") ORDER BY `time` DESC";
+    // hard cap: the global history view can target every shop on the server, and an
+    // unbounded SELECT here would stream the whole log_purchase table into memory (OOM /
+    // multi-minute stall on long-running servers). The cap is a literal int, never input.
+    final int limit = MAX_RECORDS;
+    String SQL = "SELECT * FROM %s WHERE `shop` IN (" + shopIdsPlaceHolders + ") ORDER BY `time` DESC LIMIT " + limit;
     SQL = String.format(SQL, DataTables.LOG_PURCHASE.getName());
     try(final PerfMonitor perfMonitor = new PerfMonitor("historyPageableQuery");
         final Connection connection = plugin.getSqlManager().getConnection();
@@ -325,6 +331,9 @@ public class ShopHistory {
           final double tax = set.getDouble("tax");
           historyRecords.add(new ShopHistoryRecord(date, shopId, dataId, buyer, shopType, amount, money, tax));
         }
+      }
+      if(historyRecords.size() >= limit) {
+        plugin.logger().warn("Shop history query hit the {}-record safety cap for shops {}; older entries are not shown.", limit, shopsMapping.keySet());
       }
     }
     return historyRecords;

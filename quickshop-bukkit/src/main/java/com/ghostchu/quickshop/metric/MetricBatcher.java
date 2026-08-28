@@ -27,6 +27,11 @@ public class MetricBatcher {
   public static final long FLUSH_INTERVAL_TICKS = 20L * 10L;
   /** Immediate flush threshold — bounds queue memory and worst-case staleness under bursts. */
   public static final int FLUSH_THRESHOLD = 256;
+  /**
+   * Re-queue ceiling after a failed flush: a long DB outage must degrade to "drop with an
+   * error log" instead of unbounded queue growth (OOM), matching BatchingQueue's policy.
+   */
+  private static final int MAX_PENDING = 10_000;
 
   private final QuickShop plugin;
   private final ConcurrentLinkedQueue<ShopMetricRecord> pending = new ConcurrentLinkedQueue<>();
@@ -81,6 +86,19 @@ public class MetricBatcher {
             .whenComplete((lines, err)->{
               if(err != null) {
                 plugin.logger().warn("Failed to flush " + drained.size() + " metric records: " + err.getMessage());
+                // put the batch back for the next timer cycle instead of silently losing it
+                int requeued = 0;
+                for(final ShopMetricRecord failed : drained) {
+                  if(size.get() >= MAX_PENDING) {
+                    final int dropped = drained.size() - requeued;
+                    plugin.logger().error("Metric batch re-queue ceiling (" + MAX_PENDING + ") reached; dropping "
+                                                  + dropped + " diagnostic records to protect server memory.");
+                    break;
+                  }
+                  pending.add(failed);
+                  size.incrementAndGet();
+                  requeued++;
+                }
               }
             });
   }

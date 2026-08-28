@@ -687,7 +687,9 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
             .addCondition("tag", tag)
             .build().execute()) {
       final ResultSet set = query.getResultSet();
-      shopIds.add(set.getLong("shop"));
+      while(set.next()) {
+        shopIds.add(set.getLong("shop"));
+      }
     } catch(final SQLException e) {
       plugin.logger().error("Failed to list shops by with tag " + tag, e);
     }
@@ -703,7 +705,9 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
             .addCondition("tag", tag)
             .build().execute()) {
       final ResultSet set = query.getResultSet();
-      shopIds.add(set.getLong("shop"));
+      while(set.next()) {
+        shopIds.add(set.getLong("shop"));
+      }
     } catch(final SQLException e) {
       plugin.logger().error("Failed to list shops tagged by " + tagger + " with tag " + tag, e);
     }
@@ -718,7 +722,9 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
             .addCondition("tagger", tagger.toString())
             .build().execute()) {
       final ResultSet set = query.getResultSet();
-      tags.add(set.getString("tag"));
+      while(set.next()) {
+        tags.add(set.getString("tag"));
+      }
     } catch(final SQLException e) {
       plugin.logger().error("Failed to list tags by " + tagger, e);
     }
@@ -734,7 +740,9 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
             .addCondition("shop", shopId)
             .build().execute()) {
       final ResultSet set = query.getResultSet();
-      tags.add(set.getString("tag"));
+      while(set.next()) {
+        tags.add(set.getString("tag"));
+      }
     } catch(final SQLException e) {
       plugin.logger().error("Failed to list tags by " + tagger, e);
     }
