@@ -819,7 +819,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
 
       final int space = Util.countSpace(inv, this);
       new ShopInventoryCalculateEvent(this, space, -1).callEvent();
-      Log.debug("Space count is: " + space);
+      Log.debug(() -> "Space count is: " + space);
       return space;
     } else {
 

@@ -68,7 +68,9 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
   @Override
   public boolean commit(@NotNull final TransactionCallback callback) {
 
-    Log.transaction("Transaction begin: Regular Commit --> " + describeInv(from) + " => " + describeInv(to) + "; Amount: " + amount + " Item: " + describeItem(item));
+    final String fromDesc = describeInv(from), toDesc = describeInv(to), itemDesc = describeItem(item);
+    final int amountSnap = amount;
+    Log.transaction(() -> "Transaction begin: Regular Commit --> " + fromDesc + " => " + toDesc + "; Amount: " + amountSnap + " Item: " + itemDesc);
     if(!callback.onCommit(this)) {
       this.lastError = "Plugin cancelled this transaction.";
       callback.onFailed(this);
@@ -154,7 +156,9 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
   @Override
   public boolean failSafeCommit() {
 
-    Log.transaction("Transaction begin: FailSafe Commit --> " + describeInv(from) + " => " + describeInv(to) + "; Amount: " + amount + " Item: " + describeItem(item));
+    final String fromDesc = describeInv(from), toDesc = describeInv(to), itemDesc = describeItem(item);
+    final int amountSnap = amount;
+    Log.transaction(() -> "Transaction begin: FailSafe Commit --> " + fromDesc + " => " + toDesc + "; Amount: " + amountSnap + " Item: " + itemDesc);
     final boolean result = commit();
     if(!result) {
       Log.transaction(Level.WARNING, "Fail-safe commit failed, starting rollback: " + lastError);
@@ -196,7 +200,7 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
         try {
           final boolean result = operation.rollback();
           if(!result) {
-            Log.transaction(Level.WARNING, "Rollback failed: " + operation);
+            Log.transaction(Level.WARNING, () -> "Rollback failed: " + operation);
             if(continueWhenFailed) {
               operations.add(operation);
               continue;
@@ -204,7 +208,7 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
               break;
             }
           } else {
-            Log.transaction("Rollback successes: " + operation);
+            Log.transaction(() -> "Rollback successes: " + operation);
           }
           operations.add(operation);
         } catch(Exception exception) {

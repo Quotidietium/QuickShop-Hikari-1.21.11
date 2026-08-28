@@ -371,7 +371,12 @@ public class QSEconomyTransaction implements EconomyTransaction {
   @Override
   public boolean safeCommit() {
 
-    Log.transaction("Transaction begin: FailSafe Commit --> " + from + " => " + to + "; Amount: " + amount + ", EconomyCore: " + provider.name());
+    // snapshots keep the recorded values identical to the eager form even if the
+    // transaction is mutated before a lazy read resolves the message
+    final QUser fromSnap = from, toSnap = to;
+    final BigDecimal amountSnap = amount;
+    final EconomyProvider providerSnap = provider;
+    Log.transaction(() -> "Transaction begin: FailSafe Commit --> " + fromSnap + " => " + toSnap + "; Amount: " + amountSnap + ", EconomyCore: " + providerSnap.name());
     final boolean result = commit();
     if(!result) {
       Log.transaction(Level.WARNING, "Fail-safe commit failed, starting rollback: " + provider.lastError());
@@ -390,7 +395,10 @@ public class QSEconomyTransaction implements EconomyTransaction {
   @Override
   public boolean commit(@NotNull final TransactionCallback callback) {
 
-    Log.transaction("Transaction begin: Regular Commit --> " + from + " => " + to + "; Amount: " + amount + " FromAmount: " + fromAmount + " Total(after tax): " + amountAfterTax + " From Tax: " + fromTax + " To Tax: " + toTax + ", EconomyCore: " + provider.name());
+    final QUser fromSnap = from, toSnap = to;
+    final BigDecimal amountSnap = amount, fromAmountSnap = fromAmount, afterTaxSnap = amountAfterTax, fromTaxSnap = fromTax, toTaxSnap = toTax;
+    final EconomyProvider providerSnap = provider;
+    Log.transaction(() -> "Transaction begin: Regular Commit --> " + fromSnap + " => " + toSnap + "; Amount: " + amountSnap + " FromAmount: " + fromAmountSnap + " Total(after tax): " + afterTaxSnap + " From Tax: " + fromTaxSnap + " To Tax: " + toTaxSnap + ", EconomyCore: " + providerSnap.name());
 
     if(!callback.onCommit(this)) {
 
@@ -444,21 +452,26 @@ public class QSEconomyTransaction implements EconomyTransaction {
         continue;
       }
 
-      Log.transaction("Processing benefit for " + entry.getKey() + ", value: " + entry.getValue().toPlainString());
+      // snapshot the live Map.Entry view so a lazy read records call-time values
+      final QUser benefitKey = entry.getKey();
+      final BigDecimal benefitValue = entry.getValue();
+      Log.transaction(() -> "Processing benefit for " + benefitKey + ", value: " + benefitValue.toPlainString());
       if(!this.executeOperation(new EconomyDepositOperation(entry.getKey(), amountAfterTax.multiply(entry.getValue()), world, currency))) {
 
-        this.lastError = "Failed to deposit " + amountAfterTax.toPlainString() + " to account " + entry.getKey() + "LastError: " + provider.lastError();
+        this.lastError = "Failed to deposit " + amountAfterTax + " to account " + entry.getKey() + "LastError: " + provider.lastError();
         callback.onFailed(this);
         return false;
       }
 
-      Log.transaction("Benefit for " + entry.getKey() + ", value: " + entry.getValue().toPlainString() + ". Payout = " + payout.toPlainString());
+      final BigDecimal payoutBefore = payout;
+      Log.transaction(() -> "Benefit for " + benefitKey + ", value: " + benefitValue.toPlainString() + ". Payout = " + payoutBefore.toPlainString());
       payout = payout.add(entry.getValue());
     }
 
 
     this.ownerPayment = CalculateUtil.multiply(amountAfterTax, fullAmount.subtract(payout));
-    Log.transaction("Benefit for owner remaining: " + ownerPayment.toPlainString());
+    final BigDecimal ownerPaymentSnap = ownerPayment;
+    Log.transaction(() -> "Benefit for owner remaining: " + ownerPaymentSnap.toPlainString());
     if(to != null && ownerPayment.compareTo(BigDecimal.ZERO) > 0 && !this.executeOperation(new EconomyDepositOperation(to, ownerPayment, world, currency))) {
 
       this.lastError = "Failed to deposit " + ownerPayment.toPlainString() + " to account " + to + "LastError: " + provider.lastError();

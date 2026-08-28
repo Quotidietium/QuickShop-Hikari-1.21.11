@@ -51,7 +51,8 @@ public interface QSTransactionCallback extends TransactionCallback {
    */
   default void onFailed(@NotNull final QSEconomyTransaction economyTransaction) {
 
-    Log.transaction(Level.WARNING, "Transaction failed: " + economyTransaction.lastError() + ", transaction: " + economyTransaction);
+    final String lastErrorSnap = economyTransaction.lastError();
+    Log.transaction(Level.WARNING, () -> "Transaction failed: " + lastErrorSnap + ", transaction: " + economyTransaction);
   }
 
   /**
@@ -61,7 +62,7 @@ public interface QSTransactionCallback extends TransactionCallback {
    */
   default void onSuccess(@NotNull final QSEconomyTransaction economyTransaction) {
 
-    Log.transaction("Transaction succeed: " + economyTransaction);
+    Log.transaction(() -> "Transaction succeed: " + economyTransaction);
   }
 
   /**
@@ -72,6 +73,7 @@ public interface QSTransactionCallback extends TransactionCallback {
    */
   default void onTaxFailed(@NotNull final QSEconomyTransaction economyTransaction) {
 
-    Log.transaction(Level.WARNING, "Tax Transaction failed: " + economyTransaction.lastError() + ", transaction: " + economyTransaction);
+    final String lastErrorSnap = economyTransaction.lastError();
+    Log.transaction(Level.WARNING, () -> "Tax Transaction failed: " + lastErrorSnap + ", transaction: " + economyTransaction);
   }
 }

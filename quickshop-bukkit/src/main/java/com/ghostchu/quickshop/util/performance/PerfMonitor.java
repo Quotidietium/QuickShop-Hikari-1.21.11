@@ -61,20 +61,23 @@ public class PerfMonitor implements AutoCloseable {
   @Override
   public void close() {
 
-    final Duration passedDuration = getTimePassed();
-    final String passed = passedDuration.toMillis() + "ms";
-    final StringBuilder messageBuilder = new StringBuilder();
-    messageBuilder.append("The task [").append(name).append("] ");
-    if(context != null) {
-      messageBuilder.append("(").append(context).append(") ");
-    }
-    messageBuilder.append("has finished in ").append(passed).append(".");
-    Level level = Level.INFO;
-    if(isReachedLimit()) {
-      messageBuilder.append(" OVER LIMIT! The excepted time cost should less than ").append(exceptedDuration.toMillis()).append("ms.");
-      level = Level.WARNING;
-    }
-    Log.performance(level, messageBuilder.toString(), caller);
+    // hot-path free: the level check only consults the clock when a limit exists,
+    // and the message (clock read + builder) is deferred to the log record's lazy
+    // supplier, evaluated solely when the performance buffer is actually read
+    final Level level = (exceptedDuration != null && isReachedLimit())? Level.WARNING : Level.INFO;
+    Log.performance(level, () -> {
+      final String passed = getTimePassed().toMillis() + "ms";
+      final StringBuilder messageBuilder = new StringBuilder(name.length() + 48);
+      messageBuilder.append("The task [").append(name).append("] ");
+      if(context != null) {
+        messageBuilder.append("(").append(context).append(") ");
+      }
+      messageBuilder.append("has finished in ").append(passed).append(".");
+      if(level == Level.WARNING) {
+        messageBuilder.append(" OVER LIMIT! The excepted time cost should less than ").append(exceptedDuration.toMillis()).append("ms.");
+      }
+      return messageBuilder.toString();
+    }, caller);
   }
 
   @NotNull
