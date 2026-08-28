@@ -98,6 +98,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import com.google.common.cache.CacheBuilder;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
@@ -109,7 +110,12 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
 
   public static final String DEFAULT_TYPE = "BUYING";
 
-  protected final Map<UUID, Long> cooldowns = Maps.newConcurrentMap();
+  // /qs find cooldowns; auto-evicting view so entries cannot accumulate one per unique
+  // player for the lifetime of the server (any sane cooldown fits the 24h horizon)
+  protected final Map<UUID, Long> cooldowns = CacheBuilder.newBuilder()
+          .expireAfterWrite(24, TimeUnit.HOURS)
+          .<UUID, Long>build()
+          .asMap();
   protected final Map<Integer, IShopType> shopTypes = Maps.newConcurrentMap();
   protected final Map<String, ShopState> shopStates = Maps.newConcurrentMap();
   // atomic re-entry guard: add()'s return value decides ownership, so two concurrent
@@ -989,7 +995,8 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
   public void handleChat(@NotNull final Player p, @NotNull final String msg) {
 
     final QUser qUser = QUserImpl.createFullFilled(p);
-    if(!plugin.getShopManager().getInteractiveManager().containsKey(p.getUniqueId())) {
+    final Info pending = getInteractiveManager().get(p.getUniqueId());
+    if(pending == null) {
       return;
     }
     String message = ChatColor.stripColor(msg);
@@ -999,7 +1006,11 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     // Use from the main thread, because Bukkit hates life
     final String finalMessage = message;
 
-    Util.regionThread(p.getLocation(), ()->{
+    // dispatch on the SHOP's region, not the player's: on Folia the shop's container is
+    // owned by its own region thread, and running the trade there serializes it with
+    // hopper moves and sign updates targeting the same chest (the menu trade path already
+    // dispatches on the shop location)
+    Util.regionThread(pending.getLocation(), ()->{
       // They wanted to do something.
       final Info info = getInteractiveManager().remove(p.getUniqueId());
       if(info == null) {

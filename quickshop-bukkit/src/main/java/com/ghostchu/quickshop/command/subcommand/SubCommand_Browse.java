@@ -4,6 +4,7 @@ import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.command.CommandHandler;
 import com.ghostchu.quickshop.api.command.CommandParser;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.menu.browse.BrowseFilterMode;
 import com.ghostchu.quickshop.menu.browse.BrowseSortMode;
 import com.ghostchu.quickshop.util.Util;
@@ -52,6 +53,10 @@ public class SubCommand_Browse implements CommandHandler<Player> {
 
     Util.asyncThreadRun(()->{
       final List<Shop> shops = new ArrayList<>();
+      // same privacy model as /qs find: shops that revoked the viewer's SEARCH grant
+      // (or whose owner blocked them via the group model) must not leak here — the browse
+      // menu renders locations and teleport actions for every listed shop
+      final boolean bypass = plugin.perm().hasPermission(sender, "quickshop.other.search");
 
       if(world) {
         shops.addAll(plugin.getShopManager().getAllShops().stream().filter(shop->{
@@ -61,9 +66,10 @@ public class SubCommand_Browse implements CommandHandler<Player> {
           }
 
           return shop.bukkitLocation().getWorld().getUID().equals(sender.getLocation().getWorld().getUID());
-        }).toList());
+        }).filter(shop->bypass || shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.SEARCH)).toList());
       } else {
-        shops.addAll(plugin.getShopManager().getAllShops());
+        shops.addAll(plugin.getShopManager().getAllShops().stream()
+                             .filter(shop->bypass || shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.SEARCH)).toList());
       }
 
       viewer.addData(SHOPS_DATA, shops);

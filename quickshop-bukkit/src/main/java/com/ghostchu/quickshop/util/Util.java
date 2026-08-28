@@ -681,6 +681,13 @@ public class Util {
 
   public static BigDecimal parse(final String input) {
 
+    // client-controlled strings reach this parser from chat/commands; BigDecimal accepts
+    // scientific notation and arbitrarily long digit strings ("1e999999999"), whose
+    // expansion is pure main-thread CPU/allocation churn. Real prices never come close
+    // to this bound (the default limiter caps at ~1e29).
+    if(input == null || input.isEmpty() || input.length() > 64) {
+      return null;
+    }
     try {
 
       return new BigDecimal(input);

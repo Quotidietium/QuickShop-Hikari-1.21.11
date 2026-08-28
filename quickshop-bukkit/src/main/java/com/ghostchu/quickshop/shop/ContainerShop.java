@@ -592,12 +592,28 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
    *
    * @return registered audiences
    */
+  /**
+   * True only when the given UUID identifies this shop's real-player owner. Virtual owners
+   * (e.g. "[ServerShop]" admin accounts) resolve to the offline-mode name UUID, which a
+   * real player registering the same name shares on offline-mode (cracked) servers;
+   * granting owner rights on raw UUID equality alone would let that player take over the
+   * shop — virtual-owner shops are managed through quickshop.other.* / group grants.
+   */
+  private boolean isRealOwnerUuid(@Nullable final UUID player) {
+
+    if(player == null) {
+      return false;
+    }
+    final var owner = getOwner();
+    return owner != null && owner.isRealPlayer() && player.equals(owner.getUniqueId());
+  }
+
   @Override
   public @NotNull Map<UUID, String> getPermissionAudiences() {
 
     final Map<UUID, String> clonedPlayerGroup = new HashMap<>(playerGroup);
-    final Optional<UUID> uuid = getOwner().getUniqueIdOptional();
-    if(uuid.isPresent()) {
+    // inject the owner as ADMINISTRATOR only for real-player owners (see isRealOwnerUuid)
+    if(isRealOwnerUuid(getOwner().getUniqueIdOptional().orElse(null))) {
       clonedPlayerGroup.put(getOwner().getUniqueId(), BuiltInShopPermissionGroup.ADMINISTRATOR.getNamespacedNode());
     }
     return clonedPlayerGroup;
@@ -613,7 +629,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public @NotNull String getPlayerGroup(@NotNull final UUID player) {
 
-    if(player.equals(getOwner().getUniqueId())) {
+    if(isRealOwnerUuid(player)) {
       return BuiltInShopPermissionGroup.ADMINISTRATOR.getNamespacedNode();
     }
 
@@ -1665,7 +1681,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public boolean playerAuthorize(@NotNull final UUID player, @NotNull final Plugin namespace, @NotNull final String permission) {
 
-    if(player.equals(getOwner().getUniqueId())) {
+    if(isRealOwnerUuid(player)) {
       Log.permission("Check permission " + namespace.getName().toLowerCase(Locale.ROOT) + "." + permission + " for " + player + " -> " + "true");
       return true;
     }

@@ -433,6 +433,15 @@ public class CommonUtil {
     if(length != 36 && length != 32) {
       return false;
     }
+    // also require real hex digits: "zzzzzzzz-..." passed the old length/dash check and
+    // only blew up later inside UUID.fromString
+    for(int i = 0; i < length; i++) {
+      final char c = string.charAt(i);
+      final boolean hex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+      if(!hex && c != '-') {
+        return false;
+      }
+    }
     final String[] components = string.split("-");
     return components.length == 5;
   }
