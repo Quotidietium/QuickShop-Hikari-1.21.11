@@ -238,8 +238,14 @@ permissions:
   quickshop.refill:
     description: Allows a staff member to refill the shop they're looking at with the given number of items.
     default: op
+  quickshop.other.refill:
+    description: Allows refilling shops the sender does not own or manage.
+    default: op
   quickshop.empty:
     description: Allows a staff member to empty the shop they're looking at of all items.
+    default: op
+  quickshop.other.empty:
+    description: Allows emptying shops the sender does not own or manage.
     default: op
   quickshop.debug:
     description: Enables developer mode.

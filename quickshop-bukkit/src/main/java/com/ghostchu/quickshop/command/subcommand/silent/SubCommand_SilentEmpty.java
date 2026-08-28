@@ -4,6 +4,7 @@ import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.command.CommandParser;
 import com.ghostchu.quickshop.api.inventory.InventoryWrapper;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.shop.ContainerShop;
 import com.ghostchu.quickshop.util.MsgUtil;
 import com.ghostchu.quickshop.util.logger.Log;
@@ -20,6 +21,12 @@ public class SubCommand_SilentEmpty extends SubCommand_SilentBase {
 
   @Override
   protected void doSilentCommand(final Player sender, @NotNull final Shop shop, @NotNull final CommandParser parser) {
+
+    if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)
+       && !plugin.perm().hasPermission(sender, "quickshop.other.empty")) {
+      plugin.text().of(sender, "not-permission").send();
+      return;
+    }
 
     if(!(shop instanceof final ContainerShop cs)) {
       plugin.text().of(sender, "not-looking-at-shop").send();

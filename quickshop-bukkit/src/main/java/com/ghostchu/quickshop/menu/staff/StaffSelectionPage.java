@@ -253,6 +253,13 @@ public class StaffSelectionPage {
                                                .withActions(new GuiChatAction((message)->{
                                                  if(!message.isEmpty()) {
                                                    if(message.equalsIgnoreCase("confirm")) {
+                                                     // Re-check at click time: menu visibility is not
+                                                     // an authorization record.
+                                                     if(!shop.get().playerAuthorize(id, BuiltInShopPermission.MANAGEMENT_PERMISSION)
+                                                        && !QuickShop.getInstance().perm().hasPermission(viewerPlayer, "quickshop.other.staff")) {
+                                                       QuickShop.getInstance().text().of(id, "no-permission").send();
+                                                       return true;
+                                                     }
                                                      shop.get().setPlayerGroup(uuid, BuiltInShopPermissionGroup.EVERYONE);
                                                      QuickShop.getInstance().text().of(id, "shop-staff-deleted", name).send();
                                                      return true;

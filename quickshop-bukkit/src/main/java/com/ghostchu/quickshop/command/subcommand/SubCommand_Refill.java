@@ -5,6 +5,7 @@ import com.ghostchu.quickshop.api.command.CommandHandler;
 import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.api.command.CommandParser;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.common.util.CommonUtil;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
@@ -32,6 +33,13 @@ public class SubCommand_Refill implements CommandHandler<Player> {
     final Shop shop = getLookingShop(sender);
     if(shop == null) {
       plugin.text().of(sender, "not-looking-at-shop").send();
+      return;
+    }
+    // add() materializes items out of thin air, so gate it to the shop's own
+    // managers even for holders of the base command node.
+    if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)
+       && !plugin.perm().hasPermission(sender, "quickshop.other.refill")) {
+      plugin.text().of(sender, "not-permission").send();
       return;
     }
     if(CommonUtil.isNumeric(parser.getArgs().getFirst())) {

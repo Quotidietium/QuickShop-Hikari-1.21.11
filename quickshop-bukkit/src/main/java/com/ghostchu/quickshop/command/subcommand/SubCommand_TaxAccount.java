@@ -4,6 +4,7 @@ import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.command.CommandHandler;
 import com.ghostchu.quickshop.api.command.CommandParser;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.obj.QUserImpl;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
@@ -24,6 +25,13 @@ public class SubCommand_TaxAccount implements CommandHandler<Player> {
 
     final Shop shop = getLookingShop(sender);
     if(shop != null) {
+      // Tax account redirects where this shop's taxes flow; treat it as owner-tier
+      // financial settings unless the sender holds the dedicated "other" bypass.
+      if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.SET_BENEFIT)
+         && !plugin.perm().hasPermission(sender, "quickshop.other.taxaccount")) {
+        plugin.text().of(sender, "not-managed-shop").send();
+        return;
+      }
       if(parser.getArgs().isEmpty()) {
         shop.setTaxAccount(null);
         plugin.text().of(sender, "taxaccount-unset").send();

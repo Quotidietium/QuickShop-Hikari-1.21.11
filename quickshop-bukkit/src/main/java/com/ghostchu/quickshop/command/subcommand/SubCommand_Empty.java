@@ -5,6 +5,7 @@ import com.ghostchu.quickshop.api.command.CommandHandler;
 import com.ghostchu.quickshop.api.command.CommandParser;
 import com.ghostchu.quickshop.api.inventory.InventoryWrapper;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.shop.ContainerShop;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
@@ -23,6 +24,11 @@ public class SubCommand_Empty implements CommandHandler<Player> {
 
     final Shop shop = getLookingShop(sender);
     if(shop instanceof final ContainerShop cs) {
+      if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)
+         && !plugin.perm().hasPermission(sender, "quickshop.other.empty")) {
+        plugin.text().of(sender, "not-permission").send();
+        return;
+      }
       final InventoryWrapper inventory = cs.getInventory();
       if(inventory == null) {
         return;
