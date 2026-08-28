@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -39,11 +40,22 @@ public final class BenchHarness {
   public void bench(final String name, final Consumer<OpContext> op) {
 
     System.out.printf(">> %-46s ", name);
+    final String profile = System.getProperty("benchmark.profile");
+    if(profile != null && (profile.equals("*") || List.of(profile.split(",")).contains(name))) {
+      benchProfiled(name, op);
+      return;
+    }
     final List<Double> samples = new ArrayList<>(WARMUP_SAMPLES + SAMPLES);
     for(int i = 0; i < WARMUP_SAMPLES + SAMPLES; i++) {
       samples.add(sampleNsPerOp(op));
       System.out.print('.');
     }
+    reportSamples(name, samples);
+  }
+
+  /** Reports and stores already-collected samples for a case. */
+  private void reportSamples(final String name, final List<Double> samples) {
+
     final List<Double> measured = samples.subList(WARMUP_SAMPLES, samples.size());
     final double median = median(measured);
     results.put(name, measured);
@@ -55,6 +67,64 @@ public final class BenchHarness {
     } catch(final InterruptedException ignored) {
       Thread.currentThread().interrupt();
     }
+  }
+
+  /**
+   * Poor-man's sampling profiler mode (off unless {@code -Dbenchmark.profile} selects case
+   * names or {@code *}): while the measured samples run, a daemon thread samples the
+   * benchmark thread's stack ~every 500 µs and prints the hottest leaf frames plus the
+   * hottest top-most quickshop frames. Measurement is identical to the normal path; this
+   * only adds a concurrent reader thread (used for exploration, not for A/B reports).
+   */
+  private void benchProfiled(final String name, final Consumer<OpContext> op) {
+
+    System.out.print("[profiled] ");
+    final Map<String, Integer> leafCounts = new java.util.HashMap<>();
+    final Map<String, Integer> qsCounts = new java.util.HashMap<>();
+    final Thread mainThread = Thread.currentThread();
+    final AtomicBoolean running = new AtomicBoolean(true);
+    final Thread sampler = new Thread(() -> {
+      while(running.get()) {
+        final StackTraceElement[] stack = mainThread.getStackTrace();
+        if(stack.length > 0) {
+          final StackTraceElement leaf = stack[0];
+          leafCounts.merge(leaf.getClassName() + '.' + leaf.getMethodName() + ':' + leaf.getLineNumber(), 1, Integer::sum);
+          for(final StackTraceElement frame : stack) {
+            final String cls = frame.getClassName();
+            if(cls.startsWith("com.ghostchu.") || cls.startsWith("org.maxgamer.")) {
+              qsCounts.merge(cls + '.' + frame.getMethodName(), 1, Integer::sum);
+              break;
+            }
+          }
+        }
+        try {
+          Thread.sleep(0, 500_000);
+        } catch(final InterruptedException ignored) {
+          return;
+        }
+      }
+    });
+    sampler.setDaemon(true);
+    sampler.start();
+    final List<Double> samples = new ArrayList<>(WARMUP_SAMPLES + SAMPLES);
+    for(int i = 0; i < WARMUP_SAMPLES + SAMPLES; i++) {
+      samples.add(sampleNsPerOp(op));
+      System.out.print('.');
+    }
+    running.set(false);
+    reportSamples(name, samples);
+    System.out.println("   -- profile: top leaf frames --");
+    printTop(leafCounts, 20);
+    System.out.println("   -- profile: top quickshop frames (top-most in stack) --");
+    printTop(qsCounts, 25);
+  }
+
+  private void printTop(final Map<String, Integer> counts, final int limit) {
+
+    counts.entrySet().stream()
+            .sorted((a, b) -> Integer.compare(b.getValue(), a.getValue()))
+            .limit(limit)
+            .forEach(e -> System.out.printf("   %6d  %s%n", e.getValue(), e.getKey()));
   }
 
   private double sampleNsPerOp(final Consumer<OpContext> op) {

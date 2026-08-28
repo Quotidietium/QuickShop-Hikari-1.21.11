@@ -60,15 +60,20 @@ public final class BenchmarkMain {
     final BenchHarness harness = new BenchHarness();
     final List<String> failures = new ArrayList<>();
 
-    runSuite(harness, failures, "shop-lookup", ShopLookupBench::run);
-    runSuite(harness, failures, "trade", TradeBench::run);
-    runSuite(harness, failures, "listener", ListenerBench::run);
-    runSuite(harness, failures, "menu", MenuBench::run);
-    runSuite(harness, failures, "data-record", DataRecordBench::run);
-    runSuite(harness, failures, "economy", EconomyBench::run);
-    runSuite(harness, failures, "text", TextBench::run);
-    runSuite(harness, failures, "log", LogBench::run);
-    runSuite(harness, failures, "database", DbBench::run);
+    // optional suite filter for exploration/profiling runs: -Dbenchmark.suites=trade,menu
+    final String suiteFilter = System.getProperty("benchmark.suites");
+    final java.util.Set<String> suites = suiteFilter == null? null
+            : java.util.Set.of(suiteFilter.split(","));
+
+    runSuite(harness, failures, "shop-lookup", ShopLookupBench::run, suites);
+    runSuite(harness, failures, "trade", TradeBench::run, suites);
+    runSuite(harness, failures, "listener", ListenerBench::run, suites);
+    runSuite(harness, failures, "menu", MenuBench::run, suites);
+    runSuite(harness, failures, "data-record", DataRecordBench::run, suites);
+    runSuite(harness, failures, "economy", EconomyBench::run, suites);
+    runSuite(harness, failures, "text", TextBench::run, suites);
+    runSuite(harness, failures, "log", LogBench::run, suites);
+    runSuite(harness, failures, "database", DbBench::run, suites);
 
     final Path resultsDir = Path.of("results");
     Files.createDirectories(resultsDir);
@@ -95,8 +100,12 @@ public final class BenchmarkMain {
   }
 
   private static void runSuite(final BenchHarness harness, final List<String> failures,
-                               final String name, final SuiteRunner runner) {
+                               final String name, final SuiteRunner runner,
+                               final java.util.Set<String> filter) {
 
+    if(filter != null && !filter.contains(name)) {
+      return;
+    }
     System.out.println("== suite: " + name + " ==");
     final long start = System.currentTimeMillis();
     try {
