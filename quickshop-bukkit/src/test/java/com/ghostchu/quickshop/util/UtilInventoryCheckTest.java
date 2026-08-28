@@ -85,6 +85,10 @@ class UtilInventoryCheckTest {
     } catch(final ReflectiveOperationException e) {
       throw new IllegalStateException(e);
     }
+    // Snapshot era (R32+): display-type is baked into a static snapshot at refresh
+    // time; a config change only takes effect through refreshConfigSnapshots(), the
+    // same wiring /qs reload uses. Mirror that here instead of relying on fresh reads.
+    com.ghostchu.quickshop.shop.display.AbstractDisplayItem.refreshConfigSnapshots();
   }
 
   @Test
