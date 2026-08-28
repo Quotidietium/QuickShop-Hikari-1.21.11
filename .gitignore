@@ -121,3 +121,4 @@ run/
 .${rootDir}/
 /.paper-nms/
 build/
+/test
