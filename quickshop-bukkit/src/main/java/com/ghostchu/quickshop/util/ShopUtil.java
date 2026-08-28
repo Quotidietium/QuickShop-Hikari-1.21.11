@@ -357,7 +357,9 @@ public class ShopUtil {
     }
 
     int items = Util.countItems(playerInventory, shop);
-    final int ownerCanAfford = (int)(ownerBalance / price);
+    // a zero/negative price here (admin-allowed configs) would turn the division into
+    // Infinity/NaN; balance-then-price can never limit the trade in that case
+    final int ownerCanAfford = price > 0? (int)(ownerBalance / price) : Integer.MAX_VALUE;
     if(!isContainerCountingNeeded) {
       // Amount check player amount and shop empty slot
       items = Math.min(items, shop.getRemainingSpace());

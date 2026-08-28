@@ -29,6 +29,7 @@ import com.ghostchu.quickshop.menu.shared.PageSwitchWithCloseAction;
 import com.ghostchu.quickshop.menu.shared.QuickShopPage;
 import com.ghostchu.quickshop.shop.SimpleInfo;
 import com.ghostchu.quickshop.shop.inventory.BukkitInventoryWrapper;
+import com.ghostchu.quickshop.util.ExpiringSet;
 import com.ghostchu.quickshop.util.Util;
 import net.tnemc.item.bukkit.BukkitItemStack;
 import net.tnemc.item.providers.SkullProfile;
@@ -44,6 +45,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * MainPage
@@ -52,6 +54,13 @@ import java.util.UUID;
  * @since 6.2.0.8
  */
 public class MainPage extends QuickShopPage {
+
+  /**
+   * Menu clicks bypass the interact-event rate limit in PlayerListener, so the menu path
+   * carries its own window: a modified client spamming click packets must not queue an
+   * unbounded number of full preview+commit trade tasks.
+   */
+  private static final ExpiringSet<UUID> TRADE_CLICK_COOLDOWN = new ExpiringSet<>(125, TimeUnit.MILLISECONDS);
 
   public MainPage() {
 
@@ -188,6 +197,10 @@ public class MainPage extends QuickShopPage {
                                                }
                                                return true;
                                              }
+                                             if(TRADE_CLICK_COOLDOWN.contains(id)) {
+                                               return true;
+                                             }
+                                             TRADE_CLICK_COOLDOWN.add(id);
                                              if(shop.get().isBuying()) {
                                                final Info info = new SimpleInfo(shop.get().bukkitLocation(), ShopAction.PURCHASE_SELL, null, null, shop.get(), false);
                                                Util.regionThread(shop.get().bukkitLocation(), ()->QuickShop.getInstance().getShopManager().actionBuying(player, new BukkitInventoryWrapper(player.getInventory()), eco, info, shop.get(), quantity));
@@ -226,6 +239,10 @@ public class MainPage extends QuickShopPage {
                                                          .display(QuickShop.getInstance().platform().miniMessage().deserialize(displayText))
                                                          .lore(getConfigLore(id, quantityConfig, totalPrice)))
                                          .withActions(new RunnableAction((click->{
+                                           if(TRADE_CLICK_COOLDOWN.contains(id)) {
+                                             return;
+                                           }
+                                           TRADE_CLICK_COOLDOWN.add(id);
                                            if(shop.get().isBuying()) {
 
                                              final Info info = new SimpleInfo(shop.get().bukkitLocation(), ShopAction.PURCHASE_SELL, null, null, shop.get(), false);

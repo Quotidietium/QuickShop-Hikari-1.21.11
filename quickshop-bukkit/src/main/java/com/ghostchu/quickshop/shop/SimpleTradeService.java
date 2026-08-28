@@ -509,14 +509,22 @@ public class SimpleTradeService implements TradeService {
    * SignUpdateWatcher, so trades take the same coalesced path (rapid trading refreshes a
    * shop's signs at most once per watcher cycle, in the trading player's locale as
    * before). Set shop.immediate-trade-sign-updates to restore per-trade rendering.
+   *
+   * <p>Called after the item leg has committed: a sign refresh failure must never fail
+   * the trade (the caller would skip the money leg while the items already moved), so
+   * exceptions are contained and logged here.</p>
    */
   private void updateTradeSign(@NotNull final Shop shop, @NotNull final com.ghostchu.quickshop.api.localization.text.ProxiedLocale locale) {
 
-    if(plugin.getConfig().getBoolean("shop.immediate-trade-sign-updates", false)) {
-      shop.setSignText(locale);
-      return;
+    try {
+      if(plugin.getConfig().getBoolean("shop.immediate-trade-sign-updates", false)) {
+        shop.setSignText(locale);
+        return;
+      }
+      plugin.getSignUpdateWatcher().scheduleSignUpdate(shop, locale);
+    } catch(final Exception e) {
+      plugin.logger().warn("Failed to refresh trade sign after a committed trade (shopId={}): {}", shop.getShopId(), e.getMessage());
     }
-    plugin.getSignUpdateWatcher().scheduleSignUpdate(shop, locale);
   }
 
   /**

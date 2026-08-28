@@ -458,14 +458,15 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       return null;
     }
     if(!createBackup) {
-      createBackup = false;
-      if(createBackup) {
-        plugin.getShopManager().deleteShop(this);
-      }
+      // Inventory resolution failed but the shop object stays registered: a transient
+      // provider/world hiccup must not silently drop shops from the lookup tables
+      // (the createBackup flip-flop that used to sit here was provably dead code).
+      plugin.logEvent(new ShopRemoveLog(QUserImpl.createFullFilled(CommonUtil.getNilUniqueId(), "SYSTEM", false), "Inventory Invalid", this.saveToInfoStorage()));
+      Log.debug("Inventory doesn't exist anymore: " + this + "; shop kept in registry.");
+      return null;
     } else {
       plugin.getShopManager().unregisterShop(this, false);
     }
-    plugin.logEvent(new ShopRemoveLog(QUserImpl.createFullFilled(CommonUtil.getNilUniqueId(), "SYSTEM", false), "Inventory Invalid", this.saveToInfoStorage()));
     Log.debug("Inventory doesn't exist anymore: " + this + " shop was deleted.");
     return null;
   }

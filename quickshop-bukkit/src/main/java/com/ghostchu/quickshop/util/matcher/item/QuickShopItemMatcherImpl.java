@@ -480,7 +480,7 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
           //getOwningPlayer will let server query playerProfile in server thread
           //Causing huge lag, so using String instead
           final OfflinePlayer player1 = skullMeta1.getOwningPlayer();
-          final OfflinePlayer player2 = skullMeta1.getOwningPlayer();
+          final OfflinePlayer player2 = ((SkullMeta)meta2).getOwningPlayer();
           return Objects.equals(player1, player2);
         }
         return true;

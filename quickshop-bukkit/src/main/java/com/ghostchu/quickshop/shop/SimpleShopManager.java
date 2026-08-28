@@ -446,6 +446,10 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       plugin.text().of(buyer, "economy-transaction-failed", transaction.lastError()).send();
       plugin.logger().error("EconomyTransaction Failed, last error: {}", transaction.lastError());
       plugin.logger().error("Tips: If you see any economy plugin name appears above, please don't ask QuickShop support. Contact with developer of economy plugin. QuickShop didn't process the transaction, we only receive the transaction result from your economy plugin.");
+      // The item leg (trader -> chest, or trader -> nothing for unlimited shops) already
+      // committed inside the trade service; undo it in the same tick so a failed money leg
+      // can never swallow the trader's items without payment.
+      rollbackCommittedTrade(shop, buyerInventory, amount, false);
       return false;
     }
 
@@ -680,6 +684,10 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     if(!transaction.safeCommit()) {
       plugin.text().of(seller, "economy-transaction-failed", transaction.lastError()).send();
       plugin.logger().error("EconomyTransaction Failed, last error: {}", transaction.lastError());
+      // The item leg (chest -> trader, or nothing -> trader for unlimited shops) already
+      // committed inside the trade service; undo it in the same tick so a failed money leg
+      // can never hand out free items.
+      rollbackCommittedTrade(shop, sellerInventory, amount, true);
       return false;
     }
 
@@ -693,6 +701,44 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     new ShopSuccessPurchaseEvent(shop, sellerQUser, sellerInventory, amount, total, transaction.fromTax().doubleValue()).callEvent();
     notifyBought(sellerQUser, shop, amount, stock, transaction);
     return true;
+  }
+
+  /**
+   * Reverts an already-committed item transfer after the economy leg of a trade failed.
+   * Runs in the same tick as the forward transfer, so on the trade thread nothing else
+   * could have consumed the moved items yet. {@code traderToShop} inverts the direction:
+   * true pulls the just-delivered items back out of the trader's inventory, false returns
+   * the just-taken items to the trader. Only the built-in trade service is reverted — a
+   * third-party service may implement its own item semantics, so its trades are only
+   * logged for manual reconciliation.
+   */
+  private void rollbackCommittedTrade(@NotNull final Shop shop, @NotNull final InventoryWrapper traderInventory, final int amount, final boolean traderToShop) {
+
+    if(!(tradeService() instanceof SimpleTradeService)) {
+      plugin.logger().error("TRADE RECONCILIATION REQUIRED: economy leg failed after a third-party trade service committed items (shopId={}, amount={}, direction={}). QuickShop cannot safely auto-revert this trade; please verify the affected container and inventories.", shop.getShopId(), amount, traderToShop? "trader->shop" : "shop->trader");
+      return;
+    }
+    try {
+      final int unitSize = shop.getItemUnitSize();
+      if(unitSize <= 0 || amount <= 0 || (long)unitSize * amount > Integer.MAX_VALUE) {
+        plugin.logger().error("TRADE RECONCILIATION REQUIRED: non-revertible trade dimensions after economy failure (shopId={}, unitSize={}, amount={}).", shop.getShopId(), unitSize, amount);
+        return;
+      }
+      final InventoryWrapper chest = shop.isUnlimited()? null : shop.getInventory();
+      final SimpleInventoryTransaction rollback = SimpleInventoryTransaction.builder()
+              .from(traderToShop? traderInventory : chest)
+              .to(traderToShop? chest : traderInventory)
+              .item(shop.getItem())
+              .amount(unitSize * amount)
+              .build();
+      if(rollback.commit()) {
+        plugin.logger().warn("Economy leg failed after items moved; item transfer reverted (shopId={}, items={}, direction={}).", shop.getShopId(), unitSize * amount, traderToShop? "trader->shop" : "shop->trader");
+      } else {
+        plugin.logger().error("TRADE RECONCILIATION REQUIRED: economy leg failed and the item rollback could not fully revert (shopId={}, items={}, lastError={}). Please verify the affected container and inventories.", shop.getShopId(), unitSize * amount, rollback.getLastError());
+      }
+    } catch(final Exception ex) {
+      plugin.logger().error("TRADE RECONCILIATION REQUIRED: exception while reverting items after economy failure (shopId={}).", shop.getShopId(), ex);
+    }
   }
 
 
