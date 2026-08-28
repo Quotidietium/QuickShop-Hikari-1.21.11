@@ -224,6 +224,11 @@ public final class Env {
       final java.lang.reflect.Field instanceField = QuickShop.class.getDeclaredField("instance");
       instanceField.setAccessible(true);
       instanceField.set(null, Holder.PLUGIN);
+      // Snapshot-era ordering: config values that listener/display paths bake into
+      // static snapshots (display-type since R32) must be set BEFORE Util.initialize(),
+      // mirroring a real server where config.yml predates the enable phase. Suites
+      // setting them later only worked while the getters still read config fresh.
+      setConfig("shop.display-type", 2);
       // Util.plugin is captured by an explicit initialize() call (onEnable does this on a
       // real server); canBeShop() and friends would NPE without it
       com.ghostchu.quickshop.util.Util.initialize();
