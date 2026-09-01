@@ -1,4 +1,4 @@
-package com.ghostchu.quickshop.util.metric;
+package com.ghostchu.quickshop.util.privacy;
 
 public enum MetricDataType {
   STATISTIC,

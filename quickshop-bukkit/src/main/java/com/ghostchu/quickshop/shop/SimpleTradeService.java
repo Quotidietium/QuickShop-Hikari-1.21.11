@@ -132,9 +132,6 @@ public class SimpleTradeService implements TradeService {
       }
 
       if(options.commit() && !transaction.failSafeCommit()) {
-        if(plugin.getSentryErrorReporter() != null) {
-          plugin.getSentryErrorReporter().ignoreThrow();
-        }
         return failedResult(
                 TradeType.BUY_FROM_SHOP,
                 amount,
@@ -246,9 +243,6 @@ public class SimpleTradeService implements TradeService {
       }
 
       if(options.commit() && !transaction.failSafeCommit()) {
-        if(plugin.getSentryErrorReporter() != null) {
-          plugin.getSentryErrorReporter().ignoreThrow();
-        }
         return failedResult(
                 TradeType.SELL_TO_SHOP,
                 amount,

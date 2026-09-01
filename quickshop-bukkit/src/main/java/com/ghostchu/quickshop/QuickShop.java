@@ -98,19 +98,15 @@ import com.ghostchu.quickshop.util.logger.Log;
 import com.ghostchu.quickshop.util.matcher.item.BukkitItemMatcherImpl;
 import com.ghostchu.quickshop.util.matcher.item.ModernCustomMatcher;
 import com.ghostchu.quickshop.util.matcher.item.QuickShopItemMatcherImpl;
-import com.ghostchu.quickshop.util.metric.MetricManager;
 import com.ghostchu.quickshop.util.paste.PasteManager;
 import com.ghostchu.quickshop.util.performance.PerfMonitor;
 import com.ghostchu.quickshop.util.privacy.PrivacyController;
-import com.ghostchu.quickshop.util.reporter.error.RollbarErrorReporter;
-import com.ghostchu.quickshop.util.updater.UpdateManager;
 import com.ghostchu.quickshop.watcher.CalendarWatcher;
 import com.ghostchu.quickshop.watcher.DisplayAutoDespawnWatcher;
 import com.ghostchu.quickshop.watcher.LogWatcher;
 import com.ghostchu.quickshop.watcher.OngoingFeeWatcher;
 import com.ghostchu.quickshop.watcher.ShopDataSaveWatcher;
 import com.ghostchu.quickshop.watcher.SignUpdateWatcher;
-import com.ghostchu.quickshop.watcher.UpdateWatcher;
 import com.ghostchu.simplereloadlib.ReloadManager;
 import com.ghostchu.simplereloadlib.ReloadResult;
 import com.ghostchu.simplereloadlib.Reloadable;
@@ -220,7 +216,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   private final EconomyLoader economyLoader = new EconomyLoader(this);
   private final EconomyManager economyManager = new QSEconomyManager();
   private final QuickShopTagManager tagManager;
-  private UpdateManager updateManager;
   @Getter
   private final PasteManager pasteManager = new PasteManager();
   protected MenuHandler menuHandler;
@@ -277,12 +272,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   @Getter
   private PermissionChecker permissionChecker;
   /**
-   * The error reporter to help devs report errors to Sentry.io
-   */
-  @Getter
-  @Nullable
-  private RollbarErrorReporter sentryErrorReporter;
-  /**
    * The server UniqueID, use to the ErrorReporter
    */
   @Getter
@@ -318,9 +307,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   @Getter
   private EnvironmentChecker environmentChecker;
   @Getter
-  @Nullable
-  private UpdateWatcher updateWatcher;
-  @Getter
   private BuildInfo buildInfo;
   @Getter
   @Nullable
@@ -352,8 +338,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   private VirtualDisplayItemManager virtualDisplayItemManager;
   @Getter
   private PrivacyController privacyController;
-  @Getter
-  private MetricManager metricManager;
   @Getter
   private RegistryManager registry;
 
@@ -434,9 +418,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     logger.info("Setting up QuickShop registry....");
     this.registry = new SimpleRegistryManager();
     this.registry.registerRegistry(BuiltInRegistry.ITEM_EXPRESSION.getName(), new SimpleItemExpressionRegistry(this));
-    logger.info("Setting up metrics manager...");
-    this.metricManager = new MetricManager();
-    this.metricManager.initPlatforms();
     logger.info("Loading player name and unique id mapping...");
     this.playerFinder = new FastPlayerFinder(this);
     loadTextManager();
@@ -678,10 +659,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     return tagManager;
   }
 
-  public UpdateManager updateManager() {
-    return this.updateManager;
-  }
-
   /**
    * Retrieves the InteractionManager associated with this QuickShopProvider.
    *
@@ -852,7 +829,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     logger.info("Contributors: {}", CommonUtil.list2String(javaPlugin.getDescription().getAuthors()));
     logger.info("Original author: Netherfoam, Timtower, KaiNoMood, sandtechnology");
     logger.info("Let's start loading the plugin");
-    loadErrorReporter();
     loadItemMatcher();
     this.itemMarker = new ItemMarker(this);
     loadRegistry();
@@ -920,7 +896,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     this.registerShopLock();
     logger.info("Cleaning MsgUtils...");
     MsgUtil.clean();
-    this.registerUpdater();
     /* Delay the Economy system load, give a chance to let economy system register. */
     /* And we have a listener to listen the ServiceRegisterEvent :) */
     Log.debug("Scheduled economy system loading.");
@@ -949,21 +924,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     itemExpressionRegistry.registerHandlerSafely(new SimpleEnchantmentExpressionHandler(this));
     itemExpressionRegistry.registerHandlerSafely(new SimpleItemReferenceExpressionHandler(this));
     itemExpressionRegistry.registerHandlerSafely(new SimpleWildcardExpressionHandler(this));
-  }
-
-  private void loadErrorReporter() {
-
-    try {
-      if(!getConfig().getBoolean("auto-report-errors")) {
-        Log.debug("Error Reporter has been disabled by the configuration.");
-      } else {
-        sentryErrorReporter = new RollbarErrorReporter(this);
-        Log.debug("Error Reporter has been initialized.");
-      }
-    } catch(final Exception th) {
-      logger.warn("Cannot load the Rollbar Error Reporter: {}", th.getMessage());
-      logger.warn("Because the error reporter doesn't work, report this error to the developer. Thank you!");
-    }
   }
 
   private void loadItemMatcher() {
@@ -1152,26 +1112,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     }
   }
 
-  private void registerUpdater() {
-
-    final boolean updaterEnabled = this.getConfig().getBoolean("updater", true);
-    if(updaterEnabled && this.updateManager == null) {
-      this.updateManager = new UpdateManager(this);
-      updateWatcher = new UpdateWatcher();
-      updateWatcher.init();
-    } else {
-      if (this.updateManager != null) {
-        this.updateManager.unregister();
-        this.updateManager = null;
-      }
-
-      if(updateWatcher != null) {
-        updateWatcher.uninit();
-        updateWatcher = null;
-      }
-    }
-  }
-
   private void registerTasks() {
 
     signUpdateWatcher.start(1, 10);
@@ -1302,10 +1242,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     if(calendarWatcher != null) {
       calendarWatcher.stop();
     }
-    if(sentryErrorReporter != null) {
-      logger.info("Shutting down error reporter...");
-      sentryErrorReporter.unregister();
-    }
     if(this.quickShopPAPI != null) {
       logger.info("Unregistering PlaceHolderAPI hooks...");
       if(this.quickShopPAPI.unregister()) {
@@ -1383,11 +1319,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     }
     logger.info("Shutting down scheduled timers...");
     folia.getScheduler().cancelAllTasks();
-    /* Unload UpdateWatcher */
-    if(this.updateWatcher != null) {
-      logger.info("Shutting down update watcher...");
-      this.updateWatcher.uninit();
-    }
     logger.info("Shutting down 3rd-party integrations...");
     unload3rdParty();
     if(this.playerFinder instanceof final FastPlayerFinder finder) {
@@ -1453,7 +1384,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
 
     registerDisplayAutoDespawn();
     //registerOngoingFee();
-    registerUpdater();
     registerShopLock();
     registerDisplayItem();
     return Reloadable.super.reloadModule();

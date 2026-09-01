@@ -274,46 +274,6 @@ warn-to-paste: |-
   <yellow>收集并上传数据到Pastebin，这会花费点时间。
   <red><bold>警告</bold>，数据将会在一周内对外可见，可能会导致你泄露服务器的配置和其他敏感信息，确保只向<bold>你信任的人/开发者发送链接。
 how-many-sell-stack: <green>在聊天栏中输入你想 <light_purple>卖<green> 的份数. 每份中有 <yellow>{0}<green> 个该物品, 你目前可卖出 <yellow>{1}<green> 份这样的物品，输入 <aqua>{2}<green> 以卖出所有此项物品。
-updatenotify:
-  buttontitle: '[立即更新]'
-  onekeybuttontitle: '[一键升级]'
-  label:
-    github: '[GitHub]'
-    ore: '[Ore]'
-    lts: '[长期支持]'
-    nbtapi: '[+NBTAPI]'
-    qualityverifyed: '[质量]'
-    master: '[主分支]'
-    unstable: '[不稳定]'
-    paper: '[+Paper端优化]'
-    stable: '[稳定]'
-    spigotmc: '[SpigotMC]'
-    papermc: '[PaperMC]'
-    bukkitdev: '[BukkitDev]'
-    polymart: '[Polymart]'
-    modrinth: '[Modrinth]'
-    basic: '[Basic]'
-  list:
-    - '新版本 {0} 已经发布，但您还在使用 {1} 版本！'
-    - 噔噔咚！新版本{0} 已经发布，快升级!
-    - 在？{0} 都来了，为什么还在用 {1}
-    - 快 更 新，新版本 {0} 发布了！
-    - 噢！{0}已经发布了呀,你还在用 {1}!
-    - 我保证，QuickShop已经更新到了 {0}，但你怎么还没有更新？
-    - 修复并重... 抱歉，但是新版本{0}已经发布了！
-    - 错误！其实并没有错误，只是新版本 {0} 已经发布了！
-    - 哦买噶！{0}已经出了呀！你为什么还在用 {1}?
-    - '今日新闻：QuickShop已经更新至 {0} ！'
-    - 此版本已弃坑，你现在应该升级插件到新版本 {0} ！
-    - 更新 {0} 发布了。现在就下载拯救更新吧！
-    - 这里是升级指挥官，{0}版本刚刚发布了！
-    - 看我的Style——{0} 发布了, 你为什么还在用 {1} 呢？
-    - 啊啊啊啊啊啊啊啊啊啊！更新 {0} 来了！快升级！
-    - 你在想什么呢？{0}已经发布了！快更新！
-    - 刀客塔，QuickShop有一个新的更新 {0}！你应该考虑一下更新了~
-    - 在~这~里~哦~QuickShop有一个新的更新 {0}~
-    - 派蒙想要告诉你QuickShop有新的更新 {0}！
-  remote-disable-warning: '<red>这个版本的 QuickShop 被远程服务器标记为禁用，意味着这个版本可能存在严重的问题，可以在我们的 SpigotMC 插件页面获取详细信息。{0}. 此警告将继续出现，直到您切换到一个稳定的版本，但它不会影响您的服务器的性能。'
 purchase-out-of-stock: <red>这个商店已缺货，请联系商店所有者或助手补充库存
 nearby-shop-entry: '<green>- 详情:{0} 价格:<aqua>{1} <green>x:<aqua>{2} <green>y:<aqua>{3} <green>z:<aqua>{4} <green>距离: <aqua>{5} <green>个方块'
 chest-title: QuickShop商店

@@ -233,9 +233,6 @@ public class VaultUnlockedProvider implements EconomyProvider, Listener {
       return this.economy.balance(name, user.getUniqueId(), world, currency);
     } catch(final Exception e) {
 
-      if(QuickShop.getInstance().getSentryErrorReporter() != null) {
-        QuickShop.getInstance().getSentryErrorReporter().ignoreThrow();
-      }
 
       QuickShop.getInstance().logger().warn("Failure - getBalance - " + name + " - " + world + " - " + currency);
       QuickShop.getInstance().logger().warn(String.format(ERROR_MESSAGE, providerName()), e);

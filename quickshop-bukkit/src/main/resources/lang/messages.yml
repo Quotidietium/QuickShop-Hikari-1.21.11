@@ -324,49 +324,6 @@ warn-to-paste: |-
 how-many-sell-stack: <green>Enter in chat, how many bulk you wish to <light_purple>SELL</light_purple>.
   There are <yellow>{0}</yellow> items per bulk and you can sell <yellow>{1}</yellow>
   bulks. Enter <aqua>{2}</aqua> in chat to sell all.
-updatenotify:
-  buttontitle: '[Update Now]'
-  onekeybuttontitle: '[OneKey Update]'
-  label:
-    github: '[GitHub]'
-    ore: '[Ore]'
-    lts: '[LTS]'
-    nbtapi: '[+NBTAPI]'
-    qualityverifyed: '[Quality]'
-    master: '[Master]'
-    unstable: '[Unstable]'
-    paper: '[+Paper Optimized]'
-    stable: '[Stable]'
-    spigotmc: '[SpigotMC]'
-    papermc: '[PaperMC]'
-    bukkitdev: '[BukkitDev]'
-    polymart: '[Polymart]'
-    modrinth: '[Modrinth]'
-    basic: '[Basic]'
-  list:
-    - '{0} was released. You are still using {1}!'
-    - Boom! New update {0} incoming. Update!
-    - Surprise! {0} came out. You are on {1}
-    - Looks like you need to update. {0} was released!
-    - Ooops! {0} was now released. You are on {1}!
-    - I swear, QS has been updated to {0}. Why have you not updated yet?
-    - Fixing and re... Sorry, but {0} was released!
-    - Err! Nope. This is not an error. {0} has been released!
-    - OMG! {0} came out! Why are you still using {1}?
-    - 'Todays News: QuickShop has been updated to {0}!'
-    - Plugin k.i.a. You should update to {0}!
-    - Update {0} ignited. Save update!
-    - There is an update available Commander. {0} has just came out!
-    - Look my style---{0} updated. You're still using {1}
-    - Ahhhhhhh! New update {0}! Update!
-    - What do you think? {0} has been released! Update!
-    - Doctor, QuickShop has a new update {0}! You should update~
-    - Ko~ko~da~yo~ QuickShop has a new update {0} ~
-    - Paimon want told you the QuickShop have new update {0}!
-  remote-disable-warning: '<red>This version of QuickShop is marked as disabled by
-    the remote server, which means this version may have serious problems. Get details
-    from our SpigotMC page: {0}. This warning will continue to appear until you switch
-    to a stable version, but it will not affect your server''s performance.'
 purchase-out-of-stock: <red>This shop has run out of stock. Contact the shop owner
   or staff to get it refilled.
 nearby-shop-entry: '<green>- Info: {0} Price: <aqua>{1} <green>X: <aqua>{2} <green>Y:

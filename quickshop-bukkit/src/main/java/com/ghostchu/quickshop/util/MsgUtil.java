@@ -552,9 +552,7 @@ public class MsgUtil {
 
     if(content == null) {
       Log.debug("Content is null");
-      final Throwable throwable =
-              new Throwable("Known issue: Global Alert accepted null string, what the fuck");
-      PLUGIN.getSentryErrorReporter().sendError(throwable, "NullCheck");
+      Log.debug("Global Alert accepted null string, skipped.");
       return;
     }
     sendMessageToOps(content);
@@ -571,9 +569,7 @@ public class MsgUtil {
 
     if(content == null) {
       Log.debug("Content is null");
-      final Throwable throwable =
-              new Throwable("Known issue: Global Alert accepted null string, what the fuck");
-      PLUGIN.getSentryErrorReporter().sendError(throwable, "NullCheck");
+      Log.debug("Global Alert accepted null string, skipped.");
       return;
     }
     sendMessageToOps(content);

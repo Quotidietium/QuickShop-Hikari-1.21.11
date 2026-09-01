@@ -56,10 +56,6 @@ public class EconomyLoader {
       return setup();
     } catch(final Exception e) {
 
-      if(plugin.getSentryErrorReporter() != null) {
-        plugin.getSentryErrorReporter().ignoreThrow();
-      }
-
       plugin.logger().error("Something went wrong while trying to load the economy system!");
       plugin.logger().error("QuickShop was unable to hook into an economy system (Couldn't find Vault or VaultUnlocked)!");
       plugin.logger().error("QuickShop can NOT enable properly!");

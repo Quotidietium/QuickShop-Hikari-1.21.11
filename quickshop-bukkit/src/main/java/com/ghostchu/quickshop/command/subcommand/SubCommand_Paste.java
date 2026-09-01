@@ -6,7 +6,7 @@ import com.ghostchu.quickshop.api.command.CommandParser;
 import com.ghostchu.quickshop.util.MsgUtil;
 import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.logger.Log;
-import com.ghostchu.quickshop.util.metric.MetricDataType;
+import com.ghostchu.quickshop.util.privacy.MetricDataType;
 import com.ghostchu.quickshop.util.paste.Paste;
 import com.ghostchu.quickshop.util.paste.PasteGenerator;
 import net.kyori.adventure.text.Component;
@@ -79,9 +79,6 @@ public class SubCommand_Paste implements CommandHandler<CommandSender> {
       plugin.text().of(sender, "paste-created-local", file.getAbsolutePath()).send();
       return true;
     } catch(final IOException e) {
-      if(plugin.getSentryErrorReporter() != null) {
-        plugin.getSentryErrorReporter().ignoreThrow();
-      }
       plugin.logger().warn("Failed to save paste locally! The content will be send to the console", e);
       plugin.text().of("paste-created-local-failed").send();
       return false;

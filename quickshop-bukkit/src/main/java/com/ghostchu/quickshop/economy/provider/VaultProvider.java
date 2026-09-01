@@ -220,9 +220,6 @@ public class VaultProvider implements EconomyProvider, Listener {
       return BigDecimal.valueOf(Objects.requireNonNull(this.economy).getBalance(Bukkit.getOfflinePlayer(user.getUniqueId()), world));
 
     } catch(final Exception t) {
-      if(QuickShop.getInstance().getSentryErrorReporter() != null) {
-        QuickShop.getInstance().getSentryErrorReporter().ignoreThrow();
-      }
       QuickShop.getInstance().logger().warn("Failure - getBalance - " + user + " - " + world + " - " + currency);
       QuickShop.getInstance().logger().warn(String.format(ERROR_MESSAGE, providerName()), t);
     }
@@ -254,9 +251,6 @@ public class VaultProvider implements EconomyProvider, Listener {
       Log.transaction(Level.WARNING, "Deposit player " + user.getUniqueId() + " failed, Vault response: " + response.errorMessage);
       return false;
     } catch(final Exception t) {
-      if(QuickShop.getInstance().getSentryErrorReporter() != null) {
-        QuickShop.getInstance().getSentryErrorReporter().ignoreThrow();
-      }
       if(user.getUsername() == null) {
         QuickShop.getInstance().logger().warn("Deposit failed and player name is NULL, Player uuid: " + user.getUniqueId() + ". Provider (" + providerName() + ")");
         return false;
@@ -299,9 +293,6 @@ public class VaultProvider implements EconomyProvider, Listener {
       return false;
     } catch(final Exception t) {
 
-      if(QuickShop.getInstance().getSentryErrorReporter() != null) {
-        QuickShop.getInstance().getSentryErrorReporter().ignoreThrow();
-      }
       if(user.getUsername() == null) {
         QuickShop.getInstance().logger().warn("Withdraw failed and player name is NULL, Player uuid: {}", user.getUniqueId() + ", Provider: " + providerName());
         return false;
