@@ -132,17 +132,16 @@
             <optional>true</optional>
         </dependency>
         <dependency>
-            <groupId>net.milkbowl.vault</groupId>
-            <artifactId>VaultUnlockedAPI</artifactId>
-            <version>${depend.vaultunlocked}</version>
+            <groupId>com.github.MilkBowl</groupId>
+            <artifactId>VaultAPI</artifactId>
+            <version>1.7</version>
             <scope>provided</scope>
             <exclusions>
                 <exclusion>
-                    <artifactId>*</artifactId>
                     <groupId>*</groupId>
+                    <artifactId>*</artifactId>
                 </exclusion>
             </exclusions>
-            <optional>true</optional>
         </dependency>
         <!--JsonConfiguration Dependency End-->
         <!-- https://mvnrepository.com/artifact/org.apache.clerezza.ext/org.json.simple -->

@@ -217,13 +217,6 @@ force-bukkit-chat-handler: false
 # true  = All known offline players (may lag on large servers)
 include-offlineplayer-list: false
 
-# Economy provider selection.
-# 0 = Vault/VaultUnlocked
-# VaultUnlocked supports multi-currency if your economy plugin supports it.
-#
-# Advanced option—ask for support before changing if unsure.
-economy-type: 0
-
 # Format money values using a decimal pattern.
 use-decimal-format: false
 
