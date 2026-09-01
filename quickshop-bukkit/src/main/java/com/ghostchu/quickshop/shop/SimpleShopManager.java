@@ -162,7 +162,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     super(plugin);
     Util.ensureThread(false);
     plugin.getReloadManager().register(this);
-    this.interactiveManager = new InteractiveManager(plugin);
+    this.interactiveManager = new InteractiveManager();
     this.shopLayoutProvider = new SimpleShopLayoutProvider(plugin);
     this.taxManager = new QuickShopTaxManager();
     init();
@@ -1608,12 +1608,6 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
   public static class InteractiveManager implements ShopManager.InteractiveManager {
 
     private final Map<UUID, Info> actions = Maps.newConcurrentMap();
-    private final QuickShop plugin;
-
-    public InteractiveManager(final QuickShop plugin) {
-
-      this.plugin = plugin;
-    }
 
     @Override
     public int size() {
@@ -1631,7 +1625,6 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     @Override
     public Info put(final UUID uuid, final Info info) {
 
-      sendRequest(uuid);
       return this.actions.put(uuid, info);
     }
 
@@ -1639,21 +1632,12 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     @Override
     public Info remove(final UUID uuid) {
 
-      sendCancel(uuid);
       return this.actions.remove(uuid);
     }
 
     @Override
     public void reset() {
 
-      this.actions.keySet().forEach(uuid->{
-        final Player player = Bukkit.getPlayer(uuid);
-        if(player != null) {
-          if(plugin.getBungeeListener() != null) {
-            plugin.getBungeeListener().notifyForCancel(player);
-          }
-        }
-      });
       this.actions.clear();
     }
 
@@ -1678,28 +1662,6 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     public boolean containsValue(final Info info) {
 
       return this.actions.containsValue(info);
-    }
-
-    private void sendCancel(final UUID uuid) {
-
-      if(plugin.getBungeeListener() != null) {
-        final Player p = Bukkit.getPlayer(uuid);
-        if(p != null) {
-          Log.debug("Cancel chat forward for player " + p.getName());
-          plugin.getBungeeListener().notifyForCancel(p);
-        }
-      }
-    }
-
-    private void sendRequest(final UUID uuid) {
-
-      if(plugin.getBungeeListener() != null) {
-        final Player p = Bukkit.getPlayer(uuid);
-        if(p != null) {
-          Log.debug("Request chat forward for player " + p.getName());
-          plugin.getBungeeListener().notifyForForward(p);
-        }
-      }
     }
   }
 

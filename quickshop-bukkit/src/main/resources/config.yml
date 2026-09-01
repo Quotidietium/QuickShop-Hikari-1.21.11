@@ -182,10 +182,6 @@ unlimited-shop-owner-change-account: quickshop
 # Respect item flags (for example, HIDE_ENCHANTS to hide enchantments in tooltips).
 respect-item-flag: true
 
-# Send cross-server messages to the player (proxy/network feature).
-# May cause disconnects on some networks with mixed Minecraft versions.
-bungee-cross-server-msg: false
-
 # Proxy / Network Settings
 proxy:
   # Force BungeeCord mode.

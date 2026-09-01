@@ -406,7 +406,6 @@ cleanghost-deleting: <yellow>Found a corrupted shop <aqua>{0}</aqua> because {1}
 cleanghost-deleted: <green>Total <yellow>{0}</yellow> shops have been deleted.
 shop-purchase-cancelled: <red>Shop purchase cancelled.
 bypassing-lock: <red>Bypassing a QuickShop lock!
-bungee-cross-server-msg: '<yellow>QuickShop CSM: <green>{0}'
 saved-to-path: The Backup was saved to {0}.
 shop-now-freezed: <green>You have frozen the shop. Nobody can trade with this shop
   now!

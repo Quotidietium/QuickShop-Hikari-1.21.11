@@ -343,7 +343,6 @@ cleanghost-deleting: <yellow>发现一个损坏的商店 <aqua>{0}</aqua> 因为
 cleanghost-deleted: <green>总计 <yellow>{0}</yellow> 家商店已被删除。
 shop-purchase-cancelled: <red>您取消了交易操作。
 bypassing-lock: <red>你绕过了QuickShop的锁！
-bungee-cross-server-msg: '<yellow>QuickShop跨服信息: <green>{0}'
 saved-to-path: 备份文件已保存到 {0}。
 shop-now-freezed: <green>你已经冻结了商店。现在没有人可以与这家商店交易！
 price-is-now: <green>商店的新价格是 <yellow>{0}

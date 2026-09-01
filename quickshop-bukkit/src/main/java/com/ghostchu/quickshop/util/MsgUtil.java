@@ -11,9 +11,6 @@ import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.common.util.RomanNumber;
 import com.ghostchu.quickshop.util.logger.Log;
 import com.ghostchu.quickshop.util.logging.container.PluginGlobalAlertLog;
-import com.google.common.collect.Iterables;
-import com.google.common.io.ByteArrayDataOutput;
-import com.google.common.io.ByteStreams;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextReplacementConfig;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -463,35 +460,11 @@ public class MsgUtil {
                   return null;
                 });
       }
-      try {
-        if(p.getName() != null && PLUGIN.getConfig().getBoolean("bungee-cross-server-msg", true)) {
-          PLUGIN.getDatabaseHelper().getPlayerLocale(uuid).whenCompleteAsync((locale, err)->{
-            if(locale != null) {
-              sendBungeeMessage(p.getName(), shopTransactionMessage, locale);
-            }
-          });
-        }
-      } catch(final Exception e) {
-        Log.debug("Could not send shop transaction message to player " + p.getName() + " via BungeeCord: " + e.getMessage());
-      }
     } else {
       final Player player = p.getPlayer();
       if(player != null) {
         PLUGIN.platform().sendMessage(player, shopTransactionMessage);
       }
-    }
-  }
-
-  public static void sendBungeeMessage(@NotNull final String playerName, @NotNull final Component message, @NotNull final String locale) {
-
-    final Component csmMessage = PLUGIN.text().of("bungee-cross-server-msg", message).forLocale(locale);
-    final ByteArrayDataOutput out = ByteStreams.newDataOutput();
-    out.writeUTF("MessageRaw");
-    out.writeUTF(playerName);
-    out.writeUTF(GsonComponentSerializer.gson().serialize(csmMessage));
-    final Player player = Iterables.getFirst(Bukkit.getOnlinePlayers(), null);
-    if(player != null) {
-      player.sendPluginMessage(PLUGIN.getJavaPlugin(), "BungeeCord", out.toByteArray());
     }
   }
 

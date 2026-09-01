@@ -43,7 +43,6 @@ import com.ghostchu.quickshop.economy.QSEconomyManager;
 import com.ghostchu.quickshop.hook.FWorldEditHook;
 import com.ghostchu.quickshop.hook.WorldEditHook;
 import com.ghostchu.quickshop.listener.BlockListener;
-import com.ghostchu.quickshop.listener.BungeeListener;
 import com.ghostchu.quickshop.listener.ChatListener;
 import com.ghostchu.quickshop.listener.ChunkListener;
 import com.ghostchu.quickshop.listener.CustomInventoryListener;
@@ -347,8 +346,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   private ShopDataSaveWatcher shopSaveWatcher;
   @Getter
   private SignHooker signHooker;
-  @Getter
-  private BungeeListener bungeeListener;
   private RankLimiter rankLimiter;
   @Nullable
   @Getter
@@ -930,7 +927,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     folia.getScheduler().runLater(economyLoader::load, 1);
     registerTasks();
     Log.debug("DisplayItem selected: " + AbstractDisplayItem.getNowUsing().name());
-    registerCommunicationChannels();
     new QSConfigurationReloadEvent(javaPlugin).callEvent();
     load3rdParty();
     try(final PerfMonitor ignored = new PerfMonitor("Self Test")) {
@@ -1104,10 +1100,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     new PlayerLockClickListener(this).register();
     new MetricListener(this).register();
     new InternalListener(this).register();
-    if(Util.checkIfBungee()) {
-      this.bungeeListener = new BungeeListener(this);
-      this.bungeeListener.register();
-    }
   }
 
   private void registerDisplayItem() {
@@ -1202,11 +1194,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     if(getConfig().getBoolean("purge.at-server-startup")) {
       shopPurger.purge();
     }
-  }
-
-  private void registerCommunicationChannels() {
-
-    Bukkit.getMessenger().registerOutgoingPluginChannel(javaPlugin, "BungeeCord");
   }
 
   /**
@@ -1330,11 +1317,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     if(shopManager != null) {
       logger.info("Unloading all loaded shops...");
       shopManager.getLoadedShops().forEach(shop->shopManager.unloadShop(shop));
-    }
-    if(this.bungeeListener != null) {
-      logger.info("Disabling the BungeeChat messenger listener.");
-      Bukkit.getOnlinePlayers().forEach(player->this.bungeeListener.notifyForCancel(player));
-      this.bungeeListener.unregister();
     }
     if(metricBatcher != null) {
       logger.info("Flushing pending metric records...");
