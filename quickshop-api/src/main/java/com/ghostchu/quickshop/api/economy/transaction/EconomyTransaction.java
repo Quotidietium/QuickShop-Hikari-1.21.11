@@ -36,19 +36,6 @@ public interface EconomyTransaction {
   /**
    * Retrieves the currency associated with this transaction.
    *
-   * @return a String value representing the currency of the transaction, or null if no currency is
-   * set
-   */
-  @Nullable
-  String currency();
-
-  /**
-   * Sets the currency for the transaction.
-   *
-   * @param currency the currency to be set for the transaction
-   */
-  void currency(final @Nullable String currency);
-
   /**
    * Retrieves the amount associated with this transaction.
    *

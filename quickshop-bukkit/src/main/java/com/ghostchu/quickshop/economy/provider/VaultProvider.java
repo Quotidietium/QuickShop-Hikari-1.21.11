@@ -146,43 +146,15 @@ public class VaultProvider implements EconomyProvider, Listener {
   }
 
   /**
-   * Determines if the EconomyProvider supports multiple currencies.
+   * Formats the given amount in the specified world.
    *
-   * @return true if the EconomyProvider supports multiple currencies, false otherwise
-   */
-  @Override
-  public boolean multiCurrency() {
-
-    return false;
-  }
-
-  /**
-   * Check if the EconomyProvider supports the given currency in the given world.
-   *
-   * @param world    the world to check for currency support
-   * @param currency the currency to check for support (null for default currency)
-   *
-   * @return true if the EconomyProvider supports the given currency in the given world, false
-   * otherwise
-   */
-  @Override
-  public boolean supportsCurrency(final @NotNull String world, final @Nullable String currency) {
-
-    return false;
-  }
-
-  /**
-   * Formats the given amount in the specified world and currency.
-   *
-   * @param amount   the amount to format
-   * @param world    the world in which the balance exists
-   * @param currency the currency in which the balance should be formatted (nullable for default
-   *                 currency)
+   * @param amount the amount to format
+   * @param world  the world in which the balance exists
    *
    * @return the formatted amount as a String
    */
   @Override
-  public @NotNull String format(final @NotNull BigDecimal amount, final @NotNull String world, final @Nullable String currency) {
+  public @NotNull String format(final @NotNull BigDecimal amount, final @NotNull String world) {
 
     if(!valid()) {
       return "Error";
@@ -190,27 +162,25 @@ public class VaultProvider implements EconomyProvider, Listener {
     try {
       final String formatedBalance = Objects.requireNonNull(this.economy).format(amount.doubleValue());
       if(formatedBalance == null) {
-        return this.formatter.getInternalFormat(amount.doubleValue(), null);
+        return this.formatter.getInternalFormat(amount.doubleValue());
       }
       return formatedBalance;
     } catch(final Exception e) {
 
-      return this.formatter.getInternalFormat(amount.doubleValue(), null);
+      return this.formatter.getInternalFormat(amount.doubleValue());
     }
   }
 
   /**
-   * Calculate the balance of a specific user in the given world based on the specified currency.
+   * Calculate the balance of a specific user in the given world.
    *
-   * @param user     the user for which to calculate the balance
-   * @param world    the world in which the user's balance exists
-   * @param currency the currency in which the balance should be calculated (null for default
-   *                 currency)
+   * @param user  the user for which to calculate the balance
+   * @param world the world in which the user's balance exists
    *
-   * @return the balance of the user in the specified currency
+   * @return the balance of the user
    */
   @Override
-  public @NotNull BigDecimal balance(final @NotNull QUser user, final @NotNull String world, final @Nullable String currency) {
+  public @NotNull BigDecimal balance(final @NotNull QUser user, final @NotNull String world) {
 
     if(!valid()) {
       return BigDecimal.ZERO;
@@ -220,24 +190,23 @@ public class VaultProvider implements EconomyProvider, Listener {
       return BigDecimal.valueOf(Objects.requireNonNull(this.economy).getBalance(Bukkit.getOfflinePlayer(user.getUniqueId()), world));
 
     } catch(final Exception t) {
-      QuickShop.getInstance().logger().warn("Failure - getBalance - " + user + " - " + world + " - " + currency);
+      QuickShop.getInstance().logger().warn("Failure - getBalance - " + user + " - " + world);
       QuickShop.getInstance().logger().warn(String.format(ERROR_MESSAGE, providerName()), t);
     }
     return BigDecimal.ZERO;
   }
 
   /**
-   * Deposits the specified amount of currency into the user's account in the specified world.
+   * Deposits the specified amount into the user's account in the specified world.
    *
-   * @param user     the user whose account will receive the deposit
-   * @param world    the world in which the user's account exists
-   * @param currency the currency to be deposited (can be null if default currency is used)
-   * @param amount   the amount to be deposited into the user's account
+   * @param user   the user whose account will receive the deposit
+   * @param world  the world in which the user's account exists
+   * @param amount the amount to be deposited into the user's account
    *
    * @return true if the deposit was successful, false otherwise
    */
   @Override
-  public boolean deposit(final @NotNull QUser user, final @NotNull String world, final @Nullable String currency, final @NotNull BigDecimal amount) {
+  public boolean deposit(final @NotNull QUser user, final @NotNull String world, final @NotNull BigDecimal amount) {
 
     if(!valid()) {
       return false;
@@ -255,32 +224,30 @@ public class VaultProvider implements EconomyProvider, Listener {
         QuickShop.getInstance().logger().warn("Deposit failed and player name is NULL, Player uuid: " + user.getUniqueId() + ". Provider (" + providerName() + ")");
         return false;
       }
-      QuickShop.getInstance().logger().warn("Failure - deposit - " + user + " - " + amount + " - " + world + " - " + currency);
+      QuickShop.getInstance().logger().warn("Failure - deposit - " + user + " - " + amount + " - " + world);
       QuickShop.getInstance().logger().warn(String.format(ERROR_MESSAGE, providerName()), t);
       return false;
     }
   }
 
   /**
-   * Withdraws the specified amount of currency from the user's account in the given world.
+   * Withdraws the specified amount from the user's account in the given world.
    *
-   * @param user     the user from whose account the amount will be withdrawn
-   * @param world    the world in which the user's account exists
-   * @param currency the currency in which the amount will be withdrawn (can be null if default
-   *                 currency is used)
+   * @param user   the user from whose account the amount will be withdrawn
+   * @param world  the world in which the user's account exists
    * @param amount   the amount to be withdrawn from the user's account
    *
    * @return true if the withdrawal was successful, false otherwise
    */
   @Override
-  public boolean withdraw(final @NotNull QUser user, final @NotNull String world, final @Nullable String currency, final @NotNull BigDecimal amount) {
+  public boolean withdraw(final @NotNull QUser user, final @NotNull String world, final @NotNull BigDecimal amount) {
 
     if(!valid()) {
       return false;
     }
     try {
 
-      if(balance(user, world, currency).compareTo(amount) < 0) {
+      if(balance(user, world).compareTo(amount) < 0) {
         return false;
       }
 
@@ -297,7 +264,7 @@ public class VaultProvider implements EconomyProvider, Listener {
         QuickShop.getInstance().logger().warn("Withdraw failed and player name is NULL, Player uuid: {}", user.getUniqueId() + ", Provider: " + providerName());
         return false;
       }
-      QuickShop.getInstance().logger().warn("Failure - withdraw - " + user + " - " + amount + " - " + world + " - " + currency);
+      QuickShop.getInstance().logger().warn("Failure - withdraw - " + user + " - " + amount + " - " + world);
       QuickShop.getInstance().logger().warn(String.format(ERROR_MESSAGE, providerName()), t);
       return false;
     }

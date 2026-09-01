@@ -221,7 +221,7 @@ public final class DbBench {
             source.getItem(), source.getOwner(), source.isUnlimited(),
             com.ghostchu.quickshop.shop.SimpleShopManager.SELLING_TYPE,
             com.ghostchu.quickshop.shop.SimpleShopManager.ACTIVE_STATE,
-            new org.bukkit.configuration.file.YamlConfiguration(), null,
+            new org.bukkit.configuration.file.YamlConfiguration(),
             false, null, "Bukkit",
             "sym-fresh-" + salt + "-" + System.identityHashCode(source), source.getShopName(),
             new java.util.HashMap<>(source.getPermissionAudiences()), source.getShopBenefit());

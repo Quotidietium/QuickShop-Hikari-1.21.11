@@ -36,6 +36,7 @@ import java.util.function.Consumer;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -346,7 +347,7 @@ public final class TradeBench {
     final var economyManager = Env.hotMock(com.ghostchu.quickshop.api.economy.EconomyManager.class);
     final var ecoProvider = Env.hotMock(com.ghostchu.quickshop.api.economy.EconomyProvider.class);
     lenient().when(economyManager.provider()).thenReturn(ecoProvider);
-    lenient().when(ecoProvider.balance(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any()))
+    lenient().when(ecoProvider.balance(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString()))
             .thenReturn(java.math.BigDecimal.valueOf(1_000_000));
     lenient().when(plugin.getEconomyManager()).thenReturn(economyManager);
   }
@@ -383,7 +384,7 @@ public final class TradeBench {
     injectField(manager, "taxManager", taxManager);
 
     final var formatter = Env.hotMock(com.ghostchu.quickshop.util.economyformatter.EconomyFormatter.class);
-    lenient().when(formatter.format(any(Double.class), any(com.ghostchu.quickshop.api.shop.Shop.class)))
+    lenient().when(formatter.format(anyDouble(), any(org.bukkit.World.class)))
             .thenReturn("$0");
     injectField(manager, "formatter", formatter);
     injectField(manager, "showTax", false);
@@ -400,11 +401,11 @@ public final class TradeBench {
     final var ecoProvider = Env.hotMock(com.ghostchu.quickshop.api.economy.EconomyProvider.class);
     lenient().when(economyManager.provider()).thenReturn(ecoProvider);
     lenient().when(ecoProvider.valid()).thenReturn(true);
-    lenient().when(ecoProvider.withdraw(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any(), any(java.math.BigDecimal.class)))
+    lenient().when(ecoProvider.withdraw(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any(java.math.BigDecimal.class)))
             .thenReturn(true);
-    lenient().when(ecoProvider.deposit(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any(), any(java.math.BigDecimal.class)))
+    lenient().when(ecoProvider.deposit(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any(java.math.BigDecimal.class)))
             .thenReturn(true);
-    lenient().when(ecoProvider.balance(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString(), any()))
+    lenient().when(ecoProvider.balance(any(com.ghostchu.quickshop.api.obj.QUser.class), anyString()))
             .thenReturn(java.math.BigDecimal.valueOf(1_000_000));
     lenient().when(plugin.getEconomyManager()).thenReturn(economyManager);
 
@@ -508,7 +509,7 @@ public final class TradeBench {
     return new ContainerShop(
             plugin, -1L, location, 10.0d, item, owner, false,
             type, SimpleShopManager.ACTIVE_STATE,
-            new YamlConfiguration(), null, false, null,
+            new YamlConfiguration(), false, null,
             "QuickShop-Hikari", "2;1000;64;1000;world", null,
             playerGroup, benefit);
   }

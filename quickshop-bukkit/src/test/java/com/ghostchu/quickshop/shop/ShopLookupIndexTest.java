@@ -109,7 +109,7 @@ class ShopLookupIndexTest {
     final ContainerShop shop = new ContainerShop(
             plugin, id, new org.bukkit.Location(world, x, 64, z), 10.0d, item, owner, false,
             SimpleShopManager.SELLING_TYPE, SimpleShopManager.ACTIVE_STATE,
-            new org.bukkit.configuration.file.YamlConfiguration(), null, false, null,
+            new org.bukkit.configuration.file.YamlConfiguration(), false, null,
             "Bukkit", "sym-" + ownerName + "-" + x + "-" + z, null,
             new HashMap<>(), benefit);
     return shop;
@@ -230,7 +230,7 @@ class ShopLookupIndexTest {
     return new ContainerShop(
             plugin, -1L, new org.bukkit.Location(world, x, 64, z), 10.0d, item, owner, false,
             SimpleShopManager.SELLING_TYPE, SimpleShopManager.ACTIVE_STATE,
-            new org.bukkit.configuration.file.YamlConfiguration(), null, false, null,
+            new org.bukkit.configuration.file.YamlConfiguration(), false, null,
             "Bukkit", "sym-" + ownerName + "-" + x + "-" + z, null,
             new HashMap<>(), benefit);
   }

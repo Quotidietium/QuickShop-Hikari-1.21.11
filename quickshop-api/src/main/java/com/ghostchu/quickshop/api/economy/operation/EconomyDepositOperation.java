@@ -35,7 +35,6 @@ public class EconomyDepositOperation implements Operation {
   private final QUser account;
   private final BigDecimal amount;
   private final String world;
-  private final String currency;
   private boolean commit = false;
   private boolean rollback = false;
 
@@ -44,15 +43,13 @@ public class EconomyDepositOperation implements Operation {
    *
    * @param account  the QUser account to deposit funds into
    * @param amount   the amount of funds to deposit
-   * @param world    the world where the deposit operation is taking place
-   * @param currency the currency to use for the deposit
+   * @param world the world where the deposit operation is taking place
    */
-  public EconomyDepositOperation(final QUser account, final BigDecimal amount, final String world, final String currency) {
+  public EconomyDepositOperation(final QUser account, final BigDecimal amount, final String world) {
 
     this.account = account;
     this.amount = amount;
     this.world = world;
-    this.currency = currency;
   }
 
   /**
@@ -68,7 +65,7 @@ public class EconomyDepositOperation implements Operation {
       return false;
     }
 
-    final boolean result = provider.deposit(account, world, currency, amount);
+    final boolean result = provider.deposit(account, world, amount);
     if(result) {
       this.commit = true;
     }
@@ -110,7 +107,7 @@ public class EconomyDepositOperation implements Operation {
       return false;
     }
 
-    final boolean result = provider.withdraw(account, world, currency, amount);
+    final boolean result = provider.withdraw(account, world, amount);
     if(result) {
       rollback = true;
     }

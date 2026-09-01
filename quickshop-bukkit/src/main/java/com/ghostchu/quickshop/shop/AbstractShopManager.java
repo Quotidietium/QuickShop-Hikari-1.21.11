@@ -194,9 +194,9 @@ public abstract class AbstractShopManager implements ShopManager {
    * @return formatted price
    */
   @Override
-  public @NotNull String format(final double d, @NotNull final World world, @Nullable final String currency) {
+  public @NotNull String format(final double d, @NotNull final World world) {
 
-    return formatter.format(d, world, currency);
+    return formatter.format(d, world);
   }
 
   /**
@@ -209,7 +209,7 @@ public abstract class AbstractShopManager implements ShopManager {
   @Override
   public @NotNull String format(final double d, @NotNull final Shop shop) {
 
-    return formatter.format(d, shop);
+    return formatter.format(d, shop.bukkitLocation().getWorld());
   }
 
   @NotNull

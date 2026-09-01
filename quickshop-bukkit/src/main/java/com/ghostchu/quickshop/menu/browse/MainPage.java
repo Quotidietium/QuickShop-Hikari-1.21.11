@@ -179,7 +179,7 @@ public class MainPage {
             ownerProfile.setUuid(owner.getUniqueId());
           }
 
-          final String priceFormatted = shop.format(shop.bukkitLocation().getWorld().getName(), shop.getCurrency());
+          final String priceFormatted = shop.format(shop.bukkitLocation().getWorld().getName());
 
           final AbstractItemStack<ItemStack> stack = new BukkitItemStack().of(shop.getItem().getType().key().asString(), shop.getShopStackingAmount())
                   .lore(getConfigLore(id, shopItemConfig, shop.getOwner().getDisplay(), location,

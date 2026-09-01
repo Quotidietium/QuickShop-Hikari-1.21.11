@@ -82,34 +82,22 @@ class TradeLoadSmokeTest {
     }
 
     @Override
-    public String format(final BigDecimal amount, final String world, final String currency) {
+    public String format(final BigDecimal amount, final String world) {
 
       return amount.toPlainString();
     }
 
     @Override
-    public BigDecimal balance(final QUser user, final String world, final String currency) {
+    public BigDecimal balance(final QUser user, final String world) {
 
       return BigDecimal.valueOf(account(user).get());
     }
 
     @Override
-    public boolean deposit(final QUser user, final String world, final String currency, final BigDecimal amount) {
+    public boolean deposit(final QUser user, final String world, final BigDecimal amount) {
 
       account(user).addAndGet(amount.longValueExact());
       return true;
-    }
-
-    @Override
-    public boolean supportsCurrency(final String world, final String currency) {
-
-      return true;
-    }
-
-    @Override
-    public boolean multiCurrency() {
-
-      return false;
     }
 
     @Override
@@ -119,7 +107,7 @@ class TradeLoadSmokeTest {
     }
 
     @Override
-    public boolean withdraw(final QUser user, final String world, final String currency, final BigDecimal amount) {
+    public boolean withdraw(final QUser user, final String world, final BigDecimal amount) {
 
       final AtomicLong acc = account(user);
       final long value = amount.longValueExact();

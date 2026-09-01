@@ -14,7 +14,6 @@ import com.ghostchu.quickshop.api.event.management.ShopDatabaseEvent;
 import com.ghostchu.quickshop.api.event.management.ShopLoadEvent;
 import com.ghostchu.quickshop.api.event.management.ShopPermissionCheckEvent;
 import com.ghostchu.quickshop.api.event.management.ShopUnloadEvent;
-import com.ghostchu.quickshop.api.event.settings.type.ShopCurrencyEvent;
 import com.ghostchu.quickshop.api.event.settings.type.ShopDisplayEvent;
 import com.ghostchu.quickshop.api.event.settings.type.ShopItemEvent;
 import com.ghostchu.quickshop.api.event.settings.type.ShopOwnerNameEvent;
@@ -140,7 +139,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @EqualsAndHashCode.Exclude
   private volatile boolean dirty;
   @Nullable
-  private volatile String currency;
   private volatile boolean disableDisplay;
   private volatile QUser taxAccount;
   @NotNull
@@ -182,7 +180,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
           @NotNull final IShopType type,
           @NotNull final ShopState state,
           @Nullable final YamlConfiguration extra,
-          @Nullable final String currency,
           final boolean disableDisplay,
           @Nullable final QUser taxAccount,
           @NotNull final String inventoryWrapperProvider,
@@ -226,7 +223,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     this.shopState = state;
     this.unlimited = unlimited;
     this.extra = extra;
-    this.currency = currency;
     this.disableDisplay = disableDisplay;
     this.taxAccount = taxAccount;
     this.dirty = false;
@@ -250,13 +246,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     }
 
     final ConfigurationSection section = getExtra(plugin.getJavaPlugin());
-    if(section.getString("currency") != null) {
-      this.currency = section.getString("currency");
-      section.set("currency", null);
-      Log.debug("Shop " + this + " currency data upgrade successful.");
-      setDirty();
-    }
-
   }
 
   /**
@@ -381,35 +370,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       sign.getPersistentDataContainer().set(Shop.SHOP_NAMESPACED_KEY, ShopSignPersistentDataType.INSTANCE, saveToShopSignStorage());
       sign.update();
     }
-  }
-
-  /**
-   * Gets the currency that shop use
-   *
-   * @return The currency name
-   */
-  @Override
-  public @Nullable String getCurrency() {
-
-    final ShopCurrencyEvent event = ShopCurrencyEvent.RETRIEVE(this, this.currency);
-    event.callEvent();
-
-    return event.updated();
-  }
-
-  /**
-   * Sets the currency that shop use
-   *
-   * @param currency The currency name; null to use default currency
-   */
-  @Override
-  public void setCurrency(@Nullable final String currency) {
-
-    if(Objects.equals(this.currency, currency)) {
-      return;
-    }
-    this.currency = currency;
-    setDirty();
   }
 
   /**
@@ -691,35 +651,31 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   }
 
   /**
-   * Formats a string representation based on the provided world and optional currency.
+   * Formats a string representation based on the provided world.
    *
-   * @param world    the name of the world for which the string is being formatted; must not be
-   *                 null
-   * @param currency the optional currency to include in the formatted string; can be null
+   * @param world the name of the world for which the string is being formatted; must not be null
    *
-   * @return a formatted string combining the world and currency information; never null
+   * @return a formatted string combining the world information; never null
    */
   @Override
-  public @NotNull String format(final @NotNull String world, final @Nullable String currency) {
+  public @NotNull String format(final @NotNull String world) {
 
-    return plugin.getEconomyManager().provider().format(BigDecimal.valueOf(price()), world, currency);
+    return plugin.getEconomyManager().provider().format(BigDecimal.valueOf(price()), world);
   }
 
   /**
-   * Formats a string representation based on the provided world, optional currency, and quantity.
+   * Formats a string representation based on the provided world and quantity.
    *
-   * @param world    the name of the world for which the string is being formatted; must not be
-   *                 null
-   * @param currency the optional currency to include in the formatted string; can be null
+   * @param world    the name of the world for which the string is being formatted; must not be null
    * @param quantity the quantity to include in the formatted string; represents a non-negative
    *                 integer
    *
-   * @return a formatted string combining the world, currency, and quantity information; never null
+   * @return a formatted string combining the world and quantity information; never null
    */
   @Override
-  public @NotNull String format(final @NotNull String world, final @Nullable String currency, final int quantity) {
+  public @NotNull String format(final @NotNull String world, final int quantity) {
 
-    return plugin.getEconomyManager().provider().format(BigDecimal.valueOf(price() * quantity), world, currency);
+    return plugin.getEconomyManager().provider().format(BigDecimal.valueOf(price() * quantity), world);
   }
 
   /**
@@ -758,7 +714,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       return 0;
     }
 
-    final BigDecimal balance = eco.balance(owner, location.getWorld().getName(), currency);
+    final BigDecimal balance = eco.balance(owner, location.getWorld().getName());
 
     if(balance == null || balance.compareTo(ZERO) <= 0) {
 
@@ -800,7 +756,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       return false;
     }
 
-    final BigDecimal balance = eco.balance(owner, location.getWorld().getName(), currency);
+    final BigDecimal balance = eco.balance(owner, location.getWorld().getName());
     if(balance == null || balance.compareTo(ZERO) <= 0) {
       return false;
     }
@@ -1786,7 +1742,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
                                new BlockPos(this.bukkitLocation()), this.owner, this.price,
                                QuickShop.getInstance().platform().encodeStack(this.originalItem), isUnlimited()? 1 : 0
             , shopType().id(),
-                               saveExtraToYaml(), this.currency, this.disableDisplay,
+                               saveExtraToYaml(), this.disableDisplay,
                                this.taxAccount, inventoryWrapperProvider,
                                saveToSymbolLink(), this.playerGroup);
   }
@@ -2068,7 +2024,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
             getShopName(),
             shopType().id(),
             shopState().identifier(),
-            getCurrency(),
+            null,
             getPrice(),
             isUnlimited(),
             isDisableDisplay(),
@@ -2167,7 +2123,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
            ", createBackup=" + createBackup +
            ", inventoryPreview=" + inventoryPreview +
            ", dirty=" + dirty +
-           ", currency='" + currency + '\'' +
            ", disableDisplay=" + disableDisplay +
            ", taxAccount=" + taxAccount +
            ", inventoryWrapperProvider='" + inventoryWrapperProvider + '\'' +

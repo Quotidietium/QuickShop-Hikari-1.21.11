@@ -117,7 +117,7 @@ class MetricBatchTest {
       final ContainerShop shop = new ContainerShop(
               plugin, -1L, new Location(world, 2000 + i, 64, 2000 + i), 10.0d, itemMock(), owner, false,
               SimpleShopManager.SELLING_TYPE, SimpleShopManager.ACTIVE_STATE,
-              new YamlConfiguration(), null, false, null,
+              new YamlConfiguration(), false, null,
               "Bukkit", "metric-sym-" + i, null, new HashMap<>(), benefit);
       final long dataId = helper.createData(shop).join();
       final long shopId = helper.createShop(dataId).join();

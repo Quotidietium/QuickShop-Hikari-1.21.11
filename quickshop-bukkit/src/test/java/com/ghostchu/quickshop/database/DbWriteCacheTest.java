@@ -148,7 +148,7 @@ class DbWriteCacheTest {
     return new ContainerShop(
             plugin, -1L, location, price, item, owner, false,
             SimpleShopManager.SELLING_TYPE, SimpleShopManager.ACTIVE_STATE,
-            new YamlConfiguration(), null, false, null,
+            new YamlConfiguration(), false, null,
             "Bukkit", symbolLink, null, new HashMap<>(), benefit);
   }
 

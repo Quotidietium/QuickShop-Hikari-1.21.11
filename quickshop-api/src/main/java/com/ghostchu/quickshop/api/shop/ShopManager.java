@@ -253,14 +253,13 @@ public interface ShopManager {
   /**
    * Format the price use formatter
    *
-   * @param d        price
-   * @param currency currency
-   * @param world    shop world
+   * @param d     price
+   * @param world shop world
    *
    * @return formated price
    */
   @NotNull
-  String format(double d, @NotNull World world, @Nullable String currency);
+  String format(double d, @NotNull World world);
 
   /**
    * Format the price use formatter

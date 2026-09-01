@@ -377,6 +377,6 @@ public class GroupedItemPage {
       return String.valueOf(price);
     }
     return QuickShop.getInstance().getEconomyManager().provider()
-            .format(BigDecimal.valueOf(price), world, null);
+            .format(BigDecimal.valueOf(price), world);
   }
 }

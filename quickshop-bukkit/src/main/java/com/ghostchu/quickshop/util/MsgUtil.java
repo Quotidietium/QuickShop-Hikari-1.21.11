@@ -133,7 +133,7 @@ public class MsgUtil {
     Component component = QuickShop.getInstance().text().of(player, "addon.list.entry", counter, buildShopName(shop),
                                               location.getWorld().getName(), location.getBlockX(),
                                               location.getBlockY(), location.getBlockZ(),
-                                              shop.format(shop.bukkitLocation().getWorld().getName(), shop.getCurrency()),
+                                              shop.format(shop.bukkitLocation().getWorld().getName()),
                                               shop.getShopStackingAmount(), Util.getItemStackName(shop.getItem()),
                                               buildShopType(player, shop),
                                               buildShopState(player, shop)).forLocale();
@@ -162,7 +162,7 @@ public class MsgUtil {
 
     Component component = QuickShop.getInstance().text().of(player, languageString, counter, buildShopName(shop),
                                                             location.getWorld().getName(), coords,
-                                                            shop.format(shop.bukkitLocation().getWorld().getName(), shop.getCurrency()),
+                                                            shop.format(shop.bukkitLocation().getWorld().getName()),
                                                             shop.getShopStackingAmount(), Util.getItemStackName(shop.getItem()),
                                                             buildShopType(player, shop),
                                                             buildShopState(player, shop), commandLabel, tagAmount).forLocale();

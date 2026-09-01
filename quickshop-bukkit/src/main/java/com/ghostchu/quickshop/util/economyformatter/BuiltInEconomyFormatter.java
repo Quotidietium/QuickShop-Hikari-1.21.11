@@ -1,21 +1,13 @@
 package com.ghostchu.quickshop.util.economyformatter;
 
 import com.ghostchu.quickshop.QuickShop;
-import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.util.MsgUtil;
-import com.ghostchu.quickshop.util.logger.Log;
 import com.ghostchu.simplereloadlib.ReloadResult;
 import com.ghostchu.simplereloadlib.ReloadStatus;
 import com.ghostchu.simplereloadlib.Reloadable;
-import org.jetbrains.annotations.Nullable;
-
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 public class BuiltInEconomyFormatter implements Reloadable {
 
-  private static final Map<String, String> CURRENCY_SYMBOL_MAPPING = new HashMap<>();
   private final QuickShop plugin;
   private boolean useDecimalFormat;
   private boolean currencySymbolOnRight;
@@ -33,33 +25,16 @@ public class BuiltInEconomyFormatter implements Reloadable {
   @Override
   public ReloadResult reloadModule() {
 
-    CURRENCY_SYMBOL_MAPPING.clear();
     this.useDecimalFormat = plugin.getConfig().getBoolean("use-decimal-format", false);
     this.currencySymbolOnRight = plugin.getConfig().getBoolean("shop.currency-symbol-on-right", false);
     this.currencySymbol = plugin.getConfig().getString("shop.alternate-currency-symbol", "$");
-    final List<String> symbols = plugin.getConfig().getStringList("shop.alternate-currency-symbol-list");
-    symbols.forEach(entry->{
-      final String[] splits = entry.split(";", 2);
-      if(splits.length < 2) {
-        plugin.logger().warn("Invalid entry in alternate-currency-symbol-list: {}", entry);
-      }
-      CURRENCY_SYMBOL_MAPPING.put(splits[0], splits[1]);
-    });
     return new ReloadResult(ReloadStatus.SUCCESS, "Reload successfully.", null);
   }
 
 
-  public String getInternalFormat(final double amount, @Nullable final String currency) {
+  public String getInternalFormat(final double amount) {
 
-    if(CommonUtil.isEmptyString(currency)) {
-      Log.debug("Format: Currency is null");
-      final String formatted = useDecimalFormat? MsgUtil.decimalFormat(amount) : Double.toString(amount);
-      return currencySymbolOnRight? formatted + currencySymbol : currencySymbol + formatted;
-    } else {
-      Log.debug("Format: Currency is: [" + currency + "]");
-      final String formatted = useDecimalFormat? MsgUtil.decimalFormat(amount) : Double.toString(amount);
-      final String symbol = CURRENCY_SYMBOL_MAPPING.getOrDefault(currency, currency);
-      return currencySymbolOnRight? formatted + symbol : symbol + formatted;
-    }
+    final String formatted = useDecimalFormat? MsgUtil.decimalFormat(amount) : Double.toString(amount);
+    return currencySymbolOnRight? formatted + currencySymbol : currencySymbol + formatted;
   }
 }

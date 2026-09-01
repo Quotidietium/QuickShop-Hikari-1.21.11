@@ -49,8 +49,8 @@ public final class EconomyBench {
     for(int i = 0; i < TRADER_COUNT; i++) {
       owners[i] = QUserImpl.createFullFilled(UUID.nameUUIDFromBytes(("owner" + i).getBytes()), "owner" + i, true);
       buyers[i] = QUserImpl.createFullFilled(UUID.nameUUIDFromBytes(("buyer" + i).getBytes()), "buyer" + i, true);
-      provider.deposit(owners[i], "world", null, BigDecimal.valueOf(100_000));
-      provider.deposit(buyers[i], "world", null, BigDecimal.valueOf(100_000));
+      provider.deposit(owners[i], "world", BigDecimal.valueOf(100_000));
+      provider.deposit(buyers[i], "world", BigDecimal.valueOf(100_000));
     }
 
     harness.bench("economy/safeCommitWithTax", ctx -> {
@@ -87,7 +87,7 @@ public final class EconomyBench {
     final var builtInFormatter = new com.ghostchu.quickshop.util.economyformatter.BuiltInEconomyFormatter(plugin);
     harness.bench("economy/formatInternalPrice", ctx -> {
       ctx.index++;
-      consume(builtInFormatter.getInternalFormat(12.34d, null));
+      consume(builtInFormatter.getInternalFormat(12.34d));
     });
   }
 
@@ -101,7 +101,7 @@ public final class EconomyBench {
 
     @Override
     public boolean deposit(final @NotNull QUser qUser, final @NotNull String world,
-                           final @Nullable String currency, final @NotNull BigDecimal amount) {
+                           final @NotNull BigDecimal amount) {
 
       accounts.merge(qUser, amount, BigDecimal::add);
       return true;
@@ -109,7 +109,7 @@ public final class EconomyBench {
 
     @Override
     public boolean withdraw(final @NotNull QUser qUser, final @NotNull String world,
-                            final @Nullable String currency, final @NotNull BigDecimal amount) {
+                            final @NotNull BigDecimal amount) {
 
       final BigDecimal balance = accounts.getOrDefault(qUser, BigDecimal.ZERO);
       if(balance.compareTo(amount) < 0) {
@@ -120,8 +120,7 @@ public final class EconomyBench {
     }
 
     @Override
-    public @NotNull BigDecimal balance(final @NotNull QUser qUser, final @NotNull String world,
-                                       final @Nullable String currency) {
+    public @NotNull BigDecimal balance(final @NotNull QUser qUser, final @NotNull String world) {
 
       return accounts.getOrDefault(qUser, BigDecimal.ZERO);
     }
@@ -145,20 +144,7 @@ public final class EconomyBench {
     }
 
     @Override
-    public boolean multiCurrency() {
-
-      return false;
-    }
-
-    @Override
-    public boolean supportsCurrency(final @NotNull String world, final @Nullable String currency) {
-
-      return currency == null;
-    }
-
-    @Override
-    public @NotNull String format(final @NotNull BigDecimal amount, final @NotNull String world,
-                                  final @Nullable String currency) {
+    public @NotNull String format(final @NotNull BigDecimal amount, final @NotNull String world) {
 
       return amount.toPlainString();
     }

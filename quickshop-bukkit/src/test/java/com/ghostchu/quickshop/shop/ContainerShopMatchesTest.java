@@ -103,7 +103,7 @@ class ContainerShopMatchesTest {
     return new ContainerShop(
             plugin, -1L, new org.bukkit.Location(world, 1, 64, 1), 10.0d, item, owner, false,
             SimpleShopManager.SELLING_TYPE, SimpleShopManager.ACTIVE_STATE,
-            new org.bukkit.configuration.file.YamlConfiguration(), null, false, null,
+            new org.bukkit.configuration.file.YamlConfiguration(), false, null,
             "Bukkit", "sym-matches", null,
             new HashMap<>(), benefit);
   }

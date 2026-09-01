@@ -19,7 +19,6 @@ package com.ghostchu.quickshop.api.economy;
 
 import com.ghostchu.quickshop.api.obj.QUser;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
 
@@ -64,86 +63,61 @@ public interface EconomyProvider {
   boolean valid();
 
   /**
-   * Determines if the EconomyProvider supports multiple currencies.
+   * Formats the given amount in the specified world.
    *
-   * @return true if the EconomyProvider supports multiple currencies, false otherwise
-   */
-  boolean multiCurrency();
-
-  /**
-   * Check if the EconomyProvider supports the given currency in the given world.
-   *
-   * @param world    the world to check for currency support
-   * @param currency the currency to check for support (null for default currency)
-   *
-   * @return true if the EconomyProvider supports the given currency in the given world, false
-   * otherwise
-   */
-  boolean supportsCurrency(final @NotNull String world, final @Nullable String currency);
-
-  /**
-   * Formats the given amount in the specified world and currency.
-   *
-   * @param amount   the amount to format
-   * @param world    the world in which the balance exists
-   * @param currency the currency in which the balance should be formatted (nullable for default
-   *                 currency)
+   * @param amount the amount to format
+   * @param world  the world in which the balance exists
    *
    * @return the formatted amount as a String
    */
   @NotNull
-  String format(final @NotNull BigDecimal amount, final @NotNull String world, final @Nullable String currency);
+  String format(final @NotNull BigDecimal amount, final @NotNull String world);
 
   /**
-   * Calculate the balance of a specific user in the given world based on the specified currency.
+   * Calculate the balance of a specific user in the given world.
    *
-   * @param user     the user for which to calculate the balance
-   * @param world    the world in which the user's balance exists
-   * @param currency the currency in which the balance should be calculated (null for default
-   *                 currency)
+   * @param user  the user for which to calculate the balance
+   * @param world the world in which the user's balance exists
    *
-   * @return the balance of the user in the specified currency
+   * @return the balance of the user
    */
   @NotNull
-  BigDecimal balance(final @NotNull QUser user, final @NotNull String world, final @Nullable String currency);
+  BigDecimal balance(final @NotNull QUser user, final @NotNull String world);
 
   /**
-   * Deposits the specified amount of currency into the user's account in the specified world.
+   * Deposits the specified amount into the user's account in the specified world.
    *
-   * @param user     the user whose account will receive the deposit
-   * @param world    the world in which the user's account exists
-   * @param currency the currency to be deposited (can be null if default currency is used)
-   * @param amount   the amount to be deposited into the user's account
+   * @param user   the user whose account will receive the deposit
+   * @param world  the world in which the user's account exists
+   * @param amount the amount to be deposited into the user's account
    *
    * @return true if the deposit was successful, false otherwise
    */
-  boolean deposit(final @NotNull QUser user, final @NotNull String world, final @Nullable String currency, final @NotNull BigDecimal amount);
+  boolean deposit(final @NotNull QUser user, final @NotNull String world, final @NotNull BigDecimal amount);
 
   /**
-   * Transfers the specified amount of currency from one user to another user in the given world.
+   * Transfers the specified amount from one user to another user in the given world.
    *
-   * @param from     the user from whose account the amount will be transferred
-   * @param to       the user to whose account the amount will be transferred
-   * @param world    the world in which the users' accounts exist
-   * @param currency the currency in which the amount will be transferred (can be null if default
-   *                 currency is used)
-   * @param amount   the amount to be transferred from one user to another
+   * @param from   the user from whose account the amount will be transferred
+   * @param to     the user to whose account the amount will be transferred
+   * @param world  the world in which the users' accounts exist
+   * @param amount the amount to be transferred from one user to another
    *
    * @return true if the transfer was successful, false otherwise
    */
-  default boolean transfer(final @NotNull QUser from, final @NotNull QUser to, final @NotNull String world, final @Nullable String currency, final @NotNull BigDecimal amount) {
+  default boolean transfer(final @NotNull QUser from, final @NotNull QUser to, final @NotNull String world, final @NotNull BigDecimal amount) {
 
     if(!valid()) {
       return false;
     }
 
-    if(this.balance(from, world, currency).compareTo(amount) >= 0) {
+    if(this.balance(from, world).compareTo(amount) >= 0) {
 
-      if(this.withdraw(from, world, currency, amount)) {
+      if(this.withdraw(from, world, amount)) {
 
-        if(this.deposit(to, world, currency, amount)) {
+        if(this.deposit(to, world, amount)) {
 
-          this.deposit(from, world, currency, amount);
+          this.deposit(from, world, amount);
           return true; //TODO: This was false before which I believe was a bug, but need to test to confirm.
         }
         return false;
@@ -154,15 +128,13 @@ public interface EconomyProvider {
   }
 
   /**
-   * Withdraws the specified amount of currency from the user's account in the given world.
+   * Withdraws the specified amount from the user's account in the given world.
    *
-   * @param user     the user from whose account the amount will be withdrawn
-   * @param world    the world in which the user's account exists
-   * @param currency the currency in which the amount will be withdrawn (can be null if default
-   *                 currency is used)
-   * @param amount   the amount to be withdrawn from the user's account
+   * @param user   the user from whose account the amount will be withdrawn
+   * @param world  the world in which the user's account exists
+   * @param amount the amount to be withdrawn from the user's account
    *
    * @return true if the withdrawal was successful, false otherwise
    */
-  boolean withdraw(final @NotNull QUser user, final @NotNull String world, final @Nullable String currency, final @NotNull BigDecimal amount);
+  boolean withdraw(final @NotNull QUser user, final @NotNull String world, final @NotNull BigDecimal amount);
 }

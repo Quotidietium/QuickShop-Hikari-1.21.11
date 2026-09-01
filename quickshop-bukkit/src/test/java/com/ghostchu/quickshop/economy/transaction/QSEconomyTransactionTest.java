@@ -65,9 +65,9 @@ class QSEconomyTransactionTest {
     when(provider.name()).thenReturn("test-eco");
     when(provider.lastError()).thenReturn("none");
     when(provider.valid()).thenReturn(true);
-    when(provider.balance(any(), anyString(), any())).thenReturn(BigDecimal.valueOf(1_000_000));
-    when(provider.deposit(any(), anyString(), any(), any())).thenReturn(true);
-    when(provider.withdraw(any(), anyString(), any(), any())).thenReturn(true);
+    when(provider.balance(any(), anyString())).thenReturn(BigDecimal.valueOf(1_000_000));
+    when(provider.deposit(any(), anyString(), any())).thenReturn(true);
+    when(provider.withdraw(any(), anyString(), any())).thenReturn(true);
 
     from = mock(QUser.class);
     to = mock(QUser.class);
@@ -100,9 +100,9 @@ class QSEconomyTransactionTest {
     final QSEconomyTransaction tx = baseBuilder("640", "0.05", "0").build();
 
     assertTrue(tx.commit());
-    verify(provider).withdraw(eq(from), eq("world"), any(), amountEq("640"));
-    verify(provider).deposit(eq(to), eq("world"), any(), amountEq("608.00"));
-    verify(provider).deposit(eq(taxer), eq("world"), any(), amountEq("32.00"));
+    verify(provider).withdraw(eq(from), eq("world"), amountEq("640"));
+    verify(provider).deposit(eq(to), eq("world"), amountEq("608.00"));
+    verify(provider).deposit(eq(taxer), eq("world"), amountEq("32.00"));
   }
 
   @Test
@@ -113,8 +113,8 @@ class QSEconomyTransactionTest {
 
     final ArgumentCaptor<BigDecimal> withdrawn = ArgumentCaptor.forClass(BigDecimal.class);
     final ArgumentCaptor<BigDecimal> deposited = ArgumentCaptor.forClass(BigDecimal.class);
-    verify(provider, times(1)).withdraw(eq(from), anyString(), any(), withdrawn.capture());
-    verify(provider, times(2)).deposit(any(), anyString(), any(), deposited.capture());
+    verify(provider, times(1)).withdraw(eq(from), anyString(), withdrawn.capture());
+    verify(provider, times(2)).deposit(any(), anyString(), deposited.capture());
 
     final BigDecimal totalDeposited = deposited.getAllValues().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
     assertEquals(0, withdrawn.getValue().compareTo(totalDeposited), "deposits must equal the withdrawal");
@@ -126,8 +126,8 @@ class QSEconomyTransactionTest {
     final QSEconomyTransaction tx = baseBuilder("640", "0", "0").build();
 
     assertTrue(tx.commit());
-    verify(provider, never()).deposit(eq(taxer), anyString(), any(), any());
-    verify(provider).deposit(eq(to), eq("world"), any(), amountEq("640"));
+    verify(provider, never()).deposit(eq(taxer), anyString(), any());
+    verify(provider).deposit(eq(to), eq("world"), amountEq("640"));
   }
 
   @Test
@@ -145,9 +145,9 @@ class QSEconomyTransactionTest {
 
     assertTrue(tx.commit());
     //the valid share is paid, the corrupted share is skipped, the owner keeps the remainder
-    verify(provider).deposit(eq(goodUser), anyString(), any(), amountEq("192.0"));
-    verify(provider, never()).deposit(eq(badUser), anyString(), any(), any());
-    verify(provider).deposit(eq(to), anyString(), any(), amountEq("448.0"));
+    verify(provider).deposit(eq(goodUser), anyString(), amountEq("192.0"));
+    verify(provider, never()).deposit(eq(badUser), anyString(), any());
+    verify(provider).deposit(eq(to), anyString(), amountEq("448.0"));
   }
 
   @Test
@@ -163,9 +163,9 @@ class QSEconomyTransactionTest {
             .build();
 
     assertTrue(tx.commit());
-    verify(provider).withdraw(eq(from), anyString(), any(), amountEq("100"));
-    verify(provider).deposit(eq(goodUser), anyString(), any(), amountEq("30.0"));
-    verify(provider, times(1)).deposit(any(), anyString(), any(), any());
+    verify(provider).withdraw(eq(from), anyString(), amountEq("100"));
+    verify(provider).deposit(eq(goodUser), anyString(), amountEq("30.0"));
+    verify(provider, times(1)).deposit(any(), anyString(), any());
   }
 
   @Test
@@ -189,13 +189,13 @@ class QSEconomyTransactionTest {
     final QSEconomyTransaction tx = baseBuilder("640", "0", "0").build();
     assertFalse(tx.commit(callback));
     assertTrue(failed[0], "onFailed must be invoked when a plugin cancels the commit");
-    verify(provider, never()).withdraw(any(), anyString(), any(), any());
+    verify(provider, never()).withdraw(any(), anyString(), any());
   }
 
   @Test
   void withdrawFailureNotifiesOnFailedAndDepositsNothing() {
 
-    when(provider.withdraw(any(), anyString(), any(), any())).thenReturn(false);
+    when(provider.withdraw(any(), anyString(), any())).thenReturn(false);
     final boolean[] failed = {false};
     final TransactionCallback callback = new TransactionCallback() {
       @Override
@@ -208,22 +208,22 @@ class QSEconomyTransactionTest {
     final QSEconomyTransaction tx = baseBuilder("640", "0", "0").build();
     assertFalse(tx.commit(callback));
     assertTrue(failed[0], "onFailed must be invoked when the withdrawal fails");
-    verify(provider, never()).deposit(any(), anyString(), any(), any());
+    verify(provider, never()).deposit(any(), anyString(), any());
   }
 
   @Test
   void safeCommitRollsBackDepositsWhenWithdrawalFails() {
 
     //withdraw succeeds, then the owner deposit fails; safeCommit must compensate the withdrawal
-    when(provider.withdraw(any(), anyString(), any(), any())).thenReturn(true);
-    when(provider.deposit(eq(to), anyString(), any(), any())).thenReturn(false);
+    when(provider.withdraw(any(), anyString(), any())).thenReturn(true);
+    when(provider.deposit(eq(to), anyString(), any())).thenReturn(false);
 
     final QSEconomyTransaction tx = baseBuilder("640", "0", "0").build();
     assertFalse(tx.safeCommit());
 
     final ArgumentCaptor<BigDecimal> reDeposited = ArgumentCaptor.forClass(BigDecimal.class);
     //rollback compensates the withdrawal with a deposit back to the buyer
-    verify(provider, times(1)).deposit(eq(from), anyString(), any(), reDeposited.capture());
+    verify(provider, times(1)).deposit(eq(from), anyString(), reDeposited.capture());
     assertEquals(0, new BigDecimal("640").compareTo(reDeposited.getValue()));
   }
 

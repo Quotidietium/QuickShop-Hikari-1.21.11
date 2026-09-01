@@ -445,6 +445,6 @@ public class ShopListPage {
   private String formatPrice(final double price) {
 
     return QuickShop.getInstance().getEconomyManager().provider()
-            .format(BigDecimal.valueOf(price), null, null);
+            .format(BigDecimal.valueOf(price), (String)null);
   }
 }

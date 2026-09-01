@@ -32,7 +32,6 @@ public class QSEconomyTransactionBuilder {
 
   private BenefitProvider benefitManager;
   private String world;
-  private String currency;
   private BigDecimal amount;
   private BigDecimal tax;
   private BigDecimal fromTax;
@@ -54,12 +53,6 @@ public class QSEconomyTransactionBuilder {
   public QSEconomyTransactionBuilder world(final String world) {
 
     this.world = world;
-    return this;
-  }
-
-  public QSEconomyTransactionBuilder currency(final String currency) {
-
-    this.currency = currency;
     return this;
   }
 
@@ -110,7 +103,6 @@ public class QSEconomyTransactionBuilder {
     return new QSEconomyTransaction(
             benefitManager,
             world,
-            currency,
             amount,
             (toTax != null)? toTax : BigDecimal.ZERO,
             (fromTax != null)? fromTax : BigDecimal.ZERO,

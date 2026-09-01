@@ -130,7 +130,7 @@ public class MainPage extends QuickShopPage {
         final int stock = (shop.get().isBuying())? -1
                           : MarketUtils.stockOf(shop.get(), MarketUtils.loadInventoryCaches(List.of(shop.get())));
         final String stockString = (shop.get().isUnlimited())? "Unlimited" : stock + "";
-        final String priceFormatted = shop.get().format(shop.get().bukkitLocation().getWorld().getName(), shop.get().getCurrency());
+        final String priceFormatted = shop.get().format(shop.get().bukkitLocation().getWorld().getName());
 
         // Shop item display slot from config (centered in row 2)
         final int shopItemSlot = (shopItemConfig != null)? shopItemConfig.getSlot() : 13;
@@ -231,8 +231,7 @@ public class MainPage extends QuickShopPage {
           final int quantity = configQuantities.get(i);
           final int slot = configSlots.get(i);
           final int adjustedAmount = (amount * quantity);
-          final String totalPrice = shop.get().format(shop.get().bukkitLocation().getWorld().getName(),
-                                               shop.get().getCurrency(), quantity);
+          final String totalPrice = shop.get().format(shop.get().bukkitLocation().getWorld().getName(), quantity);
           final String displayText = (shop.get().isSelling())? "<green>Buy x" + adjustedAmount + "</green>" : "<gold>Sell x" + adjustedAmount + "</gold>";
 
           open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(quantityMaterial, Math.min(adjustedAmount, 64))

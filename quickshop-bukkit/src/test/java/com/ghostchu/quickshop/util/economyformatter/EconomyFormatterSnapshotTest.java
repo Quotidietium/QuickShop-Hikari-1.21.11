@@ -79,24 +79,18 @@ class EconomyFormatterSnapshotTest {
   }
 
   @Test
-  void outputEquivalenceSymbolSideAndMapping() {
+  void outputEquivalenceSymbolSide() {
 
     setSymbols();
-    when(config.getStringList("shop.alternate-currency-symbol-list"))
-            .thenReturn(new java.util.ArrayList<>(java.util.List.of("gems;G", "credits;C")));
 
-    // right side + mapped currency uses the mapping table over the global symbol
+    // right side symbol
     final BuiltInEconomyFormatter builtIn = new BuiltInEconomyFormatter(plugin);
-    assertEquals("12.34€", builtIn.getInternalFormat(12.34d, null));
-    assertEquals("12.34G", builtIn.getInternalFormat(12.34d, "gems"));
+    assertEquals("12.34€", builtIn.getInternalFormat(12.34d));
 
     // left side flips via reload
     configValues.put("shop.currency-symbol-on-right", false);
-    configValues.remove("shop.alternate-currency-symbol-list");
-    when(config.getStringList("shop.alternate-currency-symbol-list"))
-            .thenReturn(new java.util.ArrayList<>(java.util.List.of()));
     builtIn.reloadModule();
-    assertEquals("€12.34", builtIn.getInternalFormat(12.34d, null));
+    assertEquals("€12.34", builtIn.getInternalFormat(12.34d));
   }
 
   @Test
@@ -107,11 +101,11 @@ class EconomyFormatterSnapshotTest {
     clearConfigInvocations();
 
     for(int i = 0; i < 50; i++) {
-      builtIn.getInternalFormat(1.5d, null);
+      builtIn.getInternalFormat(1.5d);
     }
 
     verify(config, times(0)).getString(anyString(), any(String.class));
-    assertEquals("1.5€", builtIn.getInternalFormat(1.5d, null));
+    assertEquals("1.5€", builtIn.getInternalFormat(1.5d));
   }
 
   @Test
@@ -122,10 +116,10 @@ class EconomyFormatterSnapshotTest {
     configValues.put("shop.disable-vault-format", true);
     final EconomyFormatter formatter = new EconomyFormatter(plugin);
     final var world = mock(org.bukkit.World.class);
-    assertEquals("12.34€", formatter.format(12.34d, world, null));
+    assertEquals("12.34€", formatter.format(12.34d, world));
 
     clearConfigInvocations();
-    assertEquals("1.5€", formatter.format(1.5d, world, null));
+    assertEquals("1.5€", formatter.format(1.5d, world));
     verify(config, times(0)).getString(anyString(), any(String.class));
   }
 
@@ -138,7 +132,7 @@ class EconomyFormatterSnapshotTest {
     configValues.put("shop.alternate-currency-symbol", "¥");
     builtIn.reloadModule();
 
-    assertEquals("12.34¥", builtIn.getInternalFormat(12.34d, null));
+    assertEquals("12.34¥", builtIn.getInternalFormat(12.34d));
   }
 
   private void clearConfigInvocations() {

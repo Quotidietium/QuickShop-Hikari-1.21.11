@@ -98,7 +98,6 @@ permissions:
       quickshop.create.changeprice: true
       quickshop.create.double: true
       quickshop.create.cmd: true
-      quickshop.currency: true
       quickshop.favorite: true
       quickshop.favorite.list: true
       quickshop.fetchmessage: true
@@ -146,7 +145,6 @@ permissions:
       quickshop.other.changeitem: true
       quickshop.other.changeamount: true
       quickshop.other.staff: true
-      quickshop.other.currency: true
       quickshop.other.taxaccount: true
       quickshop.other.empty: true
       quickshop.other.refill: true
@@ -297,12 +295,6 @@ permissions:
     default: op
   quickshop.removeworld:
     description: Permission to use /quickshop removeworld.
-    default: op
-  quickshop.currency:
-    description: Permission to use /quickshop currency.
-    default: op
-  quickshop.other.currency:
-    description: Permission to use /quickshop currency but for other's shops.
     default: op
   quickshop.showdisabled:
     description: Permission to see disabled commands in help list.

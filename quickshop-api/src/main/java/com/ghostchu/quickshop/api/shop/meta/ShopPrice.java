@@ -47,25 +47,23 @@ public interface ShopPrice<U> {
   void price(U price);
 
   /**
-   * Formats a string representation based on the provided world and optional currency.
+   * Formats a string representation based on the provided world.
    *
    * @param world the name of the world for which the string is being formatted; must not be null
-   * @param currency the optional currency to include in the formatted string; can be null
-   * @return a formatted string combining the world and currency information; never null
+   * @return a formatted string combining the world information; never null
    */
   @NotNull
-  String format(final @NotNull String world, final @Nullable String currency);
+  String format(final @NotNull String world);
 
   /**
-   * Formats a string representation based on the provided world, optional currency, and quantity.
+   * Formats a string representation based on the provided world and quantity.
    *
    * @param world the name of the world for which the string is being formatted; must not be null
-   * @param currency the optional currency to include in the formatted string; can be null
    * @param quantity the quantity to include in the formatted string; represents a non-negative integer
-   * @return a formatted string combining the world, currency, and quantity information; never null
+   * @return a formatted string combining the world and quantity information; never null
    */
   @NotNull
-  String format(final @NotNull String world, final @Nullable String currency, final int quantity);
+  String format(final @NotNull String world, final int quantity);
 
   /**
    * Provides a comparator for comparing instances of the generic type U used in the shop's pricing.

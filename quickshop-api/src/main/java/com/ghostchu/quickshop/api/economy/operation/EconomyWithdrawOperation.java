@@ -35,7 +35,6 @@ public class EconomyWithdrawOperation implements Operation {
   private final QUser account;
   private final BigDecimal amount;
   private final String world;
-  private final String currency;
   private boolean commit = false;
   private boolean rollback = false;
 
@@ -47,12 +46,11 @@ public class EconomyWithdrawOperation implements Operation {
    * @param world    the name of the world in which the transaction is performed
    * @param currency the currency type for the transaction
    */
-  public EconomyWithdrawOperation(final QUser account, final BigDecimal amount, final String world, final String currency) {
+  public EconomyWithdrawOperation(final QUser account, final BigDecimal amount, final String world) {
 
     this.account = account;
     this.amount = amount;
     this.world = world;
-    this.currency = currency;
   }
 
   /**
@@ -68,7 +66,7 @@ public class EconomyWithdrawOperation implements Operation {
       return false;
     }
 
-    final boolean result = provider.withdraw(account, world, currency, amount);
+    final boolean result = provider.withdraw(account, world, amount);
     if(result) {
       this.commit = true;
     }
@@ -110,7 +108,7 @@ public class EconomyWithdrawOperation implements Operation {
       return false;
     }
 
-    final boolean result = provider.deposit(account, world, currency, amount);
+    final boolean result = provider.deposit(account, world, amount);
     if(result) {
       rollback = true;
     }

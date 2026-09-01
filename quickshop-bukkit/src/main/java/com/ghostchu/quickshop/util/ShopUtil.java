@@ -165,7 +165,7 @@ public class ShopUtil {
       }
     }
 
-    final PriceLimiterCheckResult checkResult = limiter.check(user, shop.getItem(), plugin.getCurrency(), price);
+    final PriceLimiterCheckResult checkResult = limiter.check(user, shop.getItem(), price);
 
     switch(checkResult.getStatus()) {
       case PRICE_RESTRICTED -> {
@@ -203,7 +203,7 @@ public class ShopUtil {
               .from(QUserImpl.createFullFilled(user.getBukkitPlayer().get()))
               .amount(BigDecimal.valueOf(fee))
               .world(Objects.requireNonNull(shop.bukkitLocation().getWorld()).getName())
-              .currency(plugin.getCurrency())
+              
               .build();
       if(!transaction.completable()) {
         plugin.text().of(user, "you-cant-afford-to-change-price", plugin.getShopManager().format(fee, shop)).send();
@@ -252,7 +252,7 @@ public class ShopUtil {
     final double price = shop.getPrice();
     final Inventory playerInventory = p.getInventory();
     final String tradeAllWord = QuickShop.getInstance().getConfig().getString("shop.word-for-trade-all-items", "all");
-    final double ownerBalance = eco.balance(shop.getOwner(), shop.bukkitLocation().getWorld().getName(), shop.getCurrency()).doubleValue();
+    final double ownerBalance = eco.balance(shop.getOwner(), shop.bukkitLocation().getWorld().getName()).doubleValue();
     final int items = getPlayerCanSell(shop, ownerBalance, price, new BukkitInventoryWrapper(playerInventory));
     final ShopManager.InteractiveManager actions = QuickShop.getInstance().getShopManager().getInteractiveManager();
     if(shop.playerAuthorize(p.getUniqueId(), BuiltInShopPermission.PURCHASE)
@@ -330,7 +330,7 @@ public class ShopUtil {
     final Inventory playerInventory = p.getInventory();
     final String tradeAllWord = QuickShop.getInstance().getConfig().getString("shop.word-for-trade-all-items", "all");
     final ShopManager.InteractiveManager actions = QuickShop.getInstance().getShopManager().getInteractiveManager();
-    final double traderBalance = eco.balance(QUserImpl.createFullFilled(p), shop.bukkitLocation().getWorld().getName(), shop.getCurrency()).doubleValue();
+    final double traderBalance = eco.balance(QUserImpl.createFullFilled(p), shop.bukkitLocation().getWorld().getName()).doubleValue();
     final int itemAmount = getPlayerCanBuy(shop, traderBalance, price, new BukkitInventoryWrapper(playerInventory));
     if(shop.playerAuthorize(p.getUniqueId(), BuiltInShopPermission.PURCHASE)
        || QuickShop.getInstance().perm().hasPermission(p, "quickshop.other.use")) {
@@ -385,8 +385,7 @@ public class ShopUtil {
     final int invHaveItems = Util.countItems(new BukkitInventoryWrapper(p.getInventory()), shop);
     // Check if shop owner has enough money
     final double ownerBalance = eco
-            .balance(shop.getOwner(), shop.bukkitLocation().getWorld().getName(),
-                     shop.getCurrency()).doubleValue();
+            .balance(shop.getOwner(), shop.bukkitLocation().getWorld().getName()).doubleValue();
     final int ownerCanAfford;
     if(shop.getPrice() != 0) {
       ownerCanAfford = (int)(ownerBalance / shop.getPrice());
@@ -418,10 +417,8 @@ public class ShopUtil {
         // when typed 'all' but the shop owner doesn't have enough money to buy at least 1
         // item (and shop isn't unlimited or pay-unlimited is true)
         QuickShop.getInstance().text().of(p, "the-owner-cant-afford-to-buy-from-you",
-                                          QuickShop.getInstance().getShopManager().format(shop.getPrice(), shop.bukkitLocation().getWorld(),
-                                                                                          shop.getCurrency()),
-                                          QuickShop.getInstance().getShopManager().format(ownerBalance, shop.bukkitLocation().getWorld(),
-                                                                                          shop.getCurrency())).send();
+                                          QuickShop.getInstance().getShopManager().format(shop.getPrice(), shop.bukkitLocation().getWorld()),
+                                          QuickShop.getInstance().getShopManager().format(ownerBalance, shop.bukkitLocation().getWorld())).send();
         return 0;
       }
       // when typed 'all' but player doesn't have any items to sell
@@ -461,8 +458,7 @@ public class ShopUtil {
     }
     // typed 'all', check if player has enough money than price * amount
     final double price = shop.getPrice();
-    final double balance = eco.balance(QUserImpl.createFullFilled(p), shop.bukkitLocation().getWorld().getName(),
-                                       shop.getCurrency()).doubleValue();
+    final double balance = eco.balance(QUserImpl.createFullFilled(p), shop.bukkitLocation().getWorld().getName()).doubleValue();
     amount = Math.min(amount, (int)Math.floor(balance / price));
     if(amount < 1) { // typed 'all' but the auto set amount is 0
       // when typed 'all' but player can't buy any items
@@ -480,10 +476,8 @@ public class ShopUtil {
           return 0;
         }
         QuickShop.getInstance().text().of(p, "you-cant-afford-to-buy",
-                                          QuickShop.getInstance().getShopManager().format(price, shop.bukkitLocation().getWorld(),
-                                                                                          shop.getCurrency()),
-                                          QuickShop.getInstance().getShopManager().format(balance, shop.bukkitLocation().getWorld(),
-                                                                                          shop.getCurrency())).send();
+                                          QuickShop.getInstance().getShopManager().format(price, shop.bukkitLocation().getWorld()),
+                                          QuickShop.getInstance().getShopManager().format(balance, shop.bukkitLocation().getWorld())).send();
       }
       return 0;
     }

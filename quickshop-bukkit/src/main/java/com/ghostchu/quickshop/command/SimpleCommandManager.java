@@ -12,7 +12,6 @@ import com.ghostchu.quickshop.command.subcommand.SubCommand_Buy;
 import com.ghostchu.quickshop.command.subcommand.SubCommand_Clean;
 import com.ghostchu.quickshop.command.subcommand.SubCommand_CleanGhost;
 import com.ghostchu.quickshop.command.subcommand.SubCommand_Create;
-import com.ghostchu.quickshop.command.subcommand.SubCommand_Currency;
 import com.ghostchu.quickshop.command.subcommand.SubCommand_Database;
 import com.ghostchu.quickshop.command.subcommand.SubCommand_Debug;
 import com.ghostchu.quickshop.command.subcommand.SubCommand_Empty;
@@ -396,11 +395,6 @@ public class SimpleCommandManager implements CommandManager, TabCompleter, Comma
                         .prefix("removeworld")
                         .permission("quickshop.removeworld")
                         .executor(new SubCommand_RemoveWorld(plugin))
-                        .build());
-    registerCmd(CommandContainer.builder()
-                        .prefix("currency")
-                        .permission("quickshop.currency")
-                        .executor(new SubCommand_Currency(plugin))
                         .build());
     registerCmd(CommandContainer.builder()
                         .prefix("taxaccount")

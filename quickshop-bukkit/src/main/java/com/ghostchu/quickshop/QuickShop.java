@@ -309,9 +309,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   @Getter
   private BuildInfo buildInfo;
   @Getter
-  @Nullable
-  private String currency = null;
-  @Getter
   private CalendarWatcher calendarWatcher;
   @Getter
   private ShopPurger shopPurger;
@@ -542,7 +539,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     this.priceChangeRequiresFee = this.getConfig().getBoolean("shop.price-change-requires-fee");
     this.displayItemCheckTicks = this.getConfig().getInt("shop.display-items-check-ticks");
     this.allowStack = this.getConfig().getBoolean("shop.allow-stacks");
-    this.currency = this.getConfig().getString("currency");
     this.loggingLocation = this.getConfig().getInt("logging.location");
     this.translationMapping = new HashMap<>();
     getConfig().getStringList("custom-translation-key").forEach(str->{
@@ -554,9 +550,6 @@ public class QuickShop implements QuickShopAPI, Reloadable {
       this.platform.updateTranslationMappingSection(this.translationMapping);
     }
 
-    if(CommonUtil.isEmptyString(this.currency)) {
-      this.currency = null;
-    }
     // swap the log watcher safely on config reload: the old instance's PrintWriter must be
     // closed and its task stopped (leaks the file handle otherwise), and a replacement
     // created by a reload must actually be started — start() was only called from

@@ -23,7 +23,6 @@ tabcomplete:
   list: 'list'
   page: '[page #]'
   shop-id: '[shop id]'
-  currency: '[货币名称]'
   percentage: '[百分比%]'
   add: 'add'
   remove: 'remove'
@@ -67,7 +66,6 @@ quick-fill:
 average-price-nearby: '<green>附近的平均价格： <yellow>{0}'
 inventory-check-global-alert: "<red>[背包检查] <gray>警告！找到QuickShop悬浮物 <gold>{2}</gold> 在背包中 <aqua>{0}</aqua> <dark_gray>[{1}]</dark_gray>，这不应该发生，这通常意味着有人恶意利用漏洞来复制悬浮物。"
 digits-reach-the-limit: <red>您的价格中的小数点后位数超过上限。
-currency-unset: <green>商店货币已被成功删除。现在会使用默认货币。
 you-cant-create-shop-in-there: <red>你没有在这个位置创建商店的权限。
 no-pending-action: <red>你没有任何进行中的操作
 refill-success: <green>补货成功
@@ -192,7 +190,6 @@ menu:
   stock: '<green>库存:<yellow>{0}'
   successfully-sold: '<green>出售成功：'
   total-value-of-chest: '<green>共计商店数: <yellow>{0}'
-currency-not-exists: <red>无法找到您想要设置的货币，也许是拼写错误或该货币在这个世界不可用。
 no-nearby-shop: <red>附近没有匹配 {0} 的商店。
 translation-author: 'Ghost_chu, sandtechnology, Pemdow, YuanYuanOwO, RMSCA, 李馨雨'
 integrations-check-failed-trade: <red>集成模块 {0} 拒绝了商店交易操作。
@@ -239,7 +236,6 @@ you-dont-have-that-many-items: <red>你只有 {0} 个 {1}。
 complete: <green>完成！
 translate-not-completed-yet-url: '{0} 的翻译完成度为 {1}，您想帮助我们改进翻译吗？来这里吧： {2}'
 success-removed-shop: <green>商店删除成功。
-currency-set: <green>商店货币已被成功设置为 {0}。
 shop-purged-start: <green>商店清理已开始，请检查控制台获取详细信息。
 economy-transaction-failed: <red>抱歉，在处理您的交易时发生了内部错误。 交易已被取消，任何交易操作都已被回滚。如果出现这种情况，请联系服务器管理员。
 nothing-to-flush: <green>你没有新的商店消息
@@ -394,10 +390,8 @@ controlpanel:
   setowner: '<green>所有者: <aqua>{0} <yellow>[<bold><light_purple>修改</light_purple></bold>]'
   freeze: '<green>冻结模式： <aqua>{0} <yellow>[<bold><light_purple>切换</light_purple></bold>]'
   price: '<green>价格: <aqua>{0} <yellow>[<bold><light_purple>修改</light_purple></bold>]'
-  currency-hover: <yellow>点击以设置或移除商店使用的交易货币
   lock: '<yellow>商店锁: <aqua>{0} <yellow>[<bold><light_purple>切换</light_purple></bold>]'
   mode-selling: '<green>商店模式: <aqua>出售 <yellow>[<bold><light_purple>更改</light_purple></bold>]'
-  currency: '<green>货币: <aqua>{0} <yellow>[<bold><light_purple>设置</light_purple></bold>]'
   setowner-hover: <yellow>点击来修改店主
   mode-buying: '<green>商店模式: <aqua>收购 <yellow>[<bold><light_purple>更改</light_purple></bold>]'
   item: '<green>商店物品: {0} <yellow>[<bold><light_purple>修改</light_purple></bold>]'
@@ -469,7 +463,6 @@ command:
     find: <yellow>在附近寻找具有指定物品名称的商店
     create: <yellow>在目标箱子创建商店
     lock: <yellow>切换商店锁状态
-    currency: <yellow>设置或移除该商店的货币类型设置
     removeworld: <yellow>删除指定世界中的所有商店
     info: <yellow>查看QuickShop统计信息
     owner: <yellow>为商店设置新的所有者。
@@ -534,7 +527,6 @@ command:
   no-world-given: <red>请指定一个世界名称
   format-disabled: <red>/{0} {1} <gray>- {2}
   invalid-bulk-amount: <red>给定的值 {0} 大于最大堆叠大小或小于1
-currency-not-support: <red>此经济插件不支持多货币功能。
 trading-in-creative-mode-is-disabled: <red>你不能在创造模式下进行交易操作。
 the-owner-cant-afford-to-buy-from-you: <red>这件商品标价 {0}，但是店主只剩 {1} 了。
 you-cant-afford-shop-naming: <red>无法支付商店命名的费用，命名费用为 {0}。
@@ -573,7 +565,6 @@ permission:
     set-price: <yellow>允许拥有此权限的用户设置商店价格
     set-item: <yellow>允许拥有此权限的用户设置商店交易物品
     set-stack-amount: <yellow>允许拥有此权限的用户设置商店堆叠金额
-    set-currency: <yellow>允许拥有此权限的用户设置商店货币。
     set-name: <yellow>允许拥有此权限的用户设置商店名称。
     set-sign-type: <yellow>更改商店牌子类型
     view-purchase-logs: <yellow>查看商店交易日志的权限

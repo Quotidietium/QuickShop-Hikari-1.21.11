@@ -168,11 +168,6 @@ proxy:
   # Force BungeeCord mode.
   force-bungeecord: false
 
-# Currency used when creating shops.
-# Set to "" to use the default currency.
-# Only required for multi-currency setups.
-currency: ""
-
 # Logging
 logging:
   # Enable file/database logging.
@@ -494,13 +489,6 @@ shop:
 
   # Fallback currency symbol if Vault/economy does not provide one.
   alternate-currency-symbol: '$'
-
-  # Multi-currency symbol mapping:
-  # Format: <currencyName>;<symbol>
-  # If no match, the currency name itself is used.
-  alternate-currency-symbol-list:
-    - USD;$
-    - CNY;￥
 
   # Force QuickShop to use the alternate currency symbol if Vault formatting is incorrect.
   disable-vault-format: false

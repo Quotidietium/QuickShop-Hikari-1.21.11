@@ -14,7 +14,5 @@ rules: # Rules set
       - STONE_AXE
       - STONE_SHOVEL
       - STONE_HOE
-    currency: # Currency name, If your plugin doesn't support multi-currency (Vault API), this section won't be used
-      - '*'
     min: 1.0 # Min price (double)
     max: 50.0 # Max price (double)

@@ -70,7 +70,7 @@ public class OngoingFeeWatcher implements Runnable {
         double cost = gobalCost;
         final World world = location.getWorld();
         //We must check balance manually to avoid shop missing hell when tax account broken
-        if(allowLoan || plugin.getEconomyManager().provider().balance(shopOwner, Objects.requireNonNull(world).getName(), plugin.getCurrency()).doubleValue() >= cost) {
+        if(allowLoan || plugin.getEconomyManager().provider().balance(shopOwner, Objects.requireNonNull(world).getName()).doubleValue() >= cost) {
           QUser taxAccount = null;
           if(shop.getTaxAccount() != null) {
             taxAccount = shop.getTaxAccount();
@@ -92,7 +92,7 @@ public class OngoingFeeWatcher implements Runnable {
           final QUser finalTaxAccount = taxAccount;
           Util.mainThreadRun(()->{
             final QSEconomyTransaction transaction = QSEconomyTransaction.builder()
-                    .currency(plugin.getCurrency())
+                    
                     .world(world.getName())
                     .amount(BigDecimal.valueOf(finalCost))
                     .to(finalTaxAccount)

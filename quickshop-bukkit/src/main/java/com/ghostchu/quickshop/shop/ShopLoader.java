@@ -189,7 +189,6 @@ public class ShopLoader implements SubPasteItem {
                                rawInfo.getType(),
                                rawInfo.getState(),
                                rawInfo.getExtra(),
-                               rawInfo.getCurrency(),
                                rawInfo.isHologram(),
                                rawInfo.getTaxAccount(),
                                rawInfo.getInvWrapper(),
@@ -309,7 +308,6 @@ public class ShopLoader implements SubPasteItem {
     private String name;
     private IShopType type;
     private ShopState state;
-    private String currency;
     private double price;
     private boolean unlimited;
     private boolean hologram;
@@ -336,7 +334,6 @@ public class ShopLoader implements SubPasteItem {
       final String extraStr = dataRecord.getExtra();
       this.name = dataRecord.getName();
       //handle old shops
-      this.currency = dataRecord.getCurrency();
       this.hologram = dataRecord.isHologram();
       this.taxAccount = null;
       if(dataRecord.getTaxAccount() != null) {

@@ -50,7 +50,7 @@ public final class Shops {
     return new ContainerShop(
             plugin, -1L, location, 10.0d + (index % 977), item, owner, false,
             SimpleShopManager.SELLING_TYPE, SimpleShopManager.ACTIVE_STATE,
-            new YamlConfiguration(), null, false, null,
+            new YamlConfiguration(), false, null,
             "Bukkit", "sym-" + index, index % 8 == 0? ("shop-" + index) : null,
             playerGroup, benefit);
   }

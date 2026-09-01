@@ -32,7 +32,6 @@ tabcomplete:
   list: 'list'
   page: '[page #]'
   shop-id: '[shop id]'
-  currency: '[currency name]'
   percentage: '[percentage%]'
   add: 'add'
   remove: 'remove'
@@ -83,8 +82,6 @@ quick-fill:
 average-price-nearby: '<green>Nearby average prices: <yellow>{0}'
 inventory-check-global-alert: "<red>[Inventory Check] <gray>Warning! Found a QuickShop display item <gold>{2}</gold> in inventory at <aqua>{0}</aqua> <dark_gray>[{1}]</dark_gray>, which it shouldn't happened, This usually means that someone is maliciously exploiting the exploit to duplicating the display item."
 digits-reach-the-limit: <red>You have reached the limits of decimals in the price.
-currency-unset: <green>Shop currency removed successfully. Using default settings
-  now.
 you-cant-create-shop-in-there: <red>You don't have permission to create a shop at
   this location.
 no-pending-action: <red>You don't have any pending actions
@@ -228,8 +225,6 @@ menu:
   stock: '<green>Stock: <yellow>{0}'
   successfully-sold: '<green>Successfully sold:'
   total-value-of-chest: '<green>Total value of chest: <yellow>{0}'
-currency-not-exists: <red>Cannot find the currency that you want to set. Maybe the
-  spelling is wrong or that currency isn't available in this world.
 no-nearby-shop: <red>No nearby shops matching {0}.
 translation-author: 'Ghost_chu, Andre_601'
 integrations-check-failed-trade: <red>Integration {0} denied the Shop trading
@@ -281,7 +276,6 @@ complete: <green>Complete!
 translate-not-completed-yet-url: 'The translation of the language {0} was not completed
   yet by {1}. Do you want to help us improving the translation? Browse: {2}'
 success-removed-shop: <green>Shop removed.
-currency-set: <green>Shop currency successfully set to {0}.
 shop-purged-start: <green>Shop purge started, check the console for details.
 economy-transaction-failed: <red>Sorry, but an internal error occurred while processing
   your transaction. The transaction has been cancelled and any economic changes have
@@ -476,10 +470,8 @@ controlpanel:
   setowner: '<green>Owner: <aqua>{0} <yellow>[<bold><light_purple>Change</light_purple></bold>]'
   freeze: '<green>Freeze mode: <aqua>{0} <yellow>[<bold><light_purple>Toggle</light_purple></bold>]'
   price: '<green>Price: <aqua>{0} <yellow>[<bold><light_purple>Change</light_purple></bold>]'
-  currency-hover: <yellow>Click to set or remove the currency that this shop is using
   lock: '<yellow>Shop lock: <aqua>{0} <yellow>[<bold><light_purple>Toggle</light_purple></bold>]'
   mode-selling: '<green>Shop mode: <aqua>Selling <yellow>[<bold><light_purple>Change</light_purple></bold>]'
-  currency: '<green>Currency: <aqua>{0} <yellow>[<bold><light_purple>Set</light_purple></bold>]'
   setowner-hover: <yellow>Click to switch owner.
   mode-buying: '<green>Shop mode: <aqua>Buying <yellow>[<bold><light_purple>Change</light_purple></bold>]'
   item: '<green>Shop Item: {0} <yellow>[<bold><light_purple>Change</light_purple></bold>]'
@@ -553,7 +545,6 @@ command:
     find: <yellow>Locates the nearest shop of a specific type.
     create: <yellow>Creates a new shop from the targeted chest
     lock: <yellow>Switch the shop's lock status
-    currency: <yellow>Set or remove the currency setting of the shop
     removeworld: <yellow>Remove ALL shops in a specified world
     info: <yellow>Show QuickShop statistics
     owner: <yellow>Changes the ownership of a shop.
@@ -621,7 +612,6 @@ command:
   format-disabled: <red>/{0} {1} <gray>- {2}
   invalid-bulk-amount: <red>The given value {0} is larger than the max stack size
     or below one
-currency-not-support: <red>The economy plugin doesn't support the multi-economy feature.
 trading-in-creative-mode-is-disabled: <red>You cannot trade with this shop while in
   creative mode.
 the-owner-cant-afford-to-buy-from-you: <red>This item is worth {0}, but the shop-owner
@@ -679,8 +669,6 @@ permission:
     set-item: <yellow>Permission to allow users who have this to set the shop item.
     set-stack-amount: <yellow>Permission to allow users who have this to set the shop
       stack amount.
-    set-currency: <yellow>Permission to allow users who have this to set the shop
-      currency.
     set-name: <yellow>Permission to allow users who have this to set the shop name.
     set-sign-type: <yellow>Change the sign material that attached on the shop.
     view-purchase-logs: <yellow>Permission to view shop purchase logs.

@@ -80,13 +80,13 @@ public class SubCommand_Name implements CommandHandler<Player> {
                 .world(shop.bukkitLocation().getWorld().getName())
                 .from(QUserImpl.createFullFilled(sender))
                 .to(shop.getTaxAccount())
-                .currency(plugin.getCurrency())
+                
                 .taxer(shop.getTaxAccount())
                 .tax(BigDecimal.ZERO)
                 .amount(BigDecimal.valueOf(fee))
                 .build();
         if(!transaction.completable()) {
-          plugin.text().of(sender, "you-cant-afford-shop-naming", plugin.getShopManager().format(fee, shop.bukkitLocation().getWorld(), plugin.getCurrency())).send();
+          plugin.text().of(sender, "you-cant-afford-shop-naming", plugin.getShopManager().format(fee, shop.bukkitLocation().getWorld())).send();
           return;
         }
       }

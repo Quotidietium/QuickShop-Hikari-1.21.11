@@ -14,7 +14,6 @@ import static com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission.P
 import static com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission.RECEIVE_ALERT;
 import static com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission.SEARCH;
 import static com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission.SET_BENEFIT;
-import static com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission.SET_CURRENCY;
 import static com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission.SET_ITEM;
 import static com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission.SET_PRICE;
 import static com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission.SET_SHOPTYPE;
@@ -30,7 +29,7 @@ public enum BuiltInShopPermissionGroup implements ShopPermissionAudience {
   EVERYONE("everyone", "everyone", PURCHASE, SHOW_INFORMATION, PREVIEW_SHOP, SEARCH),
   STAFF("staff", "staff", PURCHASE, SHOW_INFORMATION, PREVIEW_SHOP, SEARCH, ACCESS_INVENTORY,
         TOGGLE_DISPLAY, SET_SHOPTYPE, SET_SHOP_STATE, SET_PRICE, SET_ITEM, SET_STACK_AMOUNT,
-        SET_CURRENCY, RECEIVE_ALERT, SET_BENEFIT, SET_SIGN_TYPE, VIEW_PURCHASE_LOGS),
+        RECEIVE_ALERT, SET_BENEFIT, SET_SIGN_TYPE, VIEW_PURCHASE_LOGS),
   ADMINISTRATOR("administrator", "administrator", BuiltInShopPermission.values());
 
   private final String node;
