@@ -1,7 +1,5 @@
 package com.ghostchu.quickshop.localization.text;
 
-import com.ghostchu.crowdin.CrowdinOTA;
-import com.ghostchu.crowdin.OTAFileInstance;
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.localization.text.ProxiedLocale;
 import com.ghostchu.quickshop.api.localization.text.TextManager;
@@ -24,7 +22,6 @@ import com.ghostchu.simplereloadlib.ReloadStatus;
 import com.ghostchu.simplereloadlib.Reloadable;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import kong.unirest.Unirest;
 import lombok.SneakyThrows;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.ComponentLike;
@@ -76,7 +73,6 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
 
   private static final String DEFAULT_LOCALE = "en_us";
   private static final String LOCALE_MAPPING_SYNTAX = "locale";
-  private static final String CROWDIN_LANGUAGE_FILE_PATH = "/hikari/crowdin/lang/%locale%/messages.yml";
   public final Set<PostProcessor> postProcessors = new LinkedHashSet<>();
   private final QuickShop plugin;
   // <File <Locale, Section>>
@@ -105,36 +101,22 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
   private final ConcurrentHashMap<String, ProxiedLocale> proxiedLocaleCache = new ConcurrentHashMap<>();
   private final Cache<String, String> languagesCache =
           CacheBuilder.newBuilder().expireAfterAccess(30, TimeUnit.MINUTES).recordStats().build();
-  private final String crowdinHost;
   private TagResolver[] tagResolvers;
-  @Nullable
-  private CrowdinOTA crowdinOTA;
 
   public SimpleTextManager(@NotNull final QuickShop plugin) {
 
     this.plugin = plugin;
     plugin.getReloadManager().register(this);
     plugin.getPasteManager().register(plugin.getJavaPlugin(), this);
-    this.crowdinHost = plugin.getConfig().getString("crowdin-host", "https://qshikari.b-cdn.net");
-    if(plugin.getConfig().getBoolean("use-crowdin-ota", true)) {
-      try {
-        plugin.logger().info("Please wait us fetch the translation updates from Crowdin OTA service...");
-        this.crowdinOTA = new CrowdinOTA(crowdinHost, new File(Util.getCacheFolder(), "crowdin-ota"), Unirest.primaryInstance());
-      } catch(final Exception e) {
-        plugin.logger().warn("Cannot initialize the CrowdinOTA instance!", e);
-      }
-    } else {
-      plugin.logger().info("[CrowdinOTA] Crowdin Over-The-Air distribution has been disabled.");
-    }
     load();
   }
 
   /**
-   * Loading Crowdin OTA module and i18n system
+   * Loading the i18n system
    */
   public void load() {
 
-    plugin.logger().info("Loading up translations from Crowdin OTA, this may need a while...");
+    plugin.logger().info("Loading up translations...");
     //TODO: This will break the message processing system in-game until loading finished, need to fix it.
     this.reset();
     initTagResolvers();
@@ -145,33 +127,6 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     languageFilesManager.deploy("en_us", builtInFallback);
     // second, load the bundled language files
     loadBundled().forEach(languageFilesManager::deploy);
-    // then, load the translations from Crowdin
-    try {
-      if(crowdinOTA != null) {
-        final OTAFileInstance fileInstance = crowdinOTA.getOtaInstance().getFileInstance(CROWDIN_LANGUAGE_FILE_PATH);
-        if(fileInstance != null) {
-          for(final String crowdinCode : fileInstance.getAvailableLocales()) {
-            final String content = fileInstance.getLocaleContentByCrowdinCode(crowdinCode);
-            final String mcCode = crowdinOTA.mapLanguageCode(crowdinCode, LOCALE_MAPPING_SYNTAX).toLowerCase(Locale.ROOT).replace("-", "_");
-            if(content == null) {
-              plugin.logger().warn("Failed to load translation for {}, the content is null.", mcCode);
-              continue;
-            }
-            final YamlConfiguration configuration = new YamlConfiguration();
-            try {
-              configuration.loadFromString(content);
-              languageFilesManager.deploy(mcCode, configuration);
-            } catch(final InvalidConfigurationException e) {
-              plugin.logger().warn("Failed to load translation for {}.", mcCode, e);
-            }
-          }
-        }
-      } else {
-        plugin.logger().info("CrowdinOTA not initialized, skipping for over-the-air translation updates.");
-      }
-    } catch(final Exception e) {
-      plugin.logger().warn("Unable to load Crowdin OTA translations", e);
-    }
     // and don't forget fix missing
     languageFilesManager.fillMissing(builtInFallback);
     // finally, load override translations
@@ -419,8 +374,6 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     final HTMLTable meta = new HTMLTable(2, true);
     meta.insert("Fallback Language", DEFAULT_LOCALE);
     meta.insert("Locale Mapping Prefix", LOCALE_MAPPING_SYNTAX);
-    meta.insert("Crowdin Language File Path", CROWDIN_LANGUAGE_FILE_PATH);
-    meta.insert("Crowdin Distribution URL", crowdinHost);
     meta.insert("Available Languages", String.valueOf(availableLanguages.size()));
     joiner.add(meta.render());
     joiner.add("<h5>Caching</h5>");

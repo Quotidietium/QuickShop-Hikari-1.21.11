@@ -24,9 +24,6 @@ game-language: default
 # Use:
 #   - '*' to enable all available languages.
 #
-# Language files can update automatically via Crowdin OTA:
-#   https://crowdin.com/project/qs-hikari
-#
 # For custom translations, use the language override system:
 #   https://quickshop-community.github.io/QuickShop-Hikari-Documents/docs/modules/localization
 enabled-languages:
@@ -41,22 +38,6 @@ lang-processor:
   papi-post-process: true
   # Prevent item names from always appearing italicized.
   fix-item-always-italic: true
-
-# Download source for Mojang translation resources
-# (item names, potion effects, etc.)
-#
-# 0 = Official Mojang server (recommended)
-# 1 = BMCLAPI (Unofficial China mirror)
-#
-# Change only if you have download/connectivity issues.
-mojangapi-mirror: 0
-
-# Crowdin OTA host URL.
-# You may host your own OTA server if needed.
-crowdin-host: "https://crowdinota.hikari.r2.quickshop-powered.top"
-
-# Use Crowdin OTA to automatically update language files.
-use-crowdin-ota: true
 
 # Developer mode.
 # Advanced feature—only enable if you know why you need it.
