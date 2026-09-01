@@ -80,7 +80,7 @@ public class SubCommand_Name implements CommandHandler<Player> {
                 .world(shop.bukkitLocation().getWorld().getName())
                 .from(QUserImpl.createFullFilled(sender))
                 .to(shop.getTaxAccount())
-                
+
                 .taxer(shop.getTaxAccount())
                 .tax(BigDecimal.ZERO)
                 .amount(BigDecimal.valueOf(fee))

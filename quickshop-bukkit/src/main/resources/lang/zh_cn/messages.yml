@@ -1139,6 +1139,11 @@ history:
       - "<white>- <yellow>{0}</yellow> <aqua>{1}</aqua></white>"
     top-n-valuable-customers-title: "<gold>前 {0} 个最有价值客户</gold>"
     no-result: "<white>没有结果</white>"
+updatenotify:
+  label:
+    lts: '[长期支持]'
+    stable: '[稳定]'
+    unstable: '[不稳定]'
 about:
   text:
     - "<b><aqua>QuickShop <yellow>{0}</yellow></aqua></b>"

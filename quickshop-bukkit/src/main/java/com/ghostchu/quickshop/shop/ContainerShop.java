@@ -234,18 +234,8 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     }
     this.symbolLink = symbolLink;
     this.inventoryWrapperProvider = inventoryWrapperProvider;
-    updateShopData();
     // ContainerShop constructor is not allowed to write any persistent data to disk
     // ContainerShop constructor may run on both ServerThread and AsyncThread
-  }
-
-  private void updateShopData() {
-
-    if(this.extra == null) {
-      return;
-    }
-
-    final ConfigurationSection section = getExtra(plugin.getJavaPlugin());
   }
 
   /**

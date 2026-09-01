@@ -1341,6 +1341,11 @@ history:
       - "<white>- <yellow>{0}</yellow> <aqua>{1}</aqua></white>"
     top-n-valuable-customers-title: "<gold>Top {0} valuable customers</gold>"
     no-result: "<white>No result</white>"
+updatenotify:
+  label:
+    lts: '[LTS]'
+    stable: '[Stable]'
+    unstable: '[Unstable]'
 about:
   text:
     - "<b><aqua>QuickShop <yellow>{0}</yellow></aqua></b>"

@@ -92,7 +92,7 @@ public class OngoingFeeWatcher implements Runnable {
           final QUser finalTaxAccount = taxAccount;
           Util.mainThreadRun(()->{
             final QSEconomyTransaction transaction = QSEconomyTransaction.builder()
-                    
+
                     .world(world.getName())
                     .amount(BigDecimal.valueOf(finalCost))
                     .to(finalTaxAccount)

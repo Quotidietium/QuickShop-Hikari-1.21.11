@@ -34,9 +34,6 @@ import java.util.List;
 public interface EconomyTransaction {
 
   /**
-   * Retrieves the currency associated with this transaction.
-   *
-  /**
    * Retrieves the amount associated with this transaction.
    *
    * @return the BigDecimal value representing the amount of the transaction
