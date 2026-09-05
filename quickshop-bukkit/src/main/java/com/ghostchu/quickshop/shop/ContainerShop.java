@@ -155,6 +155,25 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   private final AtomicBoolean updatingAtomic = new AtomicBoolean(false);
   private volatile CompletableFuture<Void> inFlightUpdate;
 
+  /**
+   * Stable, constant-time hash for set/map membership. The Lombok-generated hash read
+   * every field through its getter — and this class's getters are event-wrapped
+   * (isDisableDisplay/shopState/shopType/getTaxAccount construct and dispatch RETRIEVE
+   * events) or defensive clones (getItem) — so one hashCode() call dispatched several
+   * Bukkit events, called Bukkit.isPrimaryThread(), and cloned two ItemStacks, paid by
+   * every Set/Map operation (loadedShops.contains on the runtime-uuid lookup,
+   * SignUpdateWatcher's pending set per trade, HashMaps in commands). It also changed
+   * whenever a mutable field (price/item/unlimited/...) changed, which could strand
+   * entries in hash collections. Hashing on the final location field is
+   * contract-consistent (every equals-true pair shares it), constant-time, and stable
+   * for the object's lifetime; equals() remains the generated field comparison.
+   */
+  @Override
+  public int hashCode() {
+
+    return this.location.hashCode();
+  }
+
 
   /**
    * Adds a new shop. You need call ShopManager#loadShop if you create from outside of ShopLoader.

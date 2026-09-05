@@ -93,6 +93,11 @@ public class Util {
 
   private static final Map<Material, Integer> CUSTOM_STACKSIZE = new HashMap<>();
   private static final Set<Material> SHOPABLES = new HashSet<>();
+  // world-name snapshots behind Util.isBlacklistWorld, consulted on every canBeShop /
+  // isValid call (shop clicks, trade validation, runtime-uuid resolution); a null pair
+  // means "not yet snapshotted" and falls back to the config reads the snapshots replace
+  private static volatile Set<String> whitelistWorldsSnapshot = null;
+  private static volatile Set<String> blacklistWorldsSnapshot = null;
   private static final List<BlockFace> VERTICAL_FACING = List.of(BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST);
   private static int BYPASSED_CUSTOM_STACKSIZE = -1;
   //add limit for vanilla values
@@ -465,12 +470,24 @@ public class Util {
 
   public static boolean isBlacklistWorld(@NotNull final World world) {
 
-    final List<String> whitelist = plugin.getConfig().getStringList("shop.whitelist-world");
-    if(!whitelist.isEmpty()) {
-      return !whitelist.contains(world.getName());
+    // hot-path snapshot: the previous form materialized both config lists on every call
+    // (isValid -> canBeShop lands here per shop click/trade validation/uuid resolve);
+    // Util.initialize() refreshes the snapshots on load and reload
+    final Set<String> whitelist = whitelistWorldsSnapshot;
+    final Set<String> blacklist = blacklistWorldsSnapshot;
+    if(whitelist != null && blacklist != null) {
+      if(!whitelist.isEmpty()) {
+        return !whitelist.contains(world.getName());
+      }
+      return blacklist.contains(world.getName());
+    }
+    final List<String> liveWhitelist = plugin.getConfig().getStringList("shop.whitelist-world");
+    if(liveWhitelist != null && !liveWhitelist.isEmpty()) {
+      return !liveWhitelist.contains(world.getName());
     }
     // fall back to blacklist check
-    return plugin.getConfig().getStringList("shop.blacklist-world").contains(world.getName());
+    final List<String> liveBlacklist = plugin.getConfig().getStringList("shop.blacklist-world");
+    return liveBlacklist != null && liveBlacklist.contains(world.getName());
   }
 
   /**
@@ -1267,6 +1284,22 @@ public class Util {
   /**
    * Initialize the Util tools.
    */
+  /** Immutable snapshot of a world-name config list; null elements are skipped (a null
+   * entry would have crashed the previous per-call contains instead of matching). */
+  private static Set<String> snapshotWorldList(@Nullable final List<String> worlds) {
+
+    if(worlds == null || worlds.isEmpty()) {
+      return Set.of();
+    }
+    final Set<String> snapshot = new java.util.HashSet<>(worlds.size());
+    for(final String world : worlds) {
+      if(world != null) {
+        snapshot.add(world);
+      }
+    }
+    return Set.copyOf(snapshot);
+  }
+
   public static void initialize() {
 
     plugin = QuickShop.getInstance();
@@ -1278,6 +1311,8 @@ public class Util {
     }
     SHOPABLES.clear();
     CUSTOM_STACKSIZE.clear();
+    whitelistWorldsSnapshot = snapshotWorldList(plugin.getConfig().getStringList("shop.whitelist-world"));
+    blacklistWorldsSnapshot = snapshotWorldList(plugin.getConfig().getStringList("shop.blacklist-world"));
     devMode = plugin.getConfig().getBoolean("dev-mode");
     forceUseItemOriginalName = plugin.getConfig().getBoolean("shop.force-use-item-original-name", false);
     useEnchantmentForEnchantedBook = plugin.getConfig().getBoolean("shop.use-enchantment-for-enchanted-book", false);
