@@ -126,6 +126,20 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   private ItemStack item;
   @NotNull
   private ItemStack originalItem;
+  // memoized save-path item encodings, keyed on stack identity + amount (the only
+  // mutation paths are setItem's fresh snapshots and the allow-stack amount flip)
+  @EqualsAndHashCode.Exclude
+  private transient ItemStack encodedItemKey;
+  @EqualsAndHashCode.Exclude
+  private transient int encodedItemKeyAmount = -1;
+  @EqualsAndHashCode.Exclude
+  private transient String encodedItemValue;
+  @EqualsAndHashCode.Exclude
+  private transient ItemStack encodedOriginalKey;
+  @EqualsAndHashCode.Exclude
+  private transient int encodedOriginalKeyAmount = -1;
+  @EqualsAndHashCode.Exclude
+  private transient String encodedOriginalValue;
   @Nullable
   @EqualsAndHashCode.Exclude
   private AbstractDisplayItem displayItem = null;
@@ -490,8 +504,11 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     }
 
 
-    this.item = event.updated();
-    this.originalItem = item;
+    // defensive snapshots, matching the constructor's discipline: callers pass live
+    // stacks (a player's held item), and an aliased field would let later external
+    // mutations leak into the shop state and go stale in the memoized encodings
+    this.item = event.updated().clone();
+    this.originalItem = item.clone();
 
     //call our Post Phase
     event.clone(Phase.POST).callEvent();
@@ -1754,7 +1771,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
 
     return new ShopInfoStorage(this.bukkitLocation().getWorld().getName(),
                                new BlockPos(this.bukkitLocation()), this.owner, this.price,
-                               QuickShop.getInstance().platform().encodeStack(this.originalItem), isUnlimited()? 1 : 0
+                               encodedOriginalItemForSave(), isUnlimited()? 1 : 0
             , shopType().id(),
                                saveExtraToYaml(), this.disableDisplay,
                                this.taxAccount, inventoryWrapperProvider,
@@ -2029,8 +2046,10 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
 
   public @NotNull SimpleDataRecord createDataRecord() {
 
-    // both the legacy item column and the encoded column store the same encoding
-    final String encodedItem = plugin.platform().encodeStack(getItem());
+    // both the legacy item column and the encoded column store the same encoding; the
+    // encode is memoized because saves re-run it per flush although the stack only
+    // changes through setItem (identity) and the allow-stack amount flip (amount)
+    final String encodedItem = encodedItemForSave();
     return new SimpleDataRecord(
             getOwner(),
             encodedItem,
@@ -2050,6 +2069,46 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
             new Date(),
             getShopBenefit().serialize()
     );
+  }
+
+  /**
+   * Memoized {@code platform.encodeStack} for the traded item: a full NBT copy plus
+   * Base64 walk in production, re-run by every save and every purchase-log flush for a
+   * stack that only changes through {@code setItem} (new reference) or the allow-stack
+   * amount flip (amount key). The same (reference, amount) pair always encodes
+   * identically because setItem stores defensive clones, matching the constructor's
+   * snapshot discipline.
+   */
+  private String encodedItemForSave() {
+
+    final ItemStack source = this.item;
+    if(this.encodedItemKey == source && this.encodedItemKeyAmount == source.getAmount()
+            && this.encodedItemValue != null) {
+      return this.encodedItemValue;
+    }
+    final String encoded = plugin.platform().encodeStack(getItem());
+    this.encodedItemKey = source;
+    this.encodedItemKeyAmount = source.getAmount();
+    this.encodedItemValue = encoded;
+    return encoded;
+  }
+
+  /**
+   * Same memoization for the original item read by {@code saveToInfoStorage} (the
+   * purchase-log snapshot path); key discipline identical to {@link #encodedItemForSave()}.
+   */
+  private String encodedOriginalItemForSave() {
+
+    final ItemStack source = this.originalItem;
+    if(this.encodedOriginalKey == source && this.encodedOriginalKeyAmount == source.getAmount()
+            && this.encodedOriginalValue != null) {
+      return this.encodedOriginalValue;
+    }
+    final String encoded = QuickShop.getInstance().platform().encodeStack(this.originalItem);
+    this.encodedOriginalKey = source;
+    this.encodedOriginalKeyAmount = source.getAmount();
+    this.encodedOriginalValue = encoded;
+    return encoded;
   }
 
   /**
