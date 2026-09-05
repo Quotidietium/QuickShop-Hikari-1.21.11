@@ -3,6 +3,7 @@ package com.ghostchu.quickshop.benchmark;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.lang.management.ManagementFactory;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,7 +36,17 @@ public final class BenchHarness {
           new java.util.concurrent.atomic.AtomicLong();
 
   private final Map<String, List<Double>> results = new LinkedHashMap<>();
+  /**
+   * Allocation per op (B/op) samples, filled only in allocation mode
+   * ({@code -Dbenchmark.alloc}); keys parallel {@link #results}.
+   */
+  private final Map<String, List<Double>> allocResults = new LinkedHashMap<>();
   private final List<String> order = new ArrayList<>();
+
+  /** HotSpot thread allocation counter; null when the JVM does not expose it. */
+  private static final com.sun.management.ThreadMXBean ALLOC_THREAD_BEAN =
+          ManagementFactory.getThreadMXBean() instanceof final com.sun.management.ThreadMXBean bean
+                  && bean.isThreadAllocatedMemorySupported()? bean : null;
 
   public void bench(final String name, final Consumer<OpContext> op) {
 
@@ -43,6 +54,11 @@ public final class BenchHarness {
     final String profile = System.getProperty("benchmark.profile");
     if(profile != null && (profile.equals("*") || List.of(profile.split(",")).contains(name))) {
       benchProfiled(name, op);
+      return;
+    }
+    final String alloc = System.getProperty("benchmark.alloc");
+    if(alloc != null && (alloc.equals("*") || List.of(alloc.split(",")).contains(name))) {
+      benchWithAlloc(name, op);
       return;
     }
     final List<Double> samples = new ArrayList<>(WARMUP_SAMPLES + SAMPLES);
@@ -53,14 +69,76 @@ public final class BenchHarness {
     reportSamples(name, samples);
   }
 
+  /**
+   * Allocation-measuring variant: identical timing loop, plus a
+   * {@code getThreadAllocatedBytes} snapshot at each sample boundary so each sample yields
+   * both ns/op and B/op. The snapshot calls sit outside the timed window, so ns/op is
+   * unaffected; B/op is nearly deterministic, which makes it a stable A/B axis where
+   * mock-stack timing noise would drown small wins.
+   */
+  private void benchWithAlloc(final String name, final Consumer<OpContext> op) {
+
+    if(ALLOC_THREAD_BEAN == null) {
+      System.out.print(" [alloc unsupported, timing only]");
+      final List<Double> samples = new ArrayList<>(WARMUP_SAMPLES + SAMPLES);
+      for(int i = 0; i < WARMUP_SAMPLES + SAMPLES; i++) {
+        samples.add(sampleNsPerOp(op));
+        System.out.print('.');
+      }
+      reportSamples(name, samples);
+      return;
+    }
+    final long threadId = Thread.currentThread().getId();
+    final List<Double> samples = new ArrayList<>(WARMUP_SAMPLES + SAMPLES);
+    final List<Double> bytesPerOp = new ArrayList<>(WARMUP_SAMPLES + SAMPLES);
+    for(int i = 0; i < WARMUP_SAMPLES + SAMPLES; i++) {
+      final OpContext context = new OpContext();
+      long ops = 0;
+      final long allocBefore = ALLOC_THREAD_BEAN.getThreadAllocatedBytes(threadId);
+      final long start = System.nanoTime();
+      final long deadline = start + MIN_BATCH_MILLIS * 1_000_000L;
+      long now = start;
+      while(now < deadline) {
+        op.accept(context);
+        ops++;
+        now = System.nanoTime();
+      }
+      final long allocAfter = ALLOC_THREAD_BEAN.getThreadAllocatedBytes(threadId);
+      final double ns = ops == 0? singleShotNs(op) : (now - start) / (double)ops;
+      samples.add(ns);
+      bytesPerOp.add(ops == 0? Double.NaN : Math.max(0, allocAfter - allocBefore) / (double)ops);
+      System.out.print('.');
+    }
+    reportSamples(name, samples, bytesPerOp);
+  }
+
   /** Reports and stores already-collected samples for a case. */
   private void reportSamples(final String name, final List<Double> samples) {
+
+    reportSamples(name, samples, null);
+  }
+
+  /** Reports and stores already-collected samples, optionally with B/op samples. */
+  private void reportSamples(final String name, final List<Double> samples, final List<Double> bytesPerOp) {
 
     final List<Double> measured = samples.subList(WARMUP_SAMPLES, samples.size());
     final double median = median(measured);
     results.put(name, measured);
+    if(bytesPerOp != null) {
+      allocResults.put(name, new ArrayList<>(bytesPerOp.subList(WARMUP_SAMPLES, bytesPerOp.size())));
+    }
     order.add(name);
-    System.out.printf(" %,12.1f ns/op  (%,10.0f ops/s)%n", median, 1_000_000_000.0 / median);
+    if(bytesPerOp != null) {
+      final List<Double> allocMeasured = bytesPerOp.subList(WARMUP_SAMPLES, bytesPerOp.size());
+      final List<Double> finite = allocMeasured.stream().filter(d -> !d.isNaN()).toList();
+      if(!finite.isEmpty()) {
+        System.out.printf(" %,12.1f ns/op  (%,10.0f ops/s)  %,10.1f B/op%n", median, 1_000_000_000.0 / median, median(finite));
+      } else {
+        System.out.printf(" %,12.1f ns/op  (%,10.0f ops/s)  n/a B/op%n", median, 1_000_000_000.0 / median);
+      }
+    } else {
+      System.out.printf(" %,12.1f ns/op  (%,10.0f ops/s)%n", median, 1_000_000_000.0 / median);
+    }
     System.gc();
     try {
       Thread.sleep(50);
@@ -141,11 +219,17 @@ public final class BenchHarness {
     }
     if(ops == 0) {
       // op is slower than the batch window: run it once and time it precisely
-      final long singleStart = System.nanoTime();
-      op.accept(context);
-      return (System.nanoTime() - singleStart) * 1.0d;
+      return singleShotNs(op);
     }
     return (now - start) / (double)ops;
+  }
+
+  /** Times a single op precisely (for ops slower than the batch window). */
+  private double singleShotNs(final Consumer<OpContext> op) {
+
+    final long singleStart = System.nanoTime();
+    op.accept(new OpContext());
+    return (System.nanoTime() - singleStart) * 1.0d;
   }
 
   public static double median(final List<Double> values) {
@@ -189,6 +273,14 @@ public final class BenchHarness {
       entry.put("minNsPerOp", all.get(0));
       entry.put("maxNsPerOp", all.get(all.size() - 1));
       entry.put("samples", measured);
+      final List<Double> bytes = allocResults.get(name);
+      if(bytes != null) {
+        final List<Double> finite = bytes.stream().filter(d -> !d.isNaN()).toList();
+        if(!finite.isEmpty()) {
+          entry.put("medianBytesPerOp", median(finite));
+        }
+        entry.put("samplesBytesPerOp", bytes);
+      }
       cases.add(entry);
     }
     report.put("cases", cases);
