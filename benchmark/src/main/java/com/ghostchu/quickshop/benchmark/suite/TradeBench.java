@@ -94,6 +94,16 @@ public final class TradeBench {
       consume(Util.countSpace(fixtures.player(), fixtures.shop()));
     });
 
+    // component case: the symbol-link resolution every shop.getInventory() runs —
+    // format routing, BlockPos deserialization, world/block-state resolution and the
+    // PerfMonitor span. Runs the real BukkitInventoryWrapperManager over the same
+    // "v;x;y;z;world" links production shops carry (world/block stubs are global).
+    final BukkitInventoryWrapperManager locateManager = new BukkitInventoryWrapperManager();
+    harness.bench("trade/locateSymbolLink", ctx -> {
+      ctx.index++;
+      consume(locateManager.locate("2;1000;64;1000;world"));
+    });
+
     final AtomicInteger txCounter = new AtomicInteger();
     harness.bench("trade/inventoryTxCommit", ctx -> {
       ctx.index++;

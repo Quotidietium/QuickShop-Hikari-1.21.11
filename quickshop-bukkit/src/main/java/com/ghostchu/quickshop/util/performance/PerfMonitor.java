@@ -5,13 +5,14 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.logging.Level;
 
 public class PerfMonitor implements AutoCloseable {
 
   private final String name;
-  private final Instant startTime;
+  // monotonic start; the wall-clock Instant this replaced allocated per monitored block
+  // and made the elapsed measurement sensitive to wall-clock adjustments
+  private final long startNanos = System.nanoTime();
   @Nullable
   private final Duration exceptedDuration;
   private final Log.Caller caller;
@@ -22,7 +23,6 @@ public class PerfMonitor implements AutoCloseable {
 
     this.caller = Log.Caller.create();
     this.name = name;
-    this.startTime = Instant.now();
     this.exceptedDuration = null;
   }
 
@@ -30,7 +30,6 @@ public class PerfMonitor implements AutoCloseable {
 
     this.caller = Log.Caller.create();
     this.name = name;
-    this.startTime = Instant.now();
     this.exceptedDuration = exceptedDuration;
   }
 
@@ -38,12 +37,6 @@ public class PerfMonitor implements AutoCloseable {
   public Duration getExceptedDuration() {
 
     return exceptedDuration;
-  }
-
-  @NotNull
-  public Instant getStartTime() {
-
-    return startTime;
   }
 
   @NotNull
@@ -83,7 +76,7 @@ public class PerfMonitor implements AutoCloseable {
   @NotNull
   public Duration getTimePassed() {
 
-    return Duration.between(startTime, Instant.now());
+    return Duration.ofNanos(System.nanoTime() - startNanos);
   }
 
   public boolean isReachedLimit() {

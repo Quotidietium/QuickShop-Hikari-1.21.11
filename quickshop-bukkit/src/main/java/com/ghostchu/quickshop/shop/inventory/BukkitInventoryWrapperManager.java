@@ -3,7 +3,6 @@ package com.ghostchu.quickshop.shop.inventory;
 import com.ghostchu.quickshop.api.inventory.InventoryWrapper;
 import com.ghostchu.quickshop.api.inventory.InventoryWrapperManager;
 import com.ghostchu.quickshop.api.serialize.BlockPos;
-import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.common.util.JsonUtil;
 import com.ghostchu.quickshop.util.logger.Log;
 import com.ghostchu.quickshop.util.performance.PerfMonitor;
@@ -23,7 +22,13 @@ public class BukkitInventoryWrapperManager implements InventoryWrapperManager {
   public @NotNull InventoryWrapper locate(@NotNull final String symbolLink) throws IllegalArgumentException {
 
     try(final PerfMonitor ignored = new PerfMonitor("Locate inventory wrapper")) {
-      if(CommonUtil.isJson(symbolLink)) {
+      // format discriminator without parsing: old-format links are Gson objects, which
+      // always serialize with a leading '{'; new-format links are "v;x;y;z;world" and can
+      // never start with '{'. The historical isJson() check ran a full Gson parse — a
+      // parse that FAILS with a JsonSyntaxException on every new-format link, i.e. on
+      // every inventory location. Corrupted input throws IllegalArgumentException either
+      // way (the catch below wraps both branches' failures identically).
+      if(!symbolLink.isEmpty() && symbolLink.charAt(0) == '{') {
         Log.debug("Reading the old format symbol link: " + symbolLink);
         return locateOld(symbolLink);
       } else {
