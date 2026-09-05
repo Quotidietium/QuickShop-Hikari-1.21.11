@@ -346,12 +346,37 @@ public final class MarketUtils {
         sorted.sort((a, b) -> a.comparePrice(b.price(), false));
       }
       case PRICE_DESC -> sorted.sort((a, b) -> a.comparePrice(b.price(), true));
-      case STOCK -> sorted.sort(Comparator.comparingInt(MarketUtils::getStockFromCache).reversed());
+      case STOCK -> sortShopsByStockDesc(sorted, MarketUtils::getStockFromCache);
       case NAME -> sorted.sort(Comparator.comparing(shop->
                                                             CommonUtil.prettifyText(shop.getItem().getType().name())));
     }
 
     return sorted;
+  }
+
+  /**
+   * Decorate-sort-undecorate for the STOCK mode. The previous comparator re-read the
+   * stock key on every comparison ({@code comparingInt(...).reversed()}), so TimSort
+   * evaluated it ~2·n·log n times — each read going through {@code isUnlimited()} /
+   * {@code getShopId()} and, on the legacy path, a blocking cache query per comparison.
+   * Keys are read exactly once per shop here. Ordering is identical: the comparator only
+   * distinguishes keys and {@code List.sort} is stable, so equal keys keep encounter
+   * order exactly like the previous stable reversed comparison.
+   */
+  private static void sortShopsByStockDesc(@NotNull final List<Shop> shops,
+                                           @NotNull final java.util.function.ToIntFunction<Shop> keyReader) {
+
+    record StockKey(@NotNull Shop shop, int stock) {
+
+    }
+    final List<StockKey> decorated = new ArrayList<>(shops.size());
+    for(final Shop shop : shops) {
+      decorated.add(new StockKey(shop, keyReader.applyAsInt(shop)));
+    }
+    decorated.sort((a, b)->Integer.compare(b.stock(), a.stock()));
+    for(int i = 0; i < decorated.size(); i++) {
+      shops.set(i, decorated.get(i).shop());
+    }
   }
 
   /**
@@ -368,7 +393,7 @@ public final class MarketUtils {
     switch(sortMode) {
       case PRICE_ASC -> sorted.sort((a, b) -> a.comparePrice(b.price(), false));
       case PRICE_DESC -> sorted.sort((a, b) -> a.comparePrice(b.price(), true));
-      case STOCK -> sorted.sort(Comparator.comparingInt((final Shop shop)->stockOf(shop, snapshot)).reversed());
+      case STOCK -> sortShopsByStockDesc(sorted, shop->stockOf(shop, snapshot));
       case NAME -> sorted.sort(Comparator.comparing(shop->
                                                             CommonUtil.prettifyText(shop.getItem().getType().name())));
     }

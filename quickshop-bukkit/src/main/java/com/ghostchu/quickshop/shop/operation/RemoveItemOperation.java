@@ -69,12 +69,17 @@ public class RemoveItemOperation implements Operation {
 
     int remains = amount;
     int lastRemains = -1;
+    // one working clone for the whole loop: removeItem only reads and mutates the passed
+    // stack's amount, and every iteration overwrites the amount before the call, so a
+    // fresh clone per iteration bought nothing (leftover maps read the same mutated
+    // stack reference either way)
+    final ItemStack working = item.clone();
     while(remains > 0) {
       final int stackSize = Math.min(remains, itemMaxStackSize);
-      item.setAmount(stackSize);
+      working.setAmount(stackSize);
       final int remainsSnap = remains;
       Log.debug(() -> "Committing remove item operation, remains: " + remainsSnap + ", stackSize: " + stackSize + ", target: " + item.getType());
-      final Map<Integer, ItemStack> notFit = inv.removeItem(item.clone());
+      final Map<Integer, ItemStack> notFit = inv.removeItem(working);
       if(notFit.isEmpty()) {
         remains -= stackSize;
       } else {

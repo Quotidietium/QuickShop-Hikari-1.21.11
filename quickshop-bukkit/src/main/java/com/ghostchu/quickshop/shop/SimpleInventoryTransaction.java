@@ -44,6 +44,11 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
     new InventoryTransactionEvent(this).callEvent();
   }
 
+  /** Statelessness of the default callback makes one shared instance sufficient. */
+  private static final SimpleTransactionCallback SHARED_CALLBACK = new SimpleTransactionCallback() {
+
+  };
+
   /**
    * Commit the transaction
    *
@@ -53,8 +58,7 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
   public boolean commit() {
 
     try(PerfMonitor ignored = new PerfMonitor("Inventory Transaction - Commit")) {
-      return this.commit(new SimpleTransactionCallback() {
-      });
+      return this.commit(SHARED_CALLBACK);
     }
   }
 
@@ -68,9 +72,13 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
   @Override
   public boolean commit(@NotNull final TransactionCallback callback) {
 
-    final String fromDesc = describeInv(from), toDesc = describeInv(to), itemDesc = describeItem(item);
+    // references snapshotted per the lazy-log contract; describeInv/describeItem only run
+    // if the record is ever rendered (they cost virtual calls + string building)
+    final InventoryWrapper fromSnap = from, toSnap = to;
+    final ItemStack itemSnap = item;
     final int amountSnap = amount;
-    Log.transaction(() -> "Transaction begin: Regular Commit --> " + fromDesc + " => " + toDesc + "; Amount: " + amountSnap + " Item: " + itemDesc);
+    Log.transaction(() -> "Transaction begin: Regular Commit --> " + describeInv(fromSnap) + " => " + describeInv(toSnap)
+            + "; Amount: " + amountSnap + " Item: " + describeItem(itemSnap));
     if(!callback.onCommit(this)) {
       this.lastError = "Plugin cancelled this transaction.";
       callback.onFailed(this);
@@ -156,9 +164,12 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
   @Override
   public boolean failSafeCommit() {
 
-    final String fromDesc = describeInv(from), toDesc = describeInv(to), itemDesc = describeItem(item);
+    // same snapshot-lazy pattern as commit(): descriptors built only on render
+    final InventoryWrapper fromSnap = from, toSnap = to;
+    final ItemStack itemSnap = item;
     final int amountSnap = amount;
-    Log.transaction(() -> "Transaction begin: FailSafe Commit --> " + fromDesc + " => " + toDesc + "; Amount: " + amountSnap + " Item: " + itemDesc);
+    Log.transaction(() -> "Transaction begin: FailSafe Commit --> " + describeInv(fromSnap) + " => " + describeInv(toSnap)
+            + "; Amount: " + amountSnap + " Item: " + describeItem(itemSnap));
     final boolean result = commit();
     if(!result) {
       Log.transaction(Level.WARNING, "Fail-safe commit failed, starting rollback: " + lastError);

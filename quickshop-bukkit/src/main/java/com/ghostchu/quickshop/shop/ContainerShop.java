@@ -435,9 +435,10 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public @NotNull ItemStack getItem() {
 
-    final ShopItemEvent event = new ShopItemEvent(Phase.RETRIEVE, this, this.item.clone());
-
-    return event.updated();
+    // the ShopItemEvent(RETRIEVE) wrapper built here was never dispatched — nothing
+    // could observe it and updated() returned the very clone passed in — so the
+    // contract reduces to the defensive clone itself
+    return this.item.clone();
   }
 
   @Override
@@ -1413,9 +1414,13 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     }
     final com.ghostchu.quickshop.api.shop.ItemMatcher matcher = plugin.getItemMatcher();
     if(matcher instanceof final com.ghostchu.quickshop.util.matcher.item.QuickShopItemMatcherImpl builtin) {
+      // with no listeners the matcher's cross-type pre-gate already reads the slot's type
+      // and rejects mismatches, so the AIR pre-check's per-slot getType() is a duplicate
+      // read; with listeners the pre-gate is bypassed, so keep the explicit check
+      final boolean precheckAir = com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners();
       int items = 0;
       for(final ItemStack iStack : inv) {
-        if(iStack == null || iStack.getType() == org.bukkit.Material.AIR) {
+        if(iStack == null || (precheckAir && iStack.getType() == org.bukkit.Material.AIR)) {
           continue;
         }
         if(builtin.matches(this.item, iStack)) {
