@@ -129,11 +129,17 @@ public final class MarketUtils {
     final ItemMatcher matcher = QuickShop.getInstance().getItemMatcher();
 
     for(final Shop shop : shops) {
+      // one defensive clone per shop, reused by the type gate, every group-probe and the
+      // new-group construction (each shop.getItem() call is a full stack copy in
+      // production; the type gate reads the clone-free getMaterial instead)
+      final ItemStack shopItem = shop.getItem();
       MarketItemGroup matchingGroup = null;
-      List<MarketItemGroup> matGroups = groupsByMat.computeIfAbsent(shop.getItem().getType(), k->new ArrayList<>());
-      // Find existing group that matches this shop's item
+      List<MarketItemGroup> matGroups = groupsByMat.computeIfAbsent(shopItem.getType(), k->new ArrayList<>());
+      // Find existing group that matches this shop's item; the package-private
+      // representative read skips the defensive clone (matches() treats its arguments
+      // as read-only — full-inventory scans already pass live stacks)
       for(final MarketItemGroup group : matGroups) {
-        if(matcher.matches(group.getRepresentativeItem(), shop.getItem())) {
+        if(matcher.matches(group.getRepresentativeItemUncloned(), shopItem)) {
           matchingGroup = group;
           break;
         }
@@ -141,7 +147,7 @@ public final class MarketUtils {
 
       // Create new group if no match found
       if(matchingGroup == null) {
-        matchingGroup = new MarketItemGroup(shop.getItem());
+        matchingGroup = new MarketItemGroup(shopItem);
         matGroups.add(matchingGroup);
         groups.add(matchingGroup);
       }
@@ -347,11 +353,45 @@ public final class MarketUtils {
       }
       case PRICE_DESC -> sorted.sort((a, b) -> a.comparePrice(b.price(), true));
       case STOCK -> sortShopsByStockDesc(sorted, MarketUtils::getStockFromCache);
-      case NAME -> sorted.sort(Comparator.comparing(shop->
-                                                            CommonUtil.prettifyText(shop.getItem().getType().name())));
+      case NAME -> sortShopsByName(sorted);
     }
 
     return sorted;
+  }
+
+  /**
+   * Prettified material names, memoized over the finite {@link Material} domain: the
+   * NAME sort and menu headers ask for the same strings on every render.
+   */
+  private static final Map<Material, String> PRETTIFIED_NAMES = new java.util.concurrent.ConcurrentHashMap<>();
+
+  @NotNull
+  private static String prettifiedName(@NotNull final Material material) {
+
+    return PRETTIFIED_NAMES.computeIfAbsent(material, mat->CommonUtil.prettifyText(mat.name()));
+  }
+
+  /**
+   * Decorate-sort-undecorate for the NAME mode, mirroring {@link #sortShopsByStockDesc}:
+   * the previous comparator rebuilt its key (a full defensive stack clone plus the
+   * prettify string) on every comparison — TimSort evaluates it ~2·n·log n times. Keys
+   * are read exactly once per shop here, through the clone-free {@code getMaterial()}.
+   * Ordering is identical: the comparator only distinguishes keys and {@code List.sort}
+   * is stable, so equal keys keep encounter order exactly like before.
+   */
+  private static void sortShopsByName(@NotNull final List<Shop> shops) {
+
+    record NameKey(@NotNull Shop shop, @NotNull String name) {
+
+    }
+    final List<NameKey> decorated = new ArrayList<>(shops.size());
+    for(final Shop shop : shops) {
+      decorated.add(new NameKey(shop, prettifiedName(shop.getMaterial())));
+    }
+    decorated.sort(Comparator.comparing(NameKey::name));
+    for(int i = 0; i < decorated.size(); i++) {
+      shops.set(i, decorated.get(i).shop());
+    }
   }
 
   /**
@@ -394,8 +434,7 @@ public final class MarketUtils {
       case PRICE_ASC -> sorted.sort((a, b) -> a.comparePrice(b.price(), false));
       case PRICE_DESC -> sorted.sort((a, b) -> a.comparePrice(b.price(), true));
       case STOCK -> sortShopsByStockDesc(sorted, shop->stockOf(shop, snapshot));
-      case NAME -> sorted.sort(Comparator.comparing(shop->
-                                                            CommonUtil.prettifyText(shop.getItem().getType().name())));
+      case NAME -> sortShopsByName(sorted);
     }
 
     return sorted;

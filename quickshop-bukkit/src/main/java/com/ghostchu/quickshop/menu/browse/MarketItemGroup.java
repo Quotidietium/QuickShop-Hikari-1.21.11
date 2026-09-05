@@ -180,6 +180,17 @@ public class MarketItemGroup {
     return representativeItem.clone();
   }
 
+  /**
+   * Package-private representative read without the defensive clone: the grouping loop
+   * probes groups per shop, and {@code ItemMatcher.matches} treats its arguments as
+   * read-only (full-inventory scans already pass live stacks).
+   */
+  @NotNull
+  ItemStack getRepresentativeItemUncloned() {
+
+    return representativeItem;
+  }
+
   @NotNull
   public List<Shop> getShops() {
 
@@ -295,8 +306,12 @@ public class MarketItemGroup {
   @NotNull
   public String getItemDisplayName() {
 
-    if(representativeItem.hasItemMeta() && representativeItem.getItemMeta().hasDisplayName()) {
-      return representativeItem.getItemMeta().getDisplayName();
+    // meta reads are stack copies in production — read once, only when present
+    if(representativeItem.hasItemMeta()) {
+      final var meta = representativeItem.getItemMeta();
+      if(meta != null && meta.hasDisplayName()) {
+        return meta.getDisplayName();
+      }
     }
     return CommonUtil.prettifyText(representativeItem.getType().name());
   }

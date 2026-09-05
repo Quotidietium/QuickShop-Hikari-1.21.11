@@ -181,7 +181,7 @@ public class MainPage {
 
           final String priceFormatted = shop.format(shop.bukkitLocation().getWorld().getName());
 
-          final AbstractItemStack<ItemStack> stack = new BukkitItemStack().of(shop.getItem().getType().key().asString(), shop.getShopStackingAmount())
+          final AbstractItemStack<ItemStack> stack = new BukkitItemStack().of(shop.getMaterial().key().asString(), shop.getShopStackingAmount())
                   .lore(getConfigLore(id, shopItemConfig, shop.getOwner().getDisplay(), location,
                                       shop.shopType().identifier(), priceFormatted,
                                       MarketUtils.stockOf(shop, inventorySnapshot)));

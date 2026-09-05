@@ -288,7 +288,7 @@ public class GroupedItemPage {
       // Find ALL shops for this item type from unfiltered list (so filter can be changed on ShopListPage)
       final ItemStack representativeItem = group.getRepresentativeItem();
       final List<Shop> allShopsForItem = allShops.stream()
-              .filter(s->s.getItem().getType() == representativeItem.getType())
+              .filter(s->s.getMaterial() == representativeItem.getType())
               .toList();
 
       menuPage.addIcon(new IconBuilder(stack)

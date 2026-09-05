@@ -148,11 +148,12 @@ public class ShopListPage {
     final int itemInfoSlot = searchConfig != null? searchConfig.getSlot() : 0;
     if(!allShops.isEmpty()) {
       final Shop firstShop = allShops.getFirst();
+      final org.bukkit.Material firstMaterial = firstShop.getMaterial();
       final String filterIndicator = getFilterIndicator(filterMode);
       final AbstractItemStack<ItemStack> infoStack = new BukkitItemStack()
-              .of(firstShop.getItem().getType().key().asString(), 1)
+              .of(firstMaterial.key().asString(), 1)
               .display(QuickShop.getInstance().platform().miniMessage().deserialize(
-                      "<yellow>" + CommonUtil.prettifyText(firstShop.getItem().getType().name()) + "</yellow>"))
+                      "<yellow>" + CommonUtil.prettifyText(firstMaterial.name()) + "</yellow>"))
               .lore(List.of(
                       QuickShop.getInstance().platform().miniMessage().deserialize("<gray>Showing: " + filterIndicator + "</gray>"),
                       QuickShop.getInstance().platform().miniMessage().deserialize("<gray>Shops: <white>" + sortedShops.size() + "</white></gray>"),
@@ -266,10 +267,11 @@ public class ShopListPage {
       final List<Component> lore = buildShopLore(shop, avgPrice, canTeleport, inventorySnapshot);
 
       // Get display name for the item
-      final String itemName = CommonUtil.prettifyText(shop.getItem().getType().name());
+      final org.bukkit.Material material = shop.getMaterial();
+      final String itemName = CommonUtil.prettifyText(material.name());
 
       final AbstractItemStack<ItemStack> stack = new BukkitItemStack()
-              .of(shop.getItem().getType().key().asString(), shop.getShopStackingAmount())
+              .of(material.key().asString(), shop.getShopStackingAmount())
               .display(QuickShop.getInstance().platform().miniMessage().deserialize("<yellow>" + itemName + "</yellow>"))
               .lore(lore);
 

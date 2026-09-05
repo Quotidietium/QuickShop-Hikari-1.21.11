@@ -105,5 +105,69 @@ public final class MenuBench {
         com.ghostchu.quickshop.benchmark.BenchHarness.consume(result);
       }
     });
+
+    // grouping + NAME-sort pipeline (browse main page): groupShopsByItem runs every
+    // loaded shop through the real matcher, and NAME sort orders by prettified
+    // material name. Shop mocks bridge the candidate's clone-free getMaterial() to
+    // getItem().getType() via the default answer, so one bench source measures both
+    // sides' real pipelines (baseline sort keeps deriving the key per comparison).
+    final var matcherConfig = Env.pin(mock(dev.dejvokep.boostedyaml.block.implementation.Section.class));
+    lenient().when(plugin.getConfig().getSection("matcher.item")).thenReturn(matcherConfig);
+    final var platform = Env.pin(Env.hotMock(com.ghostchu.quickshop.platform.Platform.class));
+    lenient().when(platform.getItemShopId(any(org.bukkit.inventory.ItemStack.class))).thenReturn(null);
+    lenient().when(plugin.platform()).thenReturn(platform);
+    // construct before the stubbing opens: the matcher's constructor re-reads the plugin
+    // config, a mock call that must not nest inside when(...) (same hazard TradeBench
+    // documents for the layout provider)
+    final var realMatcher = new com.ghostchu.quickshop.util.matcher.item.QuickShopItemMatcherImpl(plugin);
+    lenient().when(plugin.getItemMatcher()).thenReturn(realMatcher);
+
+    final org.bukkit.Material[] groupMaterials = {
+            org.bukkit.Material.DIAMOND, org.bukkit.Material.IRON_INGOT, org.bukkit.Material.GOLD_INGOT,
+            org.bukkit.Material.EMERALD, org.bukkit.Material.REDSTONE, org.bukkit.Material.LAPIS_LAZULI,
+            org.bukkit.Material.COAL, org.bukkit.Material.STONE};
+    final org.mockito.stubbing.Answer<Object> materialBridge = inv -> {
+      if(inv.getMethod().getName().equals("getMaterial")) {
+        return ((Shop)inv.getMock()).getItem().getType();
+      }
+      return org.mockito.Answers.RETURNS_DEFAULTS.answer(inv);
+    };
+    final int groupCount = 120;
+    final List<Shop> groupShops = new ArrayList<>(groupCount);
+    for(int i = 0; i < groupCount; i++) {
+      final long id = 10_000 + i;
+      final org.bukkit.Material material = groupMaterials[i % groupMaterials.length];
+      final Shop shop = Env.pin(mock(Shop.class,
+                                     withSettings().stubOnly().defaultAnswer(materialBridge)));
+      final var stack = Env.pin(Env.hotMock(org.bukkit.inventory.ItemStack.class));
+      when(stack.getType()).thenReturn(material);
+      when(stack.hasItemMeta()).thenReturn(false);
+      when(stack.clone()).thenReturn(stack);
+      when(stack.isSimilar(any(org.bukkit.inventory.ItemStack.class))).thenAnswer(inv -> {
+        final var other = inv.getArgument(0, org.bukkit.inventory.ItemStack.class);
+        return other != null && other.getType() == material && !other.hasItemMeta();
+      });
+      when(shop.getShopId()).thenReturn(id);
+      when(shop.isUnlimited()).thenReturn(false);
+      when(shop.isSelling()).thenReturn(true);
+      when(shop.isBuying()).thenReturn(false);
+      lenient().when(shop.getPrice()).thenReturn(10.0d);
+      when(shop.getItem()).thenReturn(stack);
+      lenient().when(shopManager.queryShopInventoryCacheInDatabase(any(Shop.class)))
+              .thenAnswer(inv->CompletableFuture.completedFuture(
+                      new SimpleShopInventoryCountCache(64, 64, true)));
+      groupShops.add(shop);
+    }
+
+    harness.bench("menu/groupAndNameSort", ctx -> {
+      ctx.index++;
+      consume(MarketUtils.groupShopsByItem(groupShops));
+      consume(MarketUtils.sortShops(groupShops, BrowseSortMode.NAME));
+    });
+  }
+
+  private static void consume(final Object value) {
+
+    com.ghostchu.quickshop.benchmark.BenchHarness.consume(value);
   }
 }

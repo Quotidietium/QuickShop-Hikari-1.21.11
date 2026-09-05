@@ -24,6 +24,7 @@ import com.ghostchu.quickshop.api.obj.QUser;
 import com.ghostchu.quickshop.api.shop.IShopType;
 import com.ghostchu.quickshop.api.shop.state.ShopState;
 import net.kyori.adventure.text.Component;
+import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
@@ -97,6 +98,20 @@ public interface ShopMeta<U> extends ShopPrice<U> {
   default int getItemUnitSize() {
 
     return getItem().getAmount();
+  }
+
+  /**
+   * Get shop item's material without cloning the underlying stack. Default
+   * implementation goes through {@link #getItem()}; implementations holding the stack
+   * directly should override to avoid the defensive copy — callers that only read the
+   * type (menu grouping/sorting/filtering, display building) should prefer this.
+   *
+   * @return The shop item's material
+   */
+  @NotNull
+  default Material getMaterial() {
+
+    return getItem().getType();
   }
 
   /**
