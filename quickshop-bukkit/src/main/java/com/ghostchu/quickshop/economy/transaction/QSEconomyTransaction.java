@@ -55,6 +55,8 @@ public class QSEconomyTransaction implements EconomyTransaction {
 
   @JsonUtil.Hidden
   private final EconomyProvider provider;
+  // the operations this transaction creates carry this provider so transfers and
+  // rollbacks go through the same core that authorized the balance check
 
   private BenefitProvider benefitProvider;
 
@@ -389,7 +391,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
       return false;
     }
 
-    if(from != null && !this.executeOperation(new EconomyWithdrawOperation(from, fromAmount, world))) {
+    if(from != null && !this.executeOperation(new EconomyWithdrawOperation(from, fromAmount, world, this.provider))) {
 
       this.lastError = "Failed to withdraw " + fromAmount.toPlainString() + " from account " + from + "LastError: " + provider.lastError();
       callback.onFailed(this);
@@ -400,7 +402,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
     if(benefitProvider.none()) {
 
       this.ownerPayment = amountAfterTax;
-      if(to != null && !this.executeOperation(new EconomyDepositOperation(to, amountAfterTax, world))) {
+      if(to != null && !this.executeOperation(new EconomyDepositOperation(to, amountAfterTax, world, this.provider))) {
 
         this.lastError = "Failed to deposit " + amountAfterTax.toPlainString() + " to account " + to + "LastError: " + provider.lastError();
         callback.onFailed(this);
@@ -431,7 +433,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
       final QUser benefitKey = entry.getKey();
       final BigDecimal benefitValue = entry.getValue();
       Log.transaction(() -> "Processing benefit for " + benefitKey + ", value: " + benefitValue.toPlainString());
-      if(!this.executeOperation(new EconomyDepositOperation(entry.getKey(), amountAfterTax.multiply(entry.getValue()), world))) {
+      if(!this.executeOperation(new EconomyDepositOperation(entry.getKey(), amountAfterTax.multiply(entry.getValue()), world, this.provider))) {
 
         this.lastError = "Failed to deposit " + amountAfterTax + " to account " + entry.getKey() + "LastError: " + provider.lastError();
         callback.onFailed(this);
@@ -447,7 +449,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
     this.ownerPayment = CalculateUtil.multiply(amountAfterTax, fullAmount.subtract(payout));
     final BigDecimal ownerPaymentSnap = ownerPayment;
     Log.transaction(() -> "Benefit for owner remaining: " + ownerPaymentSnap.toPlainString());
-    if(to != null && ownerPayment.compareTo(BigDecimal.ZERO) > 0 && !this.executeOperation(new EconomyDepositOperation(to, ownerPayment, world))) {
+    if(to != null && ownerPayment.compareTo(BigDecimal.ZERO) > 0 && !this.executeOperation(new EconomyDepositOperation(to, ownerPayment, world, this.provider))) {
 
       this.lastError = "Failed to deposit " + ownerPayment.toPlainString() + " to account " + to + "LastError: " + provider.lastError();
       callback.onFailed(this);
@@ -469,7 +471,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
       return;
     }
 
-    if(!this.executeOperation(new EconomyDepositOperation(taxer, totalTax, world))) {
+    if(!this.executeOperation(new EconomyDepositOperation(taxer, totalTax, world, this.provider))) {
 
       this.lastError = "Failed to deposit tax to tax account: " + totalTax.toPlainString() + ". LastError: " + provider.lastError();
       callback.onTaxFailed(this);

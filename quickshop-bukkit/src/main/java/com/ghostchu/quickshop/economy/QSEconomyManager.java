@@ -84,7 +84,9 @@ public class QSEconomyManager implements EconomyManager {
   @Override
   public void useProvider(final @NotNull String id) {
 
-    this.currentProvider = id;
+    // keys in providers are stored upper-cased; normalize once here so the hot
+    // provider() lookup is a bare map get instead of a per-call toUpperCase copy
+    this.currentProvider = id.toUpperCase(Locale.ROOT);
   }
 
   /**
@@ -95,6 +97,6 @@ public class QSEconomyManager implements EconomyManager {
   @Override
   public @Nullable EconomyProvider provider() {
 
-    return providers.get(currentProvider.toUpperCase(Locale.ROOT));
+    return providers.get(currentProvider);
   }
 }

@@ -21,6 +21,7 @@ import com.ghostchu.quickshop.api.QuickShopAPI;
 import com.ghostchu.quickshop.api.economy.EconomyProvider;
 import com.ghostchu.quickshop.api.obj.QUser;
 import com.ghostchu.quickshop.api.operation.Operation;
+import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
 
@@ -35,6 +36,12 @@ public class EconomyDepositOperation implements Operation {
   private final QUser account;
   private final BigDecimal amount;
   private final String world;
+  /**
+   * Provider captured by the creating transaction, so commit and rollback transfer through
+   * the same core that authorized the balance check; null keeps the historic per-commit
+   * services-manager resolution for API callers constructing the operation standalone.
+   */
+  private final transient EconomyProvider provider;
   private boolean commit = false;
   private boolean rollback = false;
 
@@ -47,9 +54,26 @@ public class EconomyDepositOperation implements Operation {
    */
   public EconomyDepositOperation(final QUser account, final BigDecimal amount, final String world) {
 
+    this(account, amount, world, null);
+  }
+
+  /**
+   * Represents an operation to deposit funds into an economy system for a specific user,
+   * bound to a known provider.
+   *
+   * @param account  the QUser account to deposit funds into
+   * @param amount   the amount of funds to deposit
+   * @param world the world where the deposit operation is taking place
+   * @param provider the economy core the creating transaction resolved; null falls back to
+   *                 per-commit resolution
+   */
+  public EconomyDepositOperation(final QUser account, final BigDecimal amount, final String world,
+                                 @Nullable final EconomyProvider provider) {
+
     this.account = account;
     this.amount = amount;
     this.world = world;
+    this.provider = provider;
   }
 
   /**
@@ -60,7 +84,8 @@ public class EconomyDepositOperation implements Operation {
   @Override
   public boolean commit() {
 
-    final EconomyProvider provider = QuickShopAPI.getInstance().getEconomyManager().provider();
+    final EconomyProvider provider = this.provider != null? this.provider
+            : QuickShopAPI.getInstance().getEconomyManager().provider();
     if(provider == null) {
       return false;
     }
@@ -102,7 +127,8 @@ public class EconomyDepositOperation implements Operation {
   @Override
   public boolean rollback() {
 
-    final EconomyProvider provider = QuickShopAPI.getInstance().getEconomyManager().provider();
+    final EconomyProvider provider = this.provider != null? this.provider
+            : QuickShopAPI.getInstance().getEconomyManager().provider();
     if(provider == null) {
       return false;
     }
