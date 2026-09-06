@@ -12,6 +12,7 @@ import com.ghostchu.quickshop.util.logging.container.ShopRemoveLog;
 import com.ghostchu.simplereloadlib.ReloadResult;
 import com.ghostchu.simplereloadlib.ReloadStatus;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
@@ -27,7 +28,6 @@ import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.world.StructureGrowEvent;
-import org.bukkit.inventory.InventoryHolder;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -141,10 +141,12 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
   public void onHopperMoveItem(final InventoryMoveItemEvent event) {
 
-    // the holder fetch snapshots the block state; resolve it once and reuse it in the
-    // owner-exclude branch instead of re-resolving
-    final InventoryHolder destinationHolder = event.getDestination().getHolder();
-    if(!this.hopperProtect || !(destinationHolder instanceof Hopper)) {
+    // Paper: getHolder() resolves the holder through a full block-state snapshot (the
+    // backing block entity's item list gets copied) just to answer this instanceof;
+    // getHolder(false) answers the same question against the live state. The PDC read
+    // below still goes through the snapshot holder — the rare branch pays the old cost,
+    // the every-move gate no longer does
+    if(!this.hopperProtect || !(event.getDestination().getHolder(false) instanceof Hopper)) {
       return;
     }
 
@@ -159,7 +161,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
       return;
     }
 
-    if(this.hopperOwnerExclude && destinationHolder instanceof final Hopper hopper) {
+    if(this.hopperOwnerExclude && event.getDestination().getHolder() instanceof final Hopper hopper) {
       final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
       if(hopperPersistentData != null) {
         if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
@@ -173,9 +175,8 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
   public void onDropperMoveItem(final InventoryMoveItemEvent event) {
 
-    // same single-resolve as the hopper handler
-    final InventoryHolder initiatorHolder = event.getInitiator().getHolder();
-    if(!this.dropperProtect || !(initiatorHolder instanceof Dropper)) {
+    // same live-holder gate as the hopper handler; snapshot holder only in the branch
+    if(!this.dropperProtect || !(event.getInitiator().getHolder(false) instanceof Dropper)) {
       return;
     }
 
@@ -190,7 +191,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
       return;
     }
 
-    if(this.dropperOwnerExclude && initiatorHolder instanceof final Dropper dropper) {
+    if(this.dropperOwnerExclude && event.getInitiator().getHolder() instanceof final Dropper dropper) {
       final HopperPersistentData hopperPersistentData = dropper.getPersistentDataContainer().get(dropperKey, HopperPersistentDataType.INSTANCE);
       if(hopperPersistentData != null) {
         if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
@@ -204,16 +205,22 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
   public void onPlaceProtectedBlock(final BlockPlaceEvent e) {
 
-    if(e.getBlockPlaced().getState() instanceof final Hopper hopper) {
-      hopper.getPersistentDataContainer().set(hopperKey, HopperPersistentDataType.INSTANCE, new HopperPersistentData(e.getPlayer().getUniqueId()));
-      hopper.setBlockData(e.getBlockPlaced().getBlockData());
-      hopper.update();
-    }
-
-    if(e.getBlockPlaced().getState() instanceof final Dropper dropper) {
-      dropper.getPersistentDataContainer().set(dropperKey, HopperPersistentDataType.INSTANCE, new HopperPersistentData(e.getPlayer().getUniqueId()));
-      dropper.setBlockData(e.getBlockPlaced().getBlockData());
-      dropper.update();
+    // the material read is free; getState() snapshots the placed block entity, so it
+    // belongs behind the gate. Only a hopper block yields a Hopper state (and only a
+    // dropper a Dropper), so the gate reorders the instanceof without changing it
+    final Material placedType = e.getBlockPlaced().getType();
+    if(placedType == Material.HOPPER) {
+      if(e.getBlockPlaced().getState() instanceof final Hopper hopper) {
+        hopper.getPersistentDataContainer().set(hopperKey, HopperPersistentDataType.INSTANCE, new HopperPersistentData(e.getPlayer().getUniqueId()));
+        hopper.setBlockData(e.getBlockPlaced().getBlockData());
+        hopper.update();
+      }
+    } else if(placedType == Material.DROPPER) {
+      if(e.getBlockPlaced().getState() instanceof final Dropper dropper) {
+        dropper.getPersistentDataContainer().set(dropperKey, HopperPersistentDataType.INSTANCE, new HopperPersistentData(e.getPlayer().getUniqueId()));
+        dropper.setBlockData(e.getBlockPlaced().getBlockData());
+        dropper.update();
+      }
     }
   }
 

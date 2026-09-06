@@ -177,6 +177,77 @@ public final class ListenerBench {
     benchChunkLoad(harness, shopManager);
     benchSignScheduleDedup(harness);
     benchChatGate(harness, shopManager);
+    benchHopperMoveGates(harness, shopManager);
+  }
+
+  // InventoryMoveItemEvent gates (ShopProtectionListener hopper/dropper handlers): both
+  // handlers receive every item move server-wide, and their first Bukkit call decides
+  // everything. Production (Paper 1.21.11, decompiled): Inventory#getHolder() routes
+  // Container.getOwner() -> BlockEntity.getOwner(true) -> CraftBlock.getState(true) — a
+  // full block-entity snapshot (the hopper/dropper/chest item lists get copied) — while
+  // getHolder(false) resolves the live state with no copy. The mock inventories model
+  // exactly that asymmetry: the snapshot variant pays a payload copy (a 5-slot hopper
+  // block entity's component copy, ~1 KB), the live variant is free. One op models one
+  // delivered event through BOTH handlers, as Bukkit delivers it. Same body on both
+  // sides — behavior differs by jar (R24 cost-model precedent).
+  private static void benchHopperMoveGates(final com.ghostchu.quickshop.benchmark.BenchHarness harness,
+                                           final SimpleShopManager shopManager) {
+
+    Env.setConfig("protect.hopper", true);
+    Env.setConfig("protect.hopper-owner-exclude", false);
+    Env.setConfig("protect.dropper", true);
+    Env.setConfig("protect.dropper-owner-exclude", false);
+    final var listener = new com.ghostchu.quickshop.listener.ShopProtectionListener(Env.plugin());
+    final World hopperWorld = Env.pin(Env.hotMock(World.class));
+    lenient().when(hopperWorld.getName()).thenReturn("world");
+
+    // the hopper side of the modeled move: its inventory's holder is a hopper for the
+    // gate (and a non-dropper for the dropper handler's gate)
+    final var hopperHolder = Env.pin(Env.hotMock(org.bukkit.block.Hopper.class));
+    final var hopperInv = Env.pin(Env.hotMock(org.bukkit.inventory.Inventory.class));
+    when(hopperInv.getHolder()).thenAnswer(unused -> {
+      final byte[] blockEntityCopy = new byte[1024];
+      java.util.Arrays.fill(blockEntityCopy, (byte)1);
+      com.ghostchu.quickshop.benchmark.BenchHarness.consume(blockEntityCopy);
+      return hopperHolder;
+    });
+    when(hopperInv.getHolder(false)).thenReturn(hopperHolder);
+
+    // gate case: hopper pulls from a plain chest (no shop) — the dominant farm shape
+    final Location missSource = new Location(hopperWorld, 30, 64, 30);
+    when(shopManager.getShopIncludeAttachedViaCache(missSource)).thenReturn(null);
+    final var missChest = Env.pin(Env.hotMock(org.bukkit.inventory.Inventory.class));
+    lenient().when(missChest.getLocation()).thenReturn(missSource);
+    final var gateEvent = Env.pin(Env.hotMock(org.bukkit.event.inventory.InventoryMoveItemEvent.class));
+    when(gateEvent.getDestination()).thenReturn(hopperInv);
+    when(gateEvent.getInitiator()).thenReturn(hopperInv);
+    when(gateEvent.getSource()).thenReturn(missChest);
+    when(gateEvent.isCancelled()).thenReturn(false);
+
+    harness.bench("listener/hopperMoveGate", ctx -> {
+      ctx.index++;
+      listener.onHopperMoveItem(gateEvent);
+      listener.onDropperMoveItem(gateEvent);
+    });
+
+    // protect case: the same hopper pulls from a shop chest — the handler walks the
+    // source location, finds the shop and cancels the move
+    final Location shopSource = new Location(hopperWorld, 40, 64, 40);
+    final var shop = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.shop.Shop.class));
+    when(shopManager.getShopIncludeAttachedViaCache(shopSource)).thenReturn(shop);
+    final var shopChest = Env.pin(Env.hotMock(org.bukkit.inventory.Inventory.class));
+    lenient().when(shopChest.getLocation()).thenReturn(shopSource);
+    final var protectEvent = Env.pin(Env.hotMock(org.bukkit.event.inventory.InventoryMoveItemEvent.class));
+    when(protectEvent.getDestination()).thenReturn(hopperInv);
+    when(protectEvent.getInitiator()).thenReturn(hopperInv);
+    when(protectEvent.getSource()).thenReturn(shopChest);
+    when(protectEvent.isCancelled()).thenReturn(false);
+
+    harness.bench("listener/hopperMoveProtect", ctx -> {
+      ctx.index++;
+      listener.onHopperMoveItem(protectEvent);
+      listener.onDropperMoveItem(protectEvent);
+    });
   }
 
   // guard-item scan on InventoryOpenEvent (DisplayProtectionListener): virtual

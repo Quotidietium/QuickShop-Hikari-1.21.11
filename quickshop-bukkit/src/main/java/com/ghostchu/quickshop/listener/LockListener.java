@@ -27,6 +27,24 @@ public class LockListener extends AbstractProtectionListener {
           .expireAfterAccess(1, TimeUnit.SECONDS)
           .build();
 
+  /**
+   * Every sign material (standing and wall variants) by naming convention — only these
+   * can yield a {@link Sign} block state, so onSignPlace gates on this set before paying
+   * the state snapshot.
+   */
+  private static final java.util.Set<Material> SIGN_MATERIALS = buildSignMaterials();
+
+  private static java.util.Set<Material> buildSignMaterials() {
+
+    final java.util.Set<Material> signs = java.util.EnumSet.noneOf(Material.class);
+    for(final Material material : Material.values()) {
+      if(material.name().endsWith("_SIGN")) {
+        signs.add(material);
+      }
+    }
+    return java.util.Collections.unmodifiableSet(signs);
+  }
+
   public LockListener(@NotNull final QuickShop plugin) {
 
     super(plugin);
@@ -152,6 +170,12 @@ public class LockListener extends AbstractProtectionListener {
   public void onSignPlace(final BlockPlaceEvent event) {
 
     final Block placedBlock = event.getBlock();
+    // the material set is a free bitmask probe; getState() snapshots the placed block
+    // entity (e.g. a fresh chest's item list) and only a sign material can produce a
+    // Sign state, so the gate reorders the instanceof without changing it
+    if(!SIGN_MATERIALS.contains(placedBlock.getType())) {
+      return;
+    }
     if(!(placedBlock.getState() instanceof Sign)) {
       return;
     }
