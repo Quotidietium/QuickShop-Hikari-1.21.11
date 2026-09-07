@@ -31,6 +31,9 @@ public enum BuiltInShopPermission implements ShopPermissionAudience {
 
   private final String descriptionKey;
 
+  /** Lazy memo of {@link #getNamespacedNode()}; the plugin name is constant per run. */
+  private String namespacedNode;
+
   BuiltInShopPermission(@NotNull final String node, @NotNull final String descriptionKey) {
 
     this.node = node;
@@ -64,7 +67,16 @@ public enum BuiltInShopPermission implements ShopPermissionAudience {
   @NotNull
   public String getNamespacedNode() {
 
-    return QuickShopAPI.getPluginInstance().getName().toLowerCase(Locale.ROOT) + "." + this.node;
+    // every permission check resolves the namespace through the services manager and
+    // rebuilds the string; the plugin name cannot change at runtime, so memoize (the
+    // benign race only ever rebuilds an equal string)
+    final String cached = this.namespacedNode;
+    if(cached != null) {
+      return cached;
+    }
+    final String built = QuickShopAPI.getPluginInstance().getName().toLowerCase(Locale.ROOT) + "." + this.node;
+    this.namespacedNode = built;
+    return built;
   }
 
   @NotNull

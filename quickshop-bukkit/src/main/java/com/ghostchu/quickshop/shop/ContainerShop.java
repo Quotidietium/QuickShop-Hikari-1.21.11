@@ -623,6 +623,11 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     final String group = getPermissionAudiences().getOrDefault(player, BuiltInShopPermissionGroup.EVERYONE.getNamespacedNode());
     if(plugin.getShopPermissionManager().hasGroup(group)) {
 
+      // RETRIEVE settings events are unmodified without listeners (updated starts as
+      // the passed value), so skip building the event object on the hot group path
+      if(!com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+        return group;
+      }
       final ShopPlayerGroupEvent event = new ShopPlayerGroupEvent(Phase.RETRIEVE, this, player, group);
       event.callEvent();
 
@@ -955,10 +960,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public ShopState shopState() {
 
-    final ShopStateEvent event = new ShopStateEvent(Phase.RETRIEVE, this, this.shopState);
-    event.callEvent();
-
-    return event.updated();
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopStateEvent event = new ShopStateEvent(Phase.RETRIEVE, this, this.shopState);
+      event.callEvent();
+      return event.updated();
+    }
+    return this.shopState;
   }
 
   /**
@@ -1016,10 +1023,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public IShopType shopType() {
 
-    final ShopTypeEnhancedEvent event = new ShopTypeEnhancedEvent(Phase.RETRIEVE, this, this.shopType);
-    event.callEvent();
-
-    return event.updated();
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopTypeEnhancedEvent event = new ShopTypeEnhancedEvent(Phase.RETRIEVE, this, this.shopType);
+      event.callEvent();
+      return event.updated();
+    }
+    return this.shopType;
   }
 
   /**
@@ -1075,10 +1084,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
 
     final LinkedList<Component> lines = plugin.getShopManager().shopLayoutProvider().render(this, locale);
 
-    final ShopSignLinesEvent event = new ShopSignLinesEvent(Phase.RETRIEVE, this, lines);
-    event.callEvent();
-
-    return event.updated();
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopSignLinesEvent event = new ShopSignLinesEvent(Phase.RETRIEVE, this, lines);
+      event.callEvent();
+      return event.updated();
+    }
+    return lines;
   }
 
   /**
@@ -1132,10 +1143,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
         uuid = ((SimpleShopManager)plugin.getShopManager()).getCacheTaxAccount();
       }
     }
-    final ShopTaxAccountEvent event = new ShopTaxAccountEvent(Phase.RETRIEVE, this, uuid);
-    event.callEvent();
-
-    return event.updated();
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopTaxAccountEvent event = new ShopTaxAccountEvent(Phase.RETRIEVE, this, uuid);
+      event.callEvent();
+      return event.updated();
+    }
+    return uuid;
 
   }
 
@@ -1228,10 +1241,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public boolean isDisableDisplay() {
 
-    final ShopDisplayEvent event = ShopDisplayEvent.RETRIEVE(this, this.disableDisplay);
-    event.callEvent();
-
-    return event.updated();
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopDisplayEvent event = ShopDisplayEvent.RETRIEVE(this, this.disableDisplay);
+      event.callEvent();
+      return event.updated();
+    }
+    return this.disableDisplay;
   }
 
   @Override
@@ -1637,10 +1652,11 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
 
     }
 
-    final ShopOwnerNameEvent event = new ShopOwnerNameEvent(Phase.RETRIEVE, this, name);
-    event.callEvent();
-
-    name = event.updated();
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopOwnerNameEvent event = new ShopOwnerNameEvent(Phase.RETRIEVE, this, name);
+      event.callEvent();
+      name = event.updated();
+    }
     return name;
   }
 

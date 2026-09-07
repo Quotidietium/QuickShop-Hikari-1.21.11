@@ -36,6 +36,9 @@ public enum BuiltInShopPermissionGroup implements ShopPermissionAudience {
   private final String descriptionKey;
   private final List<BuiltInShopPermission> permissions;
 
+  /** Lazy memo of {@link #getNamespacedNode()}; the plugin name is constant per run. */
+  private String namespacedNode;
+
   BuiltInShopPermissionGroup(@NotNull final String node, @NotNull final String descriptionKey, @NotNull final BuiltInShopPermission... permissions) {
 
     this.node = node;
@@ -83,7 +86,15 @@ public enum BuiltInShopPermissionGroup implements ShopPermissionAudience {
   @NotNull
   public String getNamespacedNode() {
 
-    return QuickShopAPI.getPluginInstance().getName().toLowerCase(Locale.ROOT) + "." + this.node;
+    // group resolution runs on every shop permission check; memoize the namespace the
+    // same way BuiltInShopPermission does (benign race rebuilds an equal string)
+    final String cached = this.namespacedNode;
+    if(cached != null) {
+      return cached;
+    }
+    final String built = QuickShopAPI.getPluginInstance().getName().toLowerCase(Locale.ROOT) + "." + this.node;
+    this.namespacedNode = built;
+    return built;
   }
 
   @NotNull
