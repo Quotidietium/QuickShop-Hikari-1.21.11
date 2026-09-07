@@ -443,30 +443,33 @@ public abstract class AbstractShopManager implements ShopManager {
   @Override
   public @Nullable Shop getShop(@NotNull Location loc, final boolean skipShopableChecking) {
 
+    // single-pass: the chunk coordinates are read once and feed both the chunk key and
+    // the block-level probe — the previous form went through SimpleShopChunk.fromLocation
+    // (a second allocation) and re-read getWorld/getBlockX/getBlockZ for the probe; Y is
+    // only read once a shop is actually in the chunk, mirroring the old miss path
+    final World world = loc.getWorld();
+    final int x = loc.getBlockX();
+    final int z = loc.getBlockZ();
     if(!skipShopableChecking && !Util.isShoppables(loc.getBlock().getType())) {
       return null;
     }
-    final ShopChunk shopChunk = SimpleShopChunk.fromLocation(loc);
-    final Map<Location, Shop> inChunk = getShops(shopChunk);
+    final Map<Location, Shop> inChunk = getShops(world.getName(), x >> 4, z >> 4);
     if(inChunk.isEmpty()) {
       return null;
     }
+    final int y = loc.getBlockY();
     // fast path: a normalized probe hits the stored key directly (no clone allocation)
     final Location probe = SHOP_LOOKUP_PROBE.get();
-    probe.setWorld(loc.getWorld());
-    probe.setX(loc.getBlockX());
-    probe.setY(loc.getBlockY());
-    probe.setZ(loc.getBlockZ());
+    probe.setWorld(world);
+    probe.setX(x);
+    probe.setY(y);
+    probe.setZ(z);
     final Shop direct = inChunk.get(probe);
     if(direct != null) {
       return direct;
     }
     // fallback: keys stored with non-integral coordinates or rotation need a block-level
     // coordinate scan; chunk maps hold one to a handful of shops so this stays cheap
-    final World world = loc.getWorld();
-    final int x = loc.getBlockX();
-    final int y = loc.getBlockY();
-    final int z = loc.getBlockZ();
     for(final Shop shop : inChunk.values()) {
       final Location shopLoc = shop.bukkitLocation();
       if(shopLoc.getWorld() == world && shopLoc.getBlockX() == x && shopLoc.getBlockY() == y && shopLoc.getBlockZ() == z) {

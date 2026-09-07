@@ -640,6 +640,8 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
   public @NotNull List<ShopRecord> listShops(@Nullable final String worldFilter, final boolean deleteIfCorrupt) {
 
     final List<ShopRecord> shopRecords = new ArrayList<>();
+    // hoisted out of the row loop: the finder is fixed for the whole scan
+    final com.ghostchu.quickshop.api.shop.PlayerFinder playerFinder = plugin.getPlayerFinder();
     final String SQL = "SELECT * FROM " + DataTables.DATA.getName()
                        + " INNER JOIN " + DataTables.SHOPS.getName()
                        + " ON " + DataTables.DATA.getName() + ".id = " + DataTables.SHOPS.getName() + ".data"
@@ -656,7 +658,7 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
         final int x = rs.getInt("x");
         final int y = rs.getInt("y");
         final int z = rs.getInt("z");
-        final DataRecord dataRecord = new SimpleDataRecord(plugin.getPlayerFinder(), rs);
+        final DataRecord dataRecord = new SimpleDataRecord(playerFinder, rs);
         final InfoRecord infoRecord = new ShopInfo(shopId, world, x, y, z);
         shopRecords.add(new ShopRecord(dataRecord, infoRecord));
       }
