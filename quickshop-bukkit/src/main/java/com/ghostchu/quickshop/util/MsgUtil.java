@@ -12,6 +12,9 @@ import com.ghostchu.quickshop.common.util.RomanNumber;
 import com.ghostchu.quickshop.util.logger.Log;
 import com.ghostchu.quickshop.util.logging.container.PluginGlobalAlertLog;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.TranslatableComponent;
+import net.kyori.adventure.text.TranslationArgument;
 import net.kyori.adventure.text.TextReplacementConfig;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.event.HoverEvent;
@@ -251,6 +254,17 @@ public class MsgUtil {
   @NotNull
   public static Component fillArgs(@NotNull Component origin, @Nullable final Component... args) {
 
+    // Each pass matches the literal "{N}" against TextComponent content reachable
+    // through children, translation arguments and hover values. When no "{" occurs
+    // anywhere on that surface every pass is a provable no-op, so skip the per-arg
+    // replacement configs and tree walks and apply only the compaction the method
+    // always ends with — the pre-parsed render path (placeholders already inserted)
+    // lands here on every message. Braces present (an argument value carrying "{N}",
+    // or an unfilled template) takes the exact original loop, keeping the sequential
+    // re-fill of nested placeholders.
+    if(!containsOpenBrace(origin)) {
+      return origin.compact();
+    }
     for(int i = 0; i < args.length; i++) {
 
       origin = origin.replaceText(TextReplacementConfig.builder()
@@ -259,6 +273,36 @@ public class MsgUtil {
                                           .build());
     }
     return origin.compact();
+  }
+
+  /**
+   * Whether any text content reachable the way {@code replaceText} recurses contains an
+   * opening brace: text content, component-valued translation arguments, hover event
+   * component values and children. String translation arguments are never matched by
+   * the replacer and are therefore not scanned.
+   */
+  private static boolean containsOpenBrace(@NotNull final Component node) {
+
+    if(node instanceof final TextComponent text && text.content().indexOf('{') >= 0) {
+      return true;
+    }
+    if(node instanceof final TranslatableComponent translatable) {
+      for(final TranslationArgument argument : translatable.arguments()) {
+        if(argument != null && argument.value() instanceof final Component component && containsOpenBrace(component)) {
+          return true;
+        }
+      }
+    }
+    final var hover = node.style().hoverEvent();
+    if(hover != null && hover.value() instanceof final Component component && containsOpenBrace(component)) {
+      return true;
+    }
+    for(final Component child : node.children()) {
+      if(containsOpenBrace(child)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

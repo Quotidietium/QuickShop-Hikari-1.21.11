@@ -91,12 +91,14 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
    */
   private final ConcurrentHashMap<String, Component> staticComponentCache = new ConcurrentHashMap<>();
   /**
-   * (locale, path) to the pre-parsed placeholder-hole template for argument texts. The
-   * template is immutable; rendering copies only the placeholder paths and inserts the
-   * argument components directly, replacing the per-render argument serialization plus
-   * full-template MiniMessage re-parse. Entries fall back to the legacy path internally.
+   * (locale, path) to the pre-parsed placeholder-hole template for argument texts, as a
+   * nested locale -> path map: the flat form allocated a fresh concatenated key String
+   * on every rendered message just to probe the cache. The template is immutable and
+   * compiled once; rendering only validates the arguments and assembles the output
+   * tree, replacing the per-render argument serialization plus full-template
+   * MiniMessage re-parse. Entries fall back to the legacy path internally.
    */
-  private final ConcurrentHashMap<String, PreParsedTemplate> preParsedTemplateCache = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, ConcurrentHashMap<String, PreParsedTemplate>> preParsedTemplateCache = new ConcurrentHashMap<>();
   /** langCode to resolved ProxiedLocale, avoiding locale parsing on every lookup. */
   private final ConcurrentHashMap<String, ProxiedLocale> proxiedLocaleCache = new ConcurrentHashMap<>();
   private final Cache<String, String> languagesCache =
@@ -492,12 +494,16 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
                                    @NotNull final String raw, @NotNull final TagResolver[] tagResolvers,
                                    @NotNull final Component... args) {
 
-    final String key = locale + ' ' + path;
-    PreParsedTemplate template = preParsedTemplateCache.get(key);
-    if(template == null) {
-      template = PreParsedTemplate.parse(raw, plugin.platform().miniMessage(), tagResolvers);
-      preParsedTemplateCache.put(key, template);
+    // nested lookup: no key concatenation on the per-message render path
+    final ConcurrentHashMap<String, PreParsedTemplate> perLocale = preParsedTemplateCache.get(locale);
+    if(perLocale != null) {
+      final PreParsedTemplate cached = perLocale.get(path);
+      if(cached != null) {
+        return cached.render(args);
+      }
     }
+    final PreParsedTemplate template = PreParsedTemplate.parse(raw, plugin.platform().miniMessage(), tagResolvers);
+    preParsedTemplateCache.computeIfAbsent(locale, l->new ConcurrentHashMap<>()).put(path, template);
     return template.render(args);
   }
 
@@ -570,7 +576,7 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     final String prefix = locale + ' ';
     rawTemplateCache.keySet().removeIf(key->key.startsWith(prefix));
     staticComponentCache.keySet().removeIf(key->key.startsWith(prefix));
-    preParsedTemplateCache.keySet().removeIf(key->key.startsWith(prefix));
+    preParsedTemplateCache.remove(locale);
   }
 
   @Override
@@ -860,7 +866,10 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     @NotNull
     public List<Component> forLocale(@NotNull final String locale) {
 
-      final FileConfiguration index = mapping.get(manager.findRelativeLanguages(locale).getLocale());
+      // resolved once and reused: findRelativeLanguages ran twice per call (index probe
+      // and renderPreParsed key), doubling the locale chain on every list render
+      final String resolved = manager.findRelativeLanguages(locale).getLocale();
+      final FileConfiguration index = mapping.get(resolved);
       if(index == null) {
         Log.debug("Fallback " + locale + " to default game-language locale caused by QuickShop doesn't support this locale");
         final String languageCode = MsgUtil.getDefaultGameLanguageCode();
@@ -876,7 +885,6 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
           Log.debug("Fallback Missing Language Key: " + path + ", report to QuickShop!");
           return Collections.singletonList(LegacyComponentSerializer.legacySection().deserialize(path));
         }
-        final String resolved = manager.findRelativeLanguages(locale).getLocale();
         final List<Component> components = new ArrayList<>(str.size());
         for(int i = 0; i < str.size(); i++) {
           final String line = str.get(i);
