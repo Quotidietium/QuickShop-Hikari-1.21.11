@@ -1,0 +1,232 @@
+{
+  "label": "round48-baseline",
+  "commit": "86f7ebcf1",
+  "note": "R47 baseline 86f7ebcf1 (pre click-create gate sweep) \u2014 B/op medians reconstructed from round48-run.log: the worktree's per-fork result files were deleted by the next fork's git clean before being copied out; the printed medians are the same values the JSON would carry",
+  "reconstructedFromLog": true,
+  "cases": [
+    {
+      "name": "lookup/getShopByLocation-hit",
+      "medianBytesPerOp": 2024.0
+    },
+    {
+      "name": "lookup/getShopByLocation-miss",
+      "medianBytesPerOp": 2085.3
+    },
+    {
+      "name": "lookup/getShopById",
+      "medianBytesPerOp": 23.7
+    },
+    {
+      "name": "lookup/getShopByRuntimeUuid-cached",
+      "medianBytesPerOp": 9904.0
+    },
+    {
+      "name": "lookup/getShopByRuntimeUuid-uncached",
+      "medianBytesPerOp": 9904.0
+    },
+    {
+      "name": "lookup/getAllShopsByOwner",
+      "medianBytesPerOp": 888.0
+    },
+    {
+      "name": "lookup/getAllShops",
+      "medianBytesPerOp": 217960.0
+    },
+    {
+      "name": "lookup/getShopsInChunk",
+      "medianBytesPerOp": 24.0
+    },
+    {
+      "name": "trade/iterateOnly54",
+      "medianBytesPerOp": 2272.0
+    },
+    {
+      "name": "trade/countItemsScan54",
+      "medianBytesPerOp": 277552.0
+    },
+    {
+      "name": "trade/countSpaceScan41",
+      "medianBytesPerOp": 290912.0
+    },
+    {
+      "name": "trade/locateSymbolLink",
+      "medianBytesPerOp": 11312.0
+    },
+    {
+      "name": "trade/inventoryTxCommit",
+      "medianBytesPerOp": 410448.0
+    },
+    {
+      "name": "trade/tradeServiceBuy",
+      "medianBytesPerOp": 932320.0
+    },
+    {
+      "name": "trade/tradeServiceSell",
+      "medianBytesPerOp": 971099.7
+    },
+    {
+      "name": "trade/actionBuy",
+      "medianBytesPerOp": 1271768.0
+    },
+    {
+      "name": "trade/actionSell",
+      "medianBytesPerOp": 1296320.0
+    },
+    {
+      "name": "trade/purchaseLogListener",
+      "medianBytesPerOp": 2624.0
+    },
+    {
+      "name": "listener/searchShopMiss",
+      "medianBytesPerOp": 16776.0
+    },
+    {
+      "name": "listener/searchShopContainer",
+      "medianBytesPerOp": 16960.0
+    },
+    {
+      "name": "listener/chunkPacketPeek",
+      "medianBytesPerOp": 15640.0
+    },
+    {
+      "name": "listener/displayResend",
+      "medianBytesPerOp": 100360.0
+    },
+    {
+      "name": "listener/inventoryCheck",
+      "medianBytesPerOp": 1952.0
+    },
+    {
+      "name": "listener/signRender",
+      "medianBytesPerOp": 633152.0
+    },
+    {
+      "name": "listener/chunkLoad",
+      "medianBytesPerOp": 11584.0
+    },
+    {
+      "name": "listener/signScheduleDedup",
+      "medianBytesPerOp": 0.0
+    },
+    {
+      "name": "listener/chatGate",
+      "medianBytesPerOp": 10584.0
+    },
+    {
+      "name": "listener/hopperMoveGate",
+      "medianBytesPerOp": 17168.0
+    },
+    {
+      "name": "listener/hopperMoveProtect",
+      "medianBytesPerOp": 19272.0
+    },
+    {
+      "name": "listener/clickDispatch",
+      "medianBytesPerOp": 55656.0
+    },
+    {
+      "name": "listener/quickCreateGate",
+      "medianBytesPerOp": 20256.0
+    },
+    {
+      "name": "listener/quickCreateGateContainer",
+      "medianBytesPerOp": 42536.0
+    },
+    {
+      "name": "menu/browseStockPipeline",
+      "medianBytesPerOp": 2152256.0
+    },
+    {
+      "name": "menu/groupAndNameSort",
+      "medianBytesPerOp": 4870814.0
+    },
+    {
+      "name": "serialize/createDataRecord",
+      "medianBytesPerOp": 12488.0
+    },
+    {
+      "name": "serialize/generateParams",
+      "medianBytesPerOp": 1072.0
+    },
+    {
+      "name": "serialize/generateLookupParams",
+      "medianBytesPerOp": 1832.0
+    },
+    {
+      "name": "economy/safeCommitWithTax",
+      "medianBytesPerOp": 8664.0
+    },
+    {
+      "name": "economy/safeCommitNoTax",
+      "medianBytesPerOp": 8160.0
+    },
+    {
+      "name": "economy/formatInternalPrice",
+      "medianBytesPerOp": 136.0
+    },
+    {
+      "name": "text/forLocaleWithArgs",
+      "medianBytesPerOp": 1688.0
+    },
+    {
+      "name": "text/forLocaleNoArgs",
+      "medianBytesPerOp": 304.0
+    },
+    {
+      "name": "text/findRelativeLanguages",
+      "medianBytesPerOp": 48.0
+    },
+    {
+      "name": "text/itemNameFlags",
+      "medianBytesPerOp": 0.0
+    },
+    {
+      "name": "text/fallbackYamlParse",
+      "medianBytesPerOp": 4593648.0
+    },
+    {
+      "name": "log/appendTransaction",
+      "medianBytesPerOp": 160.0
+    },
+    {
+      "name": "log/appendDebug",
+      "medianBytesPerOp": 168.0
+    },
+    {
+      "name": "db/insertShopChain",
+      "medianBytesPerOp": 20240.4
+    },
+    {
+      "name": "db/updateShop-unchangedData",
+      "medianBytesPerOp": 14676.4
+    },
+    {
+      "name": "db/locateShopDataId",
+      "medianBytesPerOp": 60.4
+    },
+    {
+      "name": "db/listShops",
+      "medianBytesPerOp": 248776.3
+    },
+    {
+      "name": "db/metricInsertSingle",
+      "medianBytesPerOp": 3812.4
+    },
+    {
+      "name": "db/metricInsertBatch100",
+      "medianBytesPerOp": 66616.1
+    },
+    {
+      "name": "db/externalCacheUpdateSingle",
+      "medianBytesPerOp": 1884.4
+    },
+    {
+      "name": "db/externalCacheBatch100",
+      "medianBytesPerOp": 11359.5
+    },
+    {
+      "name": "startup/shopLoadChain",
+      "medianBytesPerOp": 358306.0
+    }
+  ]
+}
