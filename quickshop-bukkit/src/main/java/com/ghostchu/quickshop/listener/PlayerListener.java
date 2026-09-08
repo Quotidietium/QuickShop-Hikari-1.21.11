@@ -46,7 +46,6 @@ import java.time.ZoneId;
 import java.util.AbstractMap;
 import java.util.Date;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -122,24 +121,26 @@ public class PlayerListener extends AbstractQSListener {
       return;
     }
 
-    final Optional<InteractionType> interactionType = plugin.getInteractionManager().interaction(event, shopSearched.getValue());
-    if(interactionType.isEmpty()) {
+    // OrNull variants: this chain runs on every player block interact, and the Optional
+    // wrappers were two allocations per click
+    final InteractionType interactionType = plugin.getInteractionManager().interactionOrNull(event, shopSearched.getValue());
+    if(interactionType == null) {
       Log.debug("Interaction: InteractionType is empty");
       return;
     }
 
-    final Optional<InteractionBehavior> behavior = plugin.getInteractionManager().behavior(interactionType.get());
-    if(behavior.isEmpty()) {
+    final InteractionBehavior behavior = plugin.getInteractionManager().behaviorOrNull(interactionType);
+    if(behavior == null) {
       Log.debug("Interaction: InteractionBehavior is empty");
       return;
     }
 
     if(Util.isDevMode()) {
-      Log.debug("Click: " + interactionType.get().identifier());
-      Log.debug("Behavior Mapping: " + behavior.get().identifier());
+      Log.debug("Click: " + interactionType.identifier());
+      Log.debug("Behavior Mapping: " + behavior.identifier());
     }
 
-    behavior.get().handle(plugin, shopSearched.getKey(), event.getPlayer(), event, shopSearched.getValue(), interactionType.get());
+    behavior.handle(plugin, shopSearched.getKey(), event.getPlayer(), event, shopSearched.getValue(), interactionType);
   }
 
   @NotNull

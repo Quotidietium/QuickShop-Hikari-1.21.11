@@ -98,6 +98,10 @@ public class Util {
   // means "not yet snapshotted" and falls back to the config reads the snapshots replace
   private static volatile Set<String> whitelistWorldsSnapshot = null;
   private static volatile Set<String> blacklistWorldsSnapshot = null;
+  // OR of the two legacy "quick create" kill switches, consulted on every held-item
+  // block punch/right-click through Util.createShop; null means "not yet snapshotted"
+  // and falls back to the config reads the snapshot replaces
+  private static volatile Boolean quickCreateDisabledSnapshot = null;
   private static final List<BlockFace> VERTICAL_FACING = List.of(BlockFace.NORTH, BlockFace.EAST, BlockFace.SOUTH, BlockFace.WEST);
   private static int BYPASSED_CUSTOM_STACKSIZE = -1;
   //add limit for vanilla values
@@ -325,7 +329,6 @@ public class Util {
 
     Log.debug("==== Entering Shop Creation ====");
 
-    final QUser qUser = QUserImpl.createFullFilled(player);
     if(block == null) {
       Log.debug("Block is null");
       return false; // This shouldn't happen because we have checked action type.
@@ -334,15 +337,11 @@ public class Util {
       Log.debug("Not in survival mode");
       return false; // Only survival :)
     }
-
-    final ItemStack stack = item.clone();
-
-    final int maxSize = Util.getItemMaxStackSize(stack.getType());
-    if(stack.getAmount() > maxSize) {
-      stack.setAmount(maxSize);
-    }
-
-    if(stack.getType().isAir()) {
+    // gate order: every held-item block punch lands here (the default interaction.yml
+    // maps standing left-clicks on shopblocks/containers/signs to TRADE_INTERACTION),
+    // so the cheap discriminating gates run first and the item clone, the stack clamp
+    // and the QUser construction wait until a shop creation is actually possible
+    if(item.getType().isAir()) {
       Log.debug("Invalid trade item: air");
       return false; // Air cannot be used for trade
     }
@@ -350,12 +349,7 @@ public class Util {
       Log.debug("Invalid shop block");
       return false;
     }
-
-    if(plugin.getConfig().getBoolean("disable-quick-create")) {
-      Log.debug("quick create disabled");
-      return false;
-    }
-    if(plugin.getConfig().getBoolean("shop.disable-quick-create")) {
+    if(isQuickCreateDisabled()) {
       Log.debug("quick create disabled");
       return false;
     }
@@ -371,6 +365,14 @@ public class Util {
       // No permission
       return false;
     }
+
+    final ItemStack stack = item.clone();
+
+    final int maxSize = Util.getItemMaxStackSize(stack.getType());
+    if(stack.getAmount() > maxSize) {
+      stack.setAmount(maxSize);
+    }
+
     // Double chest creation permission check
     if(Util.isDoubleChest(block.getBlockData()) &&
        !plugin.perm().hasPermission(player, "quickshop.create.double")) {
@@ -424,6 +426,9 @@ public class Util {
     // Send creation menu.
     final SimpleInfo info = new SimpleInfo(block.getLocation(), action, stack, last, false);
 
+    // deferred to the point of use: held-item block punches without create permission
+    // (the dominant shape) must not pay the QUser construction
+    final QUser qUser = QUserImpl.createFullFilled(player);
     final ShopCreateEvent event = new ShopCreateEvent(Phase.PRE_CANCELLABLE, null, qUser, block.getLocation());
 
     if(event.callCancellableEvent()) {
@@ -439,6 +444,23 @@ public class Util {
                      ? stack.getAmount() : 1).send();
     Log.debug("==== Ending Shop Creation ====");
     return false;
+  }
+
+  /**
+   * Whether quick shop creation (held-item block click) is disabled by either of the two
+   * legacy config keys. OR of both keys snapshotted once per load/reload; falls back to
+   * the live config reads before the first {@link #initialize()}.
+   *
+   * @return true if either kill switch is set
+   */
+  private static boolean isQuickCreateDisabled() {
+
+    final Boolean snapshot = quickCreateDisabledSnapshot;
+    if(snapshot != null) {
+      return snapshot;
+    }
+    return plugin.getConfig().getBoolean("disable-quick-create")
+           || plugin.getConfig().getBoolean("shop.disable-quick-create");
   }
 
   /**
@@ -1313,6 +1335,8 @@ public class Util {
     CUSTOM_STACKSIZE.clear();
     whitelistWorldsSnapshot = snapshotWorldList(plugin.getConfig().getStringList("shop.whitelist-world"));
     blacklistWorldsSnapshot = snapshotWorldList(plugin.getConfig().getStringList("shop.blacklist-world"));
+    quickCreateDisabledSnapshot = plugin.getConfig().getBoolean("disable-quick-create")
+                                  || plugin.getConfig().getBoolean("shop.disable-quick-create");
     devMode = plugin.getConfig().getBoolean("dev-mode");
     forceUseItemOriginalName = plugin.getConfig().getBoolean("shop.force-use-item-original-name", false);
     useEnchantmentForEnchantedBook = plugin.getConfig().getBoolean("shop.use-enchantment-for-enchanted-book", false);

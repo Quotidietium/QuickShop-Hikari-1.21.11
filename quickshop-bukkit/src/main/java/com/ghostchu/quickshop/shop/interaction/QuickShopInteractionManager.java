@@ -67,6 +67,10 @@ public class QuickShopInteractionManager implements InteractionManager, Reloadab
   private final Map<String, InteractionType> interactions = new HashMap<>();
   private final Map<String, InteractionBehavior> behaviors = new HashMap<>();
   private final Map<String, String> behaviorMapping = new HashMap<>();
+  // memoized identifier().toLowerCase() per interaction instance: the click path resolves
+  // the behavior mapping on every matched interact, and the 12 built-in types return
+  // constant identifiers. Benign races only re-derive equal strings
+  private final Map<InteractionType, String> lowercasedIdentifiers = new java.util.concurrent.ConcurrentHashMap<>();
 
   private final QuickShop plugin;
 
@@ -143,11 +147,31 @@ public class QuickShopInteractionManager implements InteractionManager, Reloadab
    */
   public Optional<InteractionBehavior> behavior(final @NotNull InteractionType interaction) {
 
-    if(behaviorMapping.containsKey(interaction.identifier().toLowerCase(Locale.ROOT))) {
+    return Optional.ofNullable(behaviorOrNull(interaction));
+  }
 
-      return Optional.ofNullable(behaviors.get(behaviorMapping.get(interaction.identifier().toLowerCase(Locale.ROOT))));
+  /**
+   * Direct behavior resolution for the click path: one memoized lowercase lookup into
+   * the mapping, one lookup into the behaviors. Semantically identical to the previous
+   * containsKey + double get chain (a mapping entry whose behavior identifier is
+   * unknown — including the NONE placeholder — resolves to null).
+   */
+  @Override
+  public @org.jetbrains.annotations.Nullable InteractionBehavior behaviorOrNull(final @NotNull InteractionType interaction) {
+
+    final String mapped = behaviorMapping.get(lowercasedId(interaction));
+    return mapped == null? null : behaviors.get(mapped);
+  }
+
+  /** Memoized {@code identifier().toLowerCase(Locale.ROOT)} keyed by interaction instance. */
+  private String lowercasedId(final @NotNull InteractionType interaction) {
+
+    String lowercased = lowercasedIdentifiers.get(interaction);
+    if(lowercased == null) {
+      lowercased = interaction.identifier().toLowerCase(Locale.ROOT);
+      lowercasedIdentifiers.put(interaction, lowercased);
     }
-    return Optional.empty();
+    return lowercased;
   }
 
   /**
@@ -200,13 +224,21 @@ public class QuickShopInteractionManager implements InteractionManager, Reloadab
 
   public Optional<InteractionType> interaction(final @NotNull PlayerInteractEvent event, final @NotNull InteractionClick click) {
 
+    return Optional.ofNullable(interactionOrNull(event, click));
+  }
+
+  /** Direct interaction resolution for the click path — the first registered type whose
+   *  predicate applies wins, same iteration order as the Optional variant. */
+  @Override
+  public @org.jetbrains.annotations.Nullable InteractionType interactionOrNull(final @NotNull PlayerInteractEvent event, final @NotNull InteractionClick click) {
+
     for(final InteractionType interaction : interactions.values()) {
 
       if(interaction.applies(event, click)) {
-        return Optional.of(interaction);
+        return interaction;
       }
     }
-    return Optional.empty();
+    return null;
   }
 
   /**

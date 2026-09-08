@@ -99,6 +99,39 @@ public interface InteractionManager {
   Optional<InteractionType> interaction(@NotNull PlayerInteractEvent event, @NotNull InteractionClick click);
 
   /**
+   * Resolves an interaction from an event and click context without the Optional
+   * wrapper. The click path runs on every player block interact; implementors override
+   * with a direct resolution, the default delegates to {@link #interaction(PlayerInteractEvent,
+   * InteractionClick)}.
+   *
+   * @param event the PlayerInteractEvent.
+   * @param click the click context.
+   *
+   * @return the matching interaction, or null when none applies.
+   */
+  default @org.jetbrains.annotations.Nullable InteractionType interactionOrNull(
+          @NotNull final PlayerInteractEvent event, @NotNull final InteractionClick click) {
+
+    return interaction(event, click).orElse(null);
+  }
+
+  /**
+   * Retrieves the behavior mapped to the given interaction without the Optional wrapper.
+   * The click path resolves the behavior on every matched interact; implementors override
+   * with a direct lookup, the default delegates to {@link #behavior(InteractionType)}.
+   *
+   * @param interaction the interaction to resolve.
+   *
+   * @return the mapped behavior, or null when no behavior is mapped (or the mapped
+   * identifier is unknown, including the NONE placeholder).
+   */
+  default @org.jetbrains.annotations.Nullable InteractionBehavior behaviorOrNull(
+          @NotNull final InteractionType interaction) {
+
+    return behavior(interaction).orElse(null);
+  }
+
+  /**
    * Checks if an interaction is registered.
    *
    * @param identifier the interaction identifier.
