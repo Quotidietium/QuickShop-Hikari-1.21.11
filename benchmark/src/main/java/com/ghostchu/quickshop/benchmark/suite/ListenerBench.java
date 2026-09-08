@@ -180,6 +180,25 @@ public final class ListenerBench {
     benchChatGate(harness, shopManager);
     benchHopperMoveGates(harness, shopManager);
     benchClickPath(harness);
+    benchRateLimitGate(harness);
+  }
+
+  // interact rate-limit gate (PlayerListener.rateLimit, 125 ms): every block click
+  // pays a contains+add pair on this set (the trade menu's TRADE_CLICK_COOLDOWN pays
+  // the same pair per trade-menu click). Real object, no mocks — one op = the exact
+  // pair onClick runs per first-click-in-window. Same body on both sides; the jars
+  // differ in the set's backing (Guava cache vs deadline map).
+  private static void benchRateLimitGate(final com.ghostchu.quickshop.benchmark.BenchHarness harness) {
+
+    final var rateLimit = new com.ghostchu.quickshop.util.ExpiringSet<UUID>(
+            125, java.util.concurrent.TimeUnit.MILLISECONDS);
+    final UUID clicker = UUID.nameUUIDFromBytes(new byte[]{7});
+    rateLimit.add(clicker);
+    harness.bench("listener/rateLimitGate", ctx -> {
+      ctx.index++;
+      rateLimit.contains(clicker);
+      rateLimit.add(clicker);
+    });
   }
 
   // InventoryMoveItemEvent gates (ShopProtectionListener hopper/dropper handlers): both
