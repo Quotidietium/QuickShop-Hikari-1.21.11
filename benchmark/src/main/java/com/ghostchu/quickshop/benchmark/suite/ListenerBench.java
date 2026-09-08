@@ -10,6 +10,7 @@ import org.bukkit.Tag;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
@@ -178,6 +179,7 @@ public final class ListenerBench {
     benchSignScheduleDedup(harness);
     benchChatGate(harness, shopManager);
     benchHopperMoveGates(harness, shopManager);
+    benchClickPath(harness);
   }
 
   // InventoryMoveItemEvent gates (ShopProtectionListener hopper/dropper handlers): both
@@ -471,6 +473,140 @@ public final class ListenerBench {
       listener.onChat(event);
     });
   }
+
+  // click → dispatch → quick-create gate chain (PlayerListener.onClick /
+  // Util.createShop): the default interaction.yml maps standing left-clicks on
+  // shopblocks and containers to TRADE_INTERACTION, so every held-item block punch
+  // server-wide (mining clicks included) walks searchShop, the interaction predicates,
+  // the behavior mapping resolution and — while holding an item — the createShop gates.
+  // The dispatch op models the first click of each 125 ms rate-limit window (the
+  // listener's rateLimit set is swapped for an immediately-expiring one so every op
+  // runs the full path; repeat clicks inside the window only pay the Guava gate). The
+  // gate ops call Util.createShop directly. Same body on both sides — the jars differ
+  // in dispatch allocations and gate order.
+  private static void benchClickPath(final com.ghostchu.quickshop.benchmark.BenchHarness harness) throws Exception {
+
+    final QuickShop plugin = Env.plugin();
+
+    // survival player with an empty main hand (dispatch case); the standing left-click
+    // predicates consult the main hand for the golden-axe exception
+    final Player clickPlayer = Env.pin(Env.hotMock(Player.class));
+    lenient().when(clickPlayer.getGameMode()).thenReturn(org.bukkit.GameMode.SURVIVAL);
+    lenient().when(clickPlayer.getUniqueId()).thenReturn(UUID.nameUUIDFromBytes(new byte[]{4}));
+    lenient().when(clickPlayer.getName()).thenReturn("Steve");
+    lenient().when(clickPlayer.isSneaking()).thenReturn(false);
+    final var mainHand = Env.pin(Env.hotMock(org.bukkit.inventory.ItemStack.class));
+    lenient().when(mainHand.getType()).thenReturn(Material.AIR);
+    final var playerInv = Env.pin(Env.hotMock(org.bukkit.inventory.PlayerInventory.class));
+    lenient().when(playerInv.getItemInMainHand()).thenReturn(mainHand);
+    lenient().when(clickPlayer.getInventory()).thenReturn(playerInv);
+
+    // ---- dispatch case: empty-hand punch on dirt through the full click listener ----
+    // real interaction.yml so the STANDING_LEFT_CLICK_SHOPBLOCK -> TRADE_INTERACTION
+    // mapping resolves and the op reaches the behavior's handle (same production load
+    // path the QuickShopInteractionManager constructor runs)
+    final String interactionYaml = "version: 3\nSTANDING_LEFT_CLICK_SHOPBLOCK: TRADE_INTERACTION\n";
+    java.nio.file.Files.write(Env.dataFolder().toPath().resolve("interaction.yml"),
+                              interactionYaml.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    final var interactManager = new com.ghostchu.quickshop.shop.interaction.QuickShopInteractionManager(plugin);
+    lenient().when(plugin.getInteractionManager()).thenReturn(interactManager);
+
+    final World world = world0();
+    final Block punchBlock = Env.pin(Env.hotMock(Block.class));
+    when(punchBlock.getType()).thenReturn(Material.DIRT);
+    when(punchBlock.getWorld()).thenReturn(world);
+    when(punchBlock.getLocation()).thenReturn(new Location(world, 10, 64, 10));
+    when(punchBlock.getState(false)).thenReturn(Env.hotMock(BlockState.class));
+
+    final var interactEvent = Env.pin(Env.hotMock(org.bukkit.event.player.PlayerInteractEvent.class));
+    when(interactEvent.isCancelled()).thenReturn(false);
+    when(interactEvent.getHand()).thenReturn(EquipmentSlot.HAND);
+    when(interactEvent.getAction()).thenReturn(org.bukkit.event.block.Action.LEFT_CLICK_BLOCK);
+    when(interactEvent.getClickedBlock()).thenReturn(punchBlock);
+    when(interactEvent.getItem()).thenReturn(null);
+    // PlayerEvent.getPlayer() is final: inject the real protected field instead
+    try {
+      final var playerField = org.bukkit.event.player.PlayerEvent.class.getDeclaredField("player");
+      playerField.setAccessible(true);
+      playerField.set(interactEvent, clickPlayer);
+    } catch(final ReflectiveOperationException e) {
+      throw new IllegalStateException("player field injection failed", e);
+    }
+
+    final var listener = new PlayerListener(plugin);
+    // every op models the first click of a rate-limit window
+    try {
+      final var rateField = PlayerListener.class.getDeclaredField("rateLimit");
+      rateField.setAccessible(true);
+      rateField.set(listener, new com.ghostchu.quickshop.util.ExpiringSet<>(0, java.util.concurrent.TimeUnit.MILLISECONDS));
+    } catch(final ReflectiveOperationException e) {
+      throw new IllegalStateException("rateLimit swap failed", e);
+    }
+
+    harness.bench("listener/clickDispatch", ctx -> {
+      ctx.index++;
+      listener.onClick(interactEvent);
+    });
+
+    // ---- gate case 1: held-item punch on dirt (the mining-click shape) ----
+    final var pickaxeClone = Env.pin(Env.hotMock(org.bukkit.inventory.ItemStack.class));
+    lenient().when(pickaxeClone.getType()).thenReturn(Material.IRON_PICKAXE);
+    lenient().when(pickaxeClone.getAmount()).thenReturn(1);
+    final var pickaxe = Env.pin(Env.hotMock(org.bukkit.inventory.ItemStack.class));
+    lenient().when(pickaxe.getType()).thenReturn(Material.IRON_PICKAXE);
+    lenient().when(pickaxe.getAmount()).thenReturn(1);
+    lenient().when(pickaxe.clone()).thenReturn(pickaxeClone);
+
+    harness.bench("listener/quickCreateGate", ctx -> {
+      ctx.index++;
+      com.ghostchu.quickshop.benchmark.BenchHarness.consume(
+              com.ghostchu.quickshop.util.Util.createShop(clickPlayer, punchBlock,
+                      org.bukkit.block.BlockFace.NORTH, EquipmentSlot.HAND, pickaxe));
+    });
+
+    // ---- gate case 2: held-item click on a shoppable chest, no create permission ----
+    // CHEST injected into the shoppable set directly (one-time setup): populating via
+    // config would lean on Material.matchMaterial's registry semantics in a bare-API JVM
+    final java.util.Set<Object> shoppables = shoppables();
+    shoppables.add(Material.CHEST);
+    final var perm = Env.pin(Env.hotMock(com.ghostchu.quickshop.permission.PermissionManager.class));
+    lenient().when(perm.hasPermission(any(Player.class), anyString())).thenReturn(false);
+    lenient().when(plugin.perm()).thenReturn(perm);
+
+    final Block chestBlock = Env.pin(Env.hotMock(Block.class));
+    when(chestBlock.getType()).thenReturn(Material.CHEST);
+    when(chestBlock.getWorld()).thenReturn(world);
+    when(chestBlock.getState(false)).thenReturn(mock(BlockState.class,
+            org.mockito.Mockito.withSettings().stubOnly().extraInterfaces(org.bukkit.inventory.InventoryHolder.class)));
+
+    harness.bench("listener/quickCreateGateContainer", ctx -> {
+      ctx.index++;
+      com.ghostchu.quickshop.benchmark.BenchHarness.consume(
+              com.ghostchu.quickshop.util.Util.createShop(clickPlayer, chestBlock,
+                      org.bukkit.block.BlockFace.NORTH, EquipmentSlot.HAND, pickaxe));
+    });
+  }
+
+  /** Reads Util's static shoppable-material set (same field on both A/B jars). */
+  @SuppressWarnings("unchecked")
+  private static java.util.Set<Object> shoppables() throws Exception {
+
+    final var field = com.ghostchu.quickshop.util.Util.class.getDeclaredField("SHOPABLES");
+    field.setAccessible(true);
+    return (java.util.Set<Object>)field.get(null);
+  }
+
+  /** A pinned "world"-named world mock shared by the click-path cases. */
+  private static World world0() {
+
+    if(worldCache == null) {
+      worldCache = Env.pin(Env.hotMock(World.class));
+      lenient().when(worldCache.getName()).thenReturn("world");
+    }
+    return worldCache;
+  }
+
+  private static World worldCache;
 
   /**
    * A fully spawned VirtualDisplayItem over mock shop/factory/manager surfaces. The

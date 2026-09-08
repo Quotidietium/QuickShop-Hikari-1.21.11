@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -124,6 +125,10 @@ public final class Env {
       // the field can simply be injected reflectively to make the final methods work.
       final com.ghostchu.quickshop.QuickShopBukkit bukkitPlugin = mock(com.ghostchu.quickshop.QuickShopBukkit.class, Mockito.withSettings().stubOnly());
       Mockito.lenient().when(plugin.getJavaPlugin()).thenReturn(bukkitPlugin);
+      // JavaPlugin.getDataFolder() is final (reads the ctor-set field), so the field is
+      // injected reflectively; QSConfig-based configs (interaction.yml etc.) resolve the
+      // data folder through QuickShopAPI.getPluginInstance(), which lands on this mock
+      injectSuperclassField(bukkitPlugin, "dataFolder", DATA_FOLDER);
       final io.papermc.paper.plugin.configuration.PluginMeta pluginMeta =
               mock(io.papermc.paper.plugin.configuration.PluginMeta.class);
       when(pluginMeta.getName()).thenReturn("QuickShop-Hikari");
@@ -136,6 +141,11 @@ public final class Env {
         }
         if(resource != null && resource.startsWith("lang/")) {
           return stream("signs:\n  price: 'Price: {0}'\n");
+        }
+        if("interaction.yml".equals(resource)) {
+          // matching version key so the updater stays idle; values come from the file
+          // the click-path bench writes into the data folder
+          return stream("version: 3\n");
         }
         // other bundled resources (price-restriction.yml etc.) fall back to empty YAML
         return stream("");
@@ -183,7 +193,10 @@ public final class Env {
         }
         return inv.getArgument(1, String.class);
       });
-      Mockito.lenient().when(config.getStringList(anyString())).thenReturn(new java.util.ArrayList<>());
+      Mockito.lenient().when(config.getStringList(anyString())).thenAnswer(inv -> {
+        final Object value = CONFIGS.get(inv.getArgument(0, String.class));
+        return value instanceof final List<?> list? new ArrayList<>(list) : new ArrayList<>();
+      });
       Mockito.lenient().when(plugin.getConfig()).thenReturn(config);
       Mockito.lenient().when(plugin.getPasteManager())
               .thenReturn(mock(com.ghostchu.quickshop.util.paste.PasteManager.class));
