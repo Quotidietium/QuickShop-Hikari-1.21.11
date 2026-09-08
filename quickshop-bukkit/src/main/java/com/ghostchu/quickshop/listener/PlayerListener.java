@@ -335,7 +335,13 @@ public class PlayerListener extends AbstractQSListener {
   @EventHandler(ignoreCancelled = true)
   public void onTeleport(final PlayerTeleportEvent e) {
 
-    onMove(new PlayerMoveEvent(e.getPlayer(), e.getFrom(), e.getTo()));
+    // shared body with onMove: the old form synthesized a whole PlayerMoveEvent per
+    // teleport just to reuse the handler
+    final Info info = plugin.getShopManager().getInteractiveManager().get(e.getPlayer().getUniqueId());
+    if(info == null) {
+      return;
+    }
+    cancelSessionIfMovedAway(e.getPlayer(), info);
   }
 
   /*
@@ -348,7 +354,13 @@ public class PlayerListener extends AbstractQSListener {
     if(info == null) {
       return;
     }
-    final Player p = e.getPlayer();
+    cancelSessionIfMovedAway(e.getPlayer(), info);
+  }
+
+  /** Distance check against the player's CURRENT position, as both handlers always
+   *  measured it (during a teleport event that is still the departure point). */
+  private void cancelSessionIfMovedAway(final Player p, final Info info) {
+
     final Location loc1 = info.getLocation();
     final Location loc2 = p.getLocation();
     if(loc1.getWorld() != loc2.getWorld() || loc1.distanceSquared(loc2) > 25) {

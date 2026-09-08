@@ -10,7 +10,6 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.event.inventory.InventoryInteractEvent;
 
 public class CustomInventoryListener extends AbstractQSListener {
 
@@ -19,13 +18,15 @@ public class CustomInventoryListener extends AbstractQSListener {
     super(plugin);
   }
 
-  @EventHandler(ignoreCancelled = true)
-  public void invEvent(final InventoryInteractEvent e) {
-
-    if(e.getInventory().getHolder(false) instanceof QuickShopPreviewGUIHolder) {
-      e.setCancelled(true);
-    }
-  }
+  // no InventoryInteractEvent handler on purpose: InventoryInteractEvent declares no
+  // HandlerList of its own, so a handler for it registers on InventoryEvent's shared
+  // list — which click/drag events never fire (InventoryClickEvent and
+  // InventoryDragEvent each declare their own list and dispatch only there). The
+  // shared list fires for FurnaceExtract/Smelt/StartSmelt and the Prepare* family,
+  // where Paper's method-handle executor guards with an isInstance check and returns
+  // without ever reaching the body. The handler was dead for its intended purpose and
+  // one wasted dispatch per furnace/prepare event; the click and drag handlers below
+  // carry the whole preview guard.
 
   @EventHandler(ignoreCancelled = true)
   public void invEvent(final InventoryClickEvent e) {
