@@ -152,6 +152,12 @@ public class VirtualDisplayItem<T> extends AbstractDisplayItem implements Reload
   @Override
   public boolean isApplicableForPlayer(final Player player) {
 
+    // the event only lets a listener veto applicability (it starts true); with no
+    // listener registered the answer is provably true and the construction disappears
+    // from the per-display-per-player chunk-entrance path
+    if(!com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      return true;
+    }
     final DisplayApplicableCheckEvent event = new DisplayApplicableCheckEvent(shop, player.getUniqueId());
 
     event.setApplicable(true);
@@ -265,6 +271,12 @@ public class VirtualDisplayItem<T> extends AbstractDisplayItem implements Reload
 
   public void sendSpawnPacket(@NotNull final Player player) {
 
+    // the per-packet event can only be cancelled by a listener; without one the packet
+    // goes straight out — this runs 3x per display per player on every chunk re-send
+    if(!com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      this.packetFactory.sendPacket(player, spawnPacket);
+      return;
+    }
     final PacketHandlerSendSpawnEvent<T> event = new PacketHandlerSendSpawnEvent<>(manager.packetHandler(),
                                                                                    this.packetFactory,
                                                                                    spawnPacket);
@@ -279,6 +291,11 @@ public class VirtualDisplayItem<T> extends AbstractDisplayItem implements Reload
 
   public void sendMetaPacket(@NotNull final Player player) {
 
+    // same gate as sendSpawnPacket
+    if(!com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      this.packetFactory.sendPacket(player, metaPacket);
+      return;
+    }
     final PacketHandlerSendMetaEvent<T> event = new PacketHandlerSendMetaEvent<>(manager.packetHandler(),
                                                                                  this.packetFactory,
                                                                                  metaPacket);
@@ -293,6 +310,11 @@ public class VirtualDisplayItem<T> extends AbstractDisplayItem implements Reload
 
   public void sendDestroyPacket(@NotNull final Player player) {
 
+    // same gate as sendSpawnPacket
+    if(!com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      this.packetFactory.sendPacket(player, destroyPacket);
+      return;
+    }
     final PacketHandlerSendDestroyEvent<T> event = new PacketHandlerSendDestroyEvent<>(manager.packetHandler(),
                                                                                        this.packetFactory,
                                                                                        destroyPacket);

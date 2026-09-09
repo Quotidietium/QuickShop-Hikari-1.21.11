@@ -372,17 +372,30 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     // BUYING MODE  Shop Owner -> Player
     final TaxRates taxRates = taxManager.provider().calculateTax(shop, buyerQUser);
 
-    final ShopEnhancedTaxEvent taxEvent = new ShopEnhancedTaxEvent(shop, taxRates, buyerQUser);
-    taxEvent.callEvent();
+    // the ShopEnhancedTaxEvent only lets a listener swap the TaxRates object; with no
+    // listener registered getTax() provably answers the constructed rates, so the event
+    // construction disappears from the per-trade path
+    final TaxRates effectiveTax;
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopEnhancedTaxEvent taxEvent = new ShopEnhancedTaxEvent(shop, taxRates, buyerQUser);
+      taxEvent.callEvent();
+      effectiveTax = taxEvent.getTax();
+    } else {
+      effectiveTax = taxRates;
+    }
 
     //final double taxModifier = getTax(shop, buyerQUser);
     double total = CalculateUtil.multiply(amount, shop.getPrice());
-    final ShopPurchaseEvent e = new ShopPurchaseEvent(shop, buyerQUser, buyerInventory, amount, total);
-    if(Util.fireCancellableEvent(e)) {
-      plugin.text().of(buyer, "plugin-cancelled", e.getCancelReason()).send();
-      return false; // Cancelled
-    } else {
-      total = e.getTotal(); // Allow addon to set it
+    // ShopPurchaseEvent can only be cancelled or have its total rewritten by a listener;
+    // with no listener the trade proceeds with the computed total untouched
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopPurchaseEvent e = new ShopPurchaseEvent(shop, buyerQUser, buyerInventory, amount, total);
+      if(Util.fireCancellableEvent(e)) {
+        plugin.text().of(buyer, "plugin-cancelled", e.getCancelReason()).send();
+        return false; // Cancelled
+      } else {
+        total = e.getTotal(); // Allow addon to set it
+      }
     }
     QUser taxAccount = null;
     if(shop.getTaxAccount() != null) {
@@ -394,10 +407,10 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     }
     BigDecimal fromTax = BigDecimal.ZERO;
     final QSEconomyTransaction transaction;
-    final QSEconomyTransactionBuilder builder = QSEconomyTransaction.builder().amount(BigDecimal.valueOf(total)).toTax(new BigDecimal(taxEvent.getTax().interactorRate())).taxer(taxAccount).world(shop.bukkitLocation().getWorld().getName()).to(buyerQUser);
+    final QSEconomyTransactionBuilder builder = QSEconomyTransaction.builder().amount(BigDecimal.valueOf(total)).toTax(new BigDecimal(effectiveTax.interactorRate())).taxer(taxAccount).world(shop.bukkitLocation().getWorld().getName()).to(buyerQUser);
 
     if(!shop.isUnlimited() || (this.payUnlimitedShopOwner && shop.isUnlimited())) {
-      fromTax = new BigDecimal(taxEvent.getTax().shopRate());
+      fromTax = new BigDecimal(effectiveTax.shopRate());
       transaction = builder.from(shop.getOwner()).fromTax(fromTax).build();
     } else {
       transaction = builder.from(null).build();
@@ -463,7 +476,10 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     }
 
     sendSellSuccess(buyerQUser, shop, amount, total, transaction.toTax().doubleValue());
-    new ShopSuccessPurchaseEvent(shop, buyerQUser, buyerInventory, amount, total, transaction.toTax().doubleValue()).callEvent();
+    // fire-and-forget success event on the per-trade path; gated construction
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      new ShopSuccessPurchaseEvent(shop, buyerQUser, buyerInventory, amount, total, transaction.toTax().doubleValue()).callEvent();
+    }
     // sign refresh already happened inside the trade service (SignUpdateWatcher batch, or
     // immediate per shop.immediate-trade-sign-updates) in the trading player's locale —
     // a second immediate render here would duplicate that work per trade
@@ -613,16 +629,26 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
 
     final TaxRates taxRates = taxManager.provider().calculateTax(shop, sellerQUser);
 
-    final ShopEnhancedTaxEvent taxEvent = new ShopEnhancedTaxEvent(shop, taxRates, sellerQUser);
-    taxEvent.callEvent();
+    // same gate as the buying side: only a listener can swap the TaxRates object
+    final TaxRates effectiveTax;
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopEnhancedTaxEvent taxEvent = new ShopEnhancedTaxEvent(shop, taxRates, sellerQUser);
+      taxEvent.callEvent();
+      effectiveTax = taxEvent.getTax();
+    } else {
+      effectiveTax = taxRates;
+    }
     double total = CalculateUtil.multiply(amount, shop.getPrice());
 
-    final ShopPurchaseEvent e = new ShopPurchaseEvent(shop, sellerQUser, sellerInventory, amount, total);
-    if(Util.fireCancellableEvent(e)) {
-      plugin.text().of(seller, "plugin-cancelled", e.getCancelReason()).send();
-      return false; // Cancelled
-    } else {
-      total = e.getTotal(); // Allow addon to set it
+    // same gate as the buying side: without a listener the computed total stands
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopPurchaseEvent e = new ShopPurchaseEvent(shop, sellerQUser, sellerInventory, amount, total);
+      if(Util.fireCancellableEvent(e)) {
+        plugin.text().of(seller, "plugin-cancelled", e.getCancelReason()).send();
+        return false; // Cancelled
+      } else {
+        total = e.getTotal(); // Allow addon to set it
+      }
     }
     // Money handling
     // SELLING Player -> Shop Owner
@@ -635,11 +661,11 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         taxAccount = this.cacheTaxAccount;
       }
     }
-    final BigDecimal fromTax = new BigDecimal(taxEvent.getTax().interactorRate());
+    final BigDecimal fromTax = new BigDecimal(effectiveTax.interactorRate());
     final QSEconomyTransactionBuilder builder = QSEconomyTransaction.builder().from(sellerQUser).amount(BigDecimal.valueOf(total)).fromTax(fromTax).taxer(taxAccount).benefitManager(shop.getShopBenefit()).world(shop.bukkitLocation().getWorld().getName());
 
     if(!shop.isUnlimited() || (this.payUnlimitedShopOwner && shop.isUnlimited())) {
-      transaction = builder.to(shop.getOwner()).toTax(new BigDecimal(taxEvent.getTax().shopRate())).build();
+      transaction = builder.to(shop.getOwner()).toTax(new BigDecimal(effectiveTax.shopRate())).build();
     } else {
       transaction = builder.to(null).build();
     }
@@ -707,7 +733,10 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     final Integer measuredStock = result.observation().chestStock();
     final int stock = measuredStock != null? measuredStock : shop.getRemainingStock();
     sendPurchaseSuccess(sellerQUser, shop, amount, total, transaction.fromTax().doubleValue());
-    new ShopSuccessPurchaseEvent(shop, sellerQUser, sellerInventory, amount, total, transaction.fromTax().doubleValue()).callEvent();
+    // same gated construction as the buying side
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      new ShopSuccessPurchaseEvent(shop, sellerQUser, sellerInventory, amount, total, transaction.fromTax().doubleValue()).callEvent();
+    }
     notifyBought(sellerQUser, shop, amount, stock, transaction);
     return true;
   }

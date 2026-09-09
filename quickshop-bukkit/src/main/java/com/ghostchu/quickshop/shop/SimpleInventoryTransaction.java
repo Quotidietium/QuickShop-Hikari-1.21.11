@@ -41,7 +41,11 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
     this.to = to;
     this.item = item.clone();
     this.amount = amount;
-    new InventoryTransactionEvent(this).callEvent();
+    // construction-gated per-transaction event, same shared-HandlerList argument as the
+    // economy transaction above: both constructors run on every trade's item leg
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      new InventoryTransactionEvent(this).callEvent();
+    }
   }
 
   /** Statelessness of the default callback makes one shared instance sufficient. */

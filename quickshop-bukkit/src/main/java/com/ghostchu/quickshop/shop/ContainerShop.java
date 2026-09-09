@@ -825,7 +825,11 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       }
 
       final int space = Util.countSpace(inv, this);
-      new ShopInventoryCalculateEvent(this, space, -1).callEvent();
+      // the event is fire-and-forget here (return value is the scanned count), so its
+      // construction is gated: with no listener nobody can observe it (shared HandlerList)
+      if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+        new ShopInventoryCalculateEvent(this, space, -1).callEvent();
+      }
       Log.debug(() -> "Space count is: " + space);
       return space;
     } else {
@@ -859,7 +863,10 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
         return 0;
       }
       final int stock = Util.countItems(inv, this);
-      new ShopInventoryCalculateEvent(this, -1, stock).callEvent();
+      // same construction gate as getRemainingSpace: nothing is read off the event
+      if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+        new ShopInventoryCalculateEvent(this, -1, stock).callEvent();
+      }
       return stock;
     }
 
@@ -876,7 +883,10 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
           }
 
           final int stock = Util.countItems(this.getInventory(), this);
-          new ShopInventoryCalculateEvent(this, -1, stock).callEvent();
+          // same construction gate as the primary-thread branch
+          if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+            new ShopInventoryCalculateEvent(this, -1, stock).callEvent();
+          }
 
           future.complete(stock);
         });
@@ -1541,6 +1551,13 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   public void onClick(@NotNull final Player clicker) {
 
     Util.ensureThread(false);
+    // three-phase ShopClickEvent: with no listener registered the whole block is a
+    // provable no-op (nothing can cancel or observe any phase), so the body collapses
+    // to the uncancelled path — skipping the QUser construction and two phase clones
+    if(!com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      setSignText(plugin.getTextManager().findRelativeLanguages(clicker));
+      return;
+    }
     ShopClickEvent event = new ShopClickEvent(this, QUserImpl.createFullFilled(clicker));
     event.callEvent();
 
@@ -1692,12 +1709,19 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     final String group = getPlayerGroup(player);
     final boolean hasPermission = plugin.getShopPermissionManager().hasPermission(group, namespace, permission);
 
-    final ShopPermissionCheckEvent event = new ShopPermissionCheckEvent(Phase.MAIN, this, player, namespace.getName(), permission, hasPermission);
-    event.callEvent();
+    // ShopPermissionCheckEvent only lets a listener OVERRIDE the computed value; with no
+    // listener hasPermission() provably answers the constructed value, so the event
+    // construction is skipped and the permission log prints the identical text
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopPermissionCheckEvent event = new ShopPermissionCheckEvent(Phase.MAIN, this, player, namespace.getName(), permission, hasPermission);
+      event.callEvent();
 
-    Log.permission("Check permission " + namespace.getName().toLowerCase(Locale.ROOT) + "." + permission + ": " + player + " -> " + event.hasPermission());
+      Log.permission("Check permission " + namespace.getName().toLowerCase(Locale.ROOT) + "." + permission + ": " + player + " -> " + event.hasPermission());
 
-    return event.hasPermission();
+      return event.hasPermission();
+    }
+    Log.permission("Check permission " + namespace.getName().toLowerCase(Locale.ROOT) + "." + permission + ": " + player + " -> " + hasPermission);
+    return hasPermission;
   }
 
   /**
@@ -1871,7 +1895,10 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     this.symbolLink = manager.mklink(wrapper);
     setDirty();
     Log.debug("Inventory changed: " + this.symbolLink + ", wrapper provider:" + inventoryWrapperProvider);
-    new ShopInventoryChangedEvent(wrapper, manager).callEvent();
+    // fire-and-forget event on an admin-frequency path; gated for uniformity
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      new ShopInventoryChangedEvent(wrapper, manager).callEvent();
+    }
   }
 
   @Override
@@ -1946,8 +1973,17 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     Log.debug("Globally sign text setting...");
     final List<Sign> signs = this.getSigns();
 
-    final ShopSignLinesEvent event = new ShopSignLinesEvent(Phase.POST, this, lines);
-    event.callEvent();
+    // the ShopSignLinesEvent's updated() defaults to the passed lines and only a listener
+    // can change it; with no listener the render consumes the original list directly and
+    // both event constructions per sign refresh disappear from the post-trade path
+    final List<Component> effectiveLines;
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopSignLinesEvent event = new ShopSignLinesEvent(Phase.POST, this, lines);
+      event.callEvent();
+      effectiveLines = event.updated();
+    } else {
+      effectiveLines = lines;
+    }
 
     // per-call constants hoisted out of the per-sign loop: config values and the dye
     // color cannot change between two signs of the same refresh
@@ -1963,9 +1999,11 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       sign.setGlowingText(isGlowing);
       sign.setWaxed(isWaxed);
       sign.update(true);
-      plugin.platform().setLines(sign, event.updated());
+      plugin.platform().setLines(sign, effectiveLines);
 
-      new ShopSignUpdateEvent(this, sign).callEvent();
+      if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+        new ShopSignUpdateEvent(this, sign).callEvent();
+      }
     }
     if(plugin.getSignHooker() != null) {
       Log.debug("Start sign broadcast...");

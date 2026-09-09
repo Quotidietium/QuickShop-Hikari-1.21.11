@@ -857,6 +857,14 @@ public class Util {
 
       throw new IllegalArgumentException("Cancellable must is event implement");
     }
+    // QuickShop events share one HandlerList with a zero-listener fast path: nothing can
+    // cancel or observe the event, so the whole Bukkit dispatch is skipped and this
+    // helper's "true = cancelled" contract is answered directly by the (unmutated)
+    // cancelled flag (non-QuickShop events dispatch unchanged)
+    if(event instanceof com.ghostchu.quickshop.api.event.AbstractQSEvent
+       && !com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      return event.isCancelled();
+    }
     Bukkit.getPluginManager().callEvent((Event)event);
     return event.isCancelled();
   }

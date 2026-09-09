@@ -122,7 +122,11 @@ public class QSEconomyTransaction implements EconomyTransaction {
       this.benefitProvider = QSBenefitProvider.EMPTY;
     }
 
-    new EconomyTransactionEvent(this).callEvent();
+    // construction-gated per-transaction event: with no listener nobody can observe it
+    // (every QuickShop event shares one HandlerList, see AbstractQSEvent)
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      new EconomyTransactionEvent(this).callEvent();
+    }
   }
 
   public static QSEconomyTransactionBuilder builder() {

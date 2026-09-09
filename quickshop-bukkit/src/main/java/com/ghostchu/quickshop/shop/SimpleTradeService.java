@@ -324,8 +324,11 @@ public class SimpleTradeService implements TradeService {
       final int stock = Util.countItems(chestInv, shop);
       measuredStock = stock;
       // same per-calculation event the pre-trade getRemainingStock() scan used to fire, so
-      // inventory-cache listeners keep seeing one stock calculation per trade
-      new ShopInventoryCalculateEvent(shop, -1, stock).callEvent();
+      // inventory-cache listeners keep seeing one stock calculation per trade; with no
+      // listener the construction is a provable no-op (nothing is read off the event)
+      if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+        new ShopInventoryCalculateEvent(shop, -1, stock).callEvent();
+      }
       final int requestedUnits = normalizeAmount(shop, amount) / stackSize;
       if(stock < requestedUnits) {
         final int allowedTrades = stock / stackSize;
