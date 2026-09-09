@@ -179,6 +179,24 @@ public final class TradeBench {
       consume(result);
     });
 
+    // per-shop-click dispatch (ContainerShop.onClick): the handler shop-sign, control
+    // panel and trade-interaction clicks route through. Baseline unconditionally builds
+    // the three-phase ShopClickEvent (a QUser fill + two phase clones + an
+    // isPrimaryThread probe per event construction); the R50 candidate skips the whole
+    // block when no listener is registered on the shared QuickShop HandlerList,
+    // collapsing to the sign-text refresh — which the mock world answers with
+    // isWorldLoaded=false, so the case isolates exactly the dispatch overhead
+    final AtomicInteger clickCounter = new AtomicInteger();
+    harness.bench("trade/shopClickDispatch", ctx -> {
+      ctx.index++;
+      try {
+        fixtures.tradeShop().onClick(actionFixtures.trader());
+      } catch(final Throwable t) {
+        throw new IllegalStateException("shop click dispatch failed, run #" + clickCounter.incrementAndGet(), t);
+      }
+      consume(ctx.index);
+    });
+
     // per-trade purchase-log listener (InternalListener.shopPurchase with log-actions on):
     // measures the listener's main-thread cost — baseline builds the log entry eagerly
     // (shop snapshot + two item encodes + name render + Gson), candidate defers via
