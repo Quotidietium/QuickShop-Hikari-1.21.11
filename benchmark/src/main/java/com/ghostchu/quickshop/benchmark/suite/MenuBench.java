@@ -164,6 +164,63 @@ public final class MenuBench {
       consume(MarketUtils.groupShopsByItem(groupShops));
       consume(MarketUtils.sortShops(groupShops, BrowseSortMode.NAME));
     });
+
+    // default browse-open pipeline (processGroups: filter ALL -> no stock filter -> no
+    // search -> group by item -> sort groups by name) over REAL ContainerShops with
+    // clone-accounting item mocks: every shop.getItem() produces a fresh stack copy,
+    // mirroring the production NBT deep copy call-for-call. Baseline pays one defensive
+    // copy per shop per grouping pass plus one per new group; the R52 candidate reads
+    // the live prototype and clones only once per new group for its representative.
+    final org.bukkit.World browseWorld = Env.pin(Env.hotMock(org.bukkit.World.class));
+    when(browseWorld.getName()).thenReturn("world");
+    final org.bukkit.Material[] browseMaterials = groupMaterials;
+    final int browseCount = 120;
+    final List<Shop> browseShops = new ArrayList<>(browseCount);
+    for(int i = 0; i < browseCount; i++) {
+      final org.bukkit.Material material = browseMaterials[i % browseMaterials.length];
+      final org.bukkit.inventory.ItemStack stack = Env.pin(statefulStack(material));
+      final var owner = com.ghostchu.quickshop.obj.QUserImpl.createFullFilled(
+              java.util.UUID.nameUUIDFromBytes(("browse-owner-" + i).getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+              "browse-owner-" + i, true);
+      final var benefit = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.economy.benefit.BenefitProvider.class));
+      when(benefit.serialize()).thenReturn("{}");
+      browseShops.add(new com.ghostchu.quickshop.shop.ContainerShop(
+              plugin, -1L, new org.bukkit.Location(browseWorld, 1000, 64, i), 10.0d, stack, owner, false,
+              SimpleShopManager.SELLING_TYPE, SimpleShopManager.ACTIVE_STATE,
+              new org.bukkit.configuration.file.YamlConfiguration(), false, null,
+              "Bukkit", "2;1000;64;" + i + ";world", null,
+              new HashMap<>(), benefit));
+    }
+    harness.bench("menu/browseGroupPipeline", ctx -> {
+      ctx.index++;
+      consume(MarketUtils.processGroups(browseShops, BrowseFilterMode.ALL,
+                                        BrowseSortMode.NAME, null, false));
+    });
+  }
+
+  /**
+   * Clone-accounting item mock: every clone() builds a fresh self-contained stack (the
+   * benchmark mirror of a production NBT deep copy) with stable read semantics, so the
+   * B/op axis sees each eliminated defensive copy as real allocation work.
+   */
+  private static org.bukkit.inventory.ItemStack statefulStack(final org.bukkit.Material material) {
+
+    final org.bukkit.inventory.ItemStack stack = Env.hotMock(org.bukkit.inventory.ItemStack.class);
+    final int[] amt = {1};
+    when(stack.getType()).thenReturn(material);
+    when(stack.getAmount()).thenAnswer(inv->amt[0]);
+    when(stack.getMaxStackSize()).thenReturn(64);
+    when(stack.hasItemMeta()).thenReturn(false);
+    when(stack.isSimilar(any(org.bukkit.inventory.ItemStack.class))).thenAnswer(inv->{
+      final var other = inv.getArgument(0, org.bukkit.inventory.ItemStack.class);
+      return other != null && other.getType() == material && !other.hasItemMeta();
+    });
+    when(stack.clone()).thenAnswer(inv->statefulStack(material));
+    org.mockito.Mockito.doAnswer(inv->{
+      amt[0] = inv.getArgument(0, Integer.class);
+      return null;
+    }).when(stack).setAmount(org.mockito.ArgumentMatchers.anyInt());
+    return stack;
   }
 
   private static void consume(final Object value) {
