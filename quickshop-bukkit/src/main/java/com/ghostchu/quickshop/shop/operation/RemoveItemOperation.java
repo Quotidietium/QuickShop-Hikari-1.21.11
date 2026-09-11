@@ -6,6 +6,7 @@ import com.ghostchu.quickshop.api.operation.Operation;
 import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.logger.Log;
 import org.bukkit.inventory.ItemStack;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
@@ -33,11 +34,33 @@ public class RemoveItemOperation implements Operation {
    */
   public RemoveItemOperation(@NotNull final ItemStack item, final int amount, @NotNull final InventoryWrapper inv) {
 
-    this.item = item.clone();
+    this(item, amount, inv, Util.getItemMaxStackSize(item.getType()), item.clone());
+  }
+
+  /**
+   * Operation that adopts the passed item reference instead of cloning it. The only
+   * caller is {@code SimpleInventoryTransaction#commit()}, whose item field is either a
+   * constructor-private clone or a provably unaliased adoption — either way nothing
+   * besides the transaction holds it, and this class never mutates it (the removal
+   * loop works on its own clone). The public constructor keeps cloning.
+   *
+   * @param item   ItemStack to remove, exclusively owned by the caller
+   * @param amount Amount to remove
+   * @param inv    The {@link InventoryWrapper} that remove from
+   */
+  @ApiStatus.Internal
+  public static RemoveItemOperation adopting(@NotNull final ItemStack item, final int amount, @NotNull final InventoryWrapper inv) {
+
+    return new RemoveItemOperation(item, amount, inv, Util.getItemMaxStackSize(item.getType()), item);
+  }
+
+  private RemoveItemOperation(@NotNull final ItemStack item, final int amount, @NotNull final InventoryWrapper inv,
+                              final int itemMaxStackSize, @NotNull final ItemStack ownedItem) {
+
+    this.item = ownedItem;
     this.amount = amount;
     this.inv = inv;
-    this.itemMaxStackSize = Util.getItemMaxStackSize(item.getType());
-
+    this.itemMaxStackSize = itemMaxStackSize;
   }
 
   @Override

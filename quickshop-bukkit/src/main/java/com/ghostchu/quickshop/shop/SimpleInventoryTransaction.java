@@ -34,18 +34,37 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
   @Builder
   public SimpleInventoryTransaction(@Nullable final InventoryWrapper from, @Nullable final InventoryWrapper to, @NotNull final ItemStack item, final int amount) {
 
+    this(from, to, item, amount, true);
+  }
+
+  private SimpleInventoryTransaction(@Nullable final InventoryWrapper from, @Nullable final InventoryWrapper to,
+                                     @NotNull final ItemStack item, final int amount, final boolean defensiveClone) {
+
     if(from == null && to == null) {
       throw new IllegalArgumentException("Both from and to are null");
     }
     this.from = from;
     this.to = to;
-    this.item = item.clone();
+    this.item = defensiveClone? item.clone() : item;
     this.amount = amount;
     // construction-gated per-transaction event, same shared-HandlerList argument as the
     // economy transaction above: both constructors run on every trade's item leg
     if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
       new InventoryTransactionEvent(this).callEvent();
     }
+  }
+
+  /**
+   * Transaction that adopts the passed item reference instead of cloning it again.
+   * Package-internal: the trade service hands in a fresh {@code Shop#getItem()} clone
+   * that no other code references, so the historical second defensive copy (and the
+   * per-operation copies below it) duplicated an already-private stack. The public
+   * builder keeps cloning for every other caller.
+   */
+  static SimpleInventoryTransaction adopting(@Nullable final InventoryWrapper from, @Nullable final InventoryWrapper to,
+                                             @NotNull final ItemStack item, final int amount) {
+
+    return new SimpleInventoryTransaction(from, to, item, amount, false);
   }
 
   /** Statelessness of the default callback makes one shared instance sufficient. */
@@ -88,12 +107,12 @@ public class SimpleInventoryTransaction implements InventoryTransaction {
       callback.onFailed(this);
       return false;
     }
-    if(from != null && !this.executeOperation(new RemoveItemOperation(item, amount, from))) {
+    if(from != null && !this.executeOperation(RemoveItemOperation.adopting(item, amount, from))) {
       this.lastError = "Failed to remove " + amount + "x " + Util.serialize(item) + " from " + from;
       callback.onFailed(this);
       return false;
     }
-    if(to != null && !this.executeOperation(new AddItemOperation(item, amount, to))) {
+    if(to != null && !this.executeOperation(AddItemOperation.adopting(item, amount, to))) {
       this.lastError = "Failed to add " + amount + "x " + Util.serialize(item) + " to " + to;
       callback.onFailed(this);
       return false;

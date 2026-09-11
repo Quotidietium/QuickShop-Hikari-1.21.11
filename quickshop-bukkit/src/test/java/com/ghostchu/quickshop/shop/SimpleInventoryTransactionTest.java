@@ -19,8 +19,11 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -196,5 +199,69 @@ class SimpleInventoryTransactionTest {
     assertTrue(tx.commit());
     verify(chest, never()).removeItem(any(ItemStack[].class));
     verify(player, never()).addItem(any(ItemStack[].class));
+  }
+
+  @Test
+  void adoptingFactoryReusesReferenceAndStillCommits() {
+
+    //a distinct clone target so adoption vs cloning is observable
+    final ItemStack itemClone = mock(ItemStack.class);
+    when(itemClone.getType()).thenReturn(Material.DIRT);
+    when(itemClone.getAmount()).thenReturn(64);
+    when(item.clone()).thenReturn(itemClone);
+    when(chest.removeItem(any(ItemStack[].class))).thenReturn(new HashMap<>());
+    when(player.addItem(any(ItemStack[].class))).thenReturn(new HashMap<>());
+
+    final SimpleInventoryTransaction tx = SimpleInventoryTransaction.adopting(chest, player, item, 64);
+
+    //the adoption path holds the caller's reference; the public builder's defensive
+    //copy does not run (it would hand back itemClone instead)
+    assertSame(item, tx.getItem());
+    assertTrue(tx.failSafeCommit());
+    //the operations still work on their own working clones of that reference
+    verify(chest, times(1)).removeItem(any(ItemStack[].class));
+    verify(player, times(1)).addItem(any(ItemStack[].class));
+  }
+
+  @Test
+  void publicBuilderStillClonesDefensively() {
+
+    final ItemStack itemClone = mock(ItemStack.class);
+    when(itemClone.getType()).thenReturn(Material.DIRT);
+    when(item.clone()).thenReturn(itemClone);
+    when(chest.removeItem(any(ItemStack[].class))).thenReturn(new HashMap<>());
+    when(player.addItem(any(ItemStack[].class))).thenReturn(new HashMap<>());
+
+    final SimpleInventoryTransaction tx = SimpleInventoryTransaction.builder()
+            .from(chest)
+            .to(player)
+            .item(item)
+            .amount(64)
+            .build();
+
+    //third-party callers keep the historic contract: the transaction owns a private copy
+    assertSame(itemClone, tx.getItem());
+    assertNotSame(item, tx.getItem());
+  }
+
+  @Test
+  void adoptedReferenceIsNeverMutatedByTheOperationLoops() {
+
+    final ItemStack itemClone = mock(ItemStack.class);
+    when(itemClone.getType()).thenReturn(Material.DIRT);
+    when(itemClone.getAmount()).thenReturn(64);
+    when(item.clone()).thenReturn(itemClone);
+    when(chest.removeItem(any(ItemStack[].class))).thenReturn(new HashMap<>());
+    when(player.addItem(any(ItemStack[].class))).thenReturn(new HashMap<>());
+
+    final SimpleInventoryTransaction tx = SimpleInventoryTransaction.adopting(chest, player, item, 128);
+
+    assertTrue(tx.failSafeCommit());
+
+    //both operations chunk their transfers on private working clones; the adopted
+    //reference itself stays untouched, which is what lets the trade service hand its
+    //fresh getItem() clone straight through without further copies
+    verify(item, never()).setAmount(anyInt());
+    verify(itemClone, org.mockito.Mockito.atLeastOnce()).setAmount(anyInt());
   }
 }

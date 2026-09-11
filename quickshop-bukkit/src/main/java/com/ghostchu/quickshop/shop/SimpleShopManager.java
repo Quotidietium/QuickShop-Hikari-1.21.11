@@ -1157,7 +1157,10 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         return;
       }
       final ProxiedLocale locale = plugin.text().findRelativeLanguages(p);
-      // Potentially faster with an array?
+      // one snapshot serves every line of the panel: each getItem() clones the stack
+      // (an NBT deep copy in production) and this render read it up to eight times;
+      // nothing between here and the last line mutates the shop item, so the later
+      // original reads were re-fetching an unchanged stack
       final ItemStack items = shop.getItem();
       final ChatSheetPrinter chatSheetPrinter = new ChatSheetPrinter(p);
       chatSheetPrinter.printHeader();
@@ -1165,18 +1168,18 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       chatSheetPrinter.printLine(plugin.text().of(p, "menu.owner", shop.ownerName(locale)).forLocale());
       // Enabled
       if(shop.playerAuthorize(p.getUniqueId(), BuiltInShopPermission.PREVIEW_SHOP) || plugin.perm().hasPermission(p, "quickshop.other.preview")) {
-        ItemStack previewItemStack = shop.getItem().clone();
+        ItemStack previewItemStack = items.clone();
         final ItemPreviewComponentPrePopulateEvent previewComponentPrePopulateEvent = new ItemPreviewComponentPrePopulateEvent(previewItemStack, p);
         previewComponentPrePopulateEvent.callEvent();
         previewItemStack = previewComponentPrePopulateEvent.getItemStack();
         Component previewComponent = plugin.text().of(p, "menu.preview", Component.text(previewItemStack.getAmount())).forLocale().clickEvent(ClickEvent.clickEvent(ClickEvent.Action.RUN_COMMAND, MsgUtil.fillArgs("/{0} {1} {2}", plugin.getMainCommand(), plugin.getCommandPrefix("silentpreview"), shop.getRuntimeRandomUniqueId().toString())));
-        previewComponent = plugin.platform().setItemStackHoverEvent(previewComponent, shop.getItem());
+        previewComponent = plugin.platform().setItemStackHoverEvent(previewComponent, items);
         final ItemPreviewComponentPopulateEvent itemPreviewComponentPopulateEvent = new ItemPreviewComponentPopulateEvent(previewComponent, p);
         itemPreviewComponentPopulateEvent.callEvent();
         previewComponent = itemPreviewComponentPopulateEvent.getComponent();
-        chatSheetPrinter.printLine(plugin.text().of(p, "menu.item", Util.getItemStackName(shop.getItem())).forLocale().append(Component.text("   ")).append(previewComponent));
+        chatSheetPrinter.printLine(plugin.text().of(p, "menu.item", Util.getItemStackName(items)).forLocale().append(Component.text("   ")).append(previewComponent));
       } else {
-        final ItemStack previewItemStack = shop.getItem().clone();
+        final ItemStack previewItemStack = items.clone();
         final ItemPreviewComponentPrePopulateEvent previewComponentPrePopulateEvent = new ItemPreviewComponentPrePopulateEvent(previewItemStack, p);
         previewComponentPrePopulateEvent.callEvent();
         chatSheetPrinter.printLine(plugin.text().of(p, "menu.item", plugin.platform().setItemStackHoverEvent(Util.getItemStackName(previewComponentPrePopulateEvent.getItemStack()), previewComponentPrePopulateEvent.getItemStack())).forLocale());
@@ -1185,23 +1188,27 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       if(Util.isTool(items.getType()) && plugin.getConfig().getBoolean("shop.info-panel.show-durability")) {
         chatSheetPrinter.printLine(plugin.text().of(p, "menu.damage-percent-remaining", Component.text(Util.getToolPercentage(items))).forLocale());
       }
+      // one scan per panel: the branch test and the printed value consulted the same
+      // unchanged quantity, paying the full inventory count twice
       if(shop.isSelling()) {
-        if(shop.getRemainingStock() == -1) {
+        final int stock = shop.getRemainingStock();
+        if(stock == -1) {
           chatSheetPrinter.printLine(plugin.text().of(p, "menu.stock", plugin.text().of(p, "signs.unlimited").forLocale()).forLocale());
         } else {
-          chatSheetPrinter.printLine(plugin.text().of(p, "menu.stock", Component.text(shop.getRemainingStock())).forLocale());
+          chatSheetPrinter.printLine(plugin.text().of(p, "menu.stock", Component.text(stock)).forLocale());
         }
       } else {
-        if(shop.getRemainingSpace() == -1) {
+        final int space = shop.getRemainingSpace();
+        if(space == -1) {
           chatSheetPrinter.printLine(plugin.text().of(p, "menu.space", plugin.text().of(p, "signs.unlimited").forLocale()).forLocale());
         } else {
-          chatSheetPrinter.printLine(plugin.text().of(p, "menu.space", Component.text(shop.getRemainingSpace())).forLocale());
+          chatSheetPrinter.printLine(plugin.text().of(p, "menu.space", Component.text(space)).forLocale());
         }
       }
-      if(shop.getItem().getAmount() == 1) {
-        chatSheetPrinter.printLine(plugin.text().of(p, "menu.price-per", Util.getItemStackName(shop.getItem()), format(shop.getPrice(), shop)).forLocale());
+      if(items.getAmount() == 1) {
+        chatSheetPrinter.printLine(plugin.text().of(p, "menu.price-per", Util.getItemStackName(items), format(shop.getPrice(), shop)).forLocale());
       } else {
-        chatSheetPrinter.printLine(plugin.text().of(p, "menu.price-per-stack", Util.getItemStackName(shop.getItem()), format(shop.getPrice(), shop), shop.getItem().getAmount()).forLocale());
+        chatSheetPrinter.printLine(plugin.text().of(p, "menu.price-per-stack", Util.getItemStackName(items), format(shop.getPrice(), shop), items.getAmount()).forLocale());
       }
       if(shop.isBuying()) {
         chatSheetPrinter.printLine(plugin.text().of(p, "menu.this-shop-is-buying").forLocale());
@@ -1216,7 +1223,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
 
       if(respectItemFlag && items.hasItemMeta()) {
 
-        final ItemMeta shopItemMeta = shop.getItem().getItemMeta();
+        final ItemMeta shopItemMeta = items.getItemMeta();
         shouldDisplayEnchantments = !shopItemMeta.hasItemFlag(ItemFlag.HIDE_ENCHANTS);
 
         ItemFlag hidePotionEffect;
@@ -1229,7 +1236,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       }
 
       if(shouldDisplayEnchantments) {
-        MsgUtil.printEnchantment(shop, chatSheetPrinter);
+        MsgUtil.printEnchantment(items, chatSheetPrinter);
       }
       if(shouldDisplayPotionEffects) {
         if(plugin.getGameVersion().isNewPotionAPI()) {

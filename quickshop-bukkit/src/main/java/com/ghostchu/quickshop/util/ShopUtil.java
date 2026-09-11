@@ -241,10 +241,18 @@ public class ShopUtil {
       return false;
     }
     QuickShop.getInstance().getShopManager().sendShopInfo(p, shop);
-    shop.setSignText(QuickShop.getInstance().text().findRelativeLanguages(p));
+    // onClick (below) refreshes the sign in the same locale; without listeners its render
+    // is provably identical to this one, so the explicit refresh is a duplicate and is
+    // skipped — with listeners registered every historic render stays observable
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      shop.setSignText(QuickShop.getInstance().text().findRelativeLanguages(p));
+    }
     Util.playClickSound(p);
     shop.onClick(p);
-    if(shop.getRemainingSpace() == 0) {
+    // measured once for the out-of-space gate and reused by the sell-cap calculation
+    // below (both consult the same unchanged quantity)
+    final int shopSpace = shop.getRemainingSpace();
+    if(shopSpace == 0) {
       QuickShop.getInstance().text().of(p, "purchase-out-of-space", shop.ownerName()).send();
       return true;
     }
@@ -253,7 +261,7 @@ public class ShopUtil {
     final Inventory playerInventory = p.getInventory();
     final String tradeAllWord = QuickShop.getInstance().getConfig().getString("shop.word-for-trade-all-items", "all");
     final double ownerBalance = eco.balance(shop.getOwner(), shop.bukkitLocation().getWorld().getName()).doubleValue();
-    final int items = getPlayerCanSell(shop, ownerBalance, price, new BukkitInventoryWrapper(playerInventory));
+    final int items = getPlayerCanSell(shop, ownerBalance, price, new BukkitInventoryWrapper(playerInventory), shopSpace);
     final ShopManager.InteractiveManager actions = QuickShop.getInstance().getShopManager().getInteractiveManager();
     if(shop.playerAuthorize(p.getUniqueId(), BuiltInShopPermission.PURCHASE)
        || QuickShop.getInstance().perm().hasPermission(p, "quickshop.other.use")) {
@@ -318,8 +326,16 @@ public class ShopUtil {
       return false;
     }
     QuickShop.getInstance().getShopManager().sendShopInfo(p, shop);
-    shop.setSignText(QuickShop.getInstance().text().findRelativeLanguages(p));
-    if(shop.getRemainingStock() == 0) {
+    // onClick (below) refreshes the sign in the same locale; without listeners its render
+    // is provably identical to this one, so the explicit refresh is a duplicate and is
+    // skipped — with listeners registered every historic render stays observable
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      shop.setSignText(QuickShop.getInstance().text().findRelativeLanguages(p));
+    }
+    // measured once for the out-of-stock gate and reused by the buy-cap calculation
+    // below (both consult the same unchanged quantity)
+    final int shopStock = shop.getRemainingStock();
+    if(shopStock == 0) {
       QuickShop.getInstance().text().of(p, "purchase-out-of-stock", shop.ownerName()).send();
       return true;
     }
@@ -331,7 +347,7 @@ public class ShopUtil {
     final String tradeAllWord = QuickShop.getInstance().getConfig().getString("shop.word-for-trade-all-items", "all");
     final ShopManager.InteractiveManager actions = QuickShop.getInstance().getShopManager().getInteractiveManager();
     final double traderBalance = eco.balance(QUserImpl.createFullFilled(p), shop.bukkitLocation().getWorld().getName()).doubleValue();
-    final int itemAmount = getPlayerCanBuy(shop, traderBalance, price, new BukkitInventoryWrapper(playerInventory));
+    final int itemAmount = getPlayerCanBuy(shop, traderBalance, price, new BukkitInventoryWrapper(playerInventory), shopStock);
     if(shop.playerAuthorize(p.getUniqueId(), BuiltInShopPermission.PURCHASE)
        || QuickShop.getInstance().perm().hasPermission(p, "quickshop.other.use")) {
       final Info info = new SimpleInfo(shop.bukkitLocation(), ShopAction.PURCHASE_BUY, null, null, shop, false);
@@ -349,11 +365,17 @@ public class ShopUtil {
     return true;
   }
 
-  private static int getPlayerCanSell(@NotNull final Shop shop, final double ownerBalance, final double price, @NotNull final InventoryWrapper playerInventory) {
+  /**
+   * Sell-cap calculation. {@code precomputedSpace} carries the shop-space measurement the
+   * caller already took for its out-of-space gate — the same unchanged quantity this
+   * method used to re-derive with a second full inventory scan.
+   */
+  private static int getPlayerCanSell(@NotNull final Shop shop, final double ownerBalance, final double price,
+                                      @NotNull final InventoryWrapper playerInventory, final int precomputedSpace) {
 
     final boolean isContainerCountingNeeded = shop.isUnlimited();
     if(shop.isFreeShop()) {
-      return isContainerCountingNeeded? Util.countItems(playerInventory, shop) : Math.min(shop.getRemainingSpace(), Util.countItems(playerInventory, shop));
+      return isContainerCountingNeeded? Util.countItems(playerInventory, shop) : Math.min(precomputedSpace, Util.countItems(playerInventory, shop));
     }
 
     int items = Util.countItems(playerInventory, shop);
@@ -362,7 +384,7 @@ public class ShopUtil {
     final int ownerCanAfford = price > 0? (int)(ownerBalance / price) : Integer.MAX_VALUE;
     if(!isContainerCountingNeeded) {
       // Amount check player amount and shop empty slot
-      items = Math.min(items, shop.getRemainingSpace());
+      items = Math.min(items, precomputedSpace);
       // Amount check player selling item total cost and the shop owner's balance
       items = Math.min(items, ownerCanAfford);
     } else if(payUnlimitedShopOwners) {
@@ -428,15 +450,21 @@ public class ShopUtil {
     return amount;
   }
 
-  private static int getPlayerCanBuy(@NotNull final Shop shop, final double traderBalance, final double price, @NotNull final InventoryWrapper playerInventory) {
+  /**
+   * Buy-cap calculation. {@code precomputedStock} carries the shop-stock measurement the
+   * caller already took for its out-of-stock gate — the same unchanged quantity this
+   * method used to re-derive with a second full inventory scan.
+   */
+  private static int getPlayerCanBuy(@NotNull final Shop shop, final double traderBalance, final double price,
+                                     @NotNull final InventoryWrapper playerInventory, final int precomputedStock) {
 
     final boolean isContainerCountingNeeded = shop.isUnlimited();
     if(shop.isFreeShop()) { // Free shop
-      return isContainerCountingNeeded? Util.countSpace(playerInventory, shop) : Math.min(shop.getRemainingStock(), Util.countSpace(playerInventory, shop));
+      return isContainerCountingNeeded? Util.countSpace(playerInventory, shop) : Math.min(precomputedStock, Util.countSpace(playerInventory, shop));
     }
     int itemAmount = Math.min(Util.countSpace(playerInventory, shop), (int)Math.floor(traderBalance / price));
     if(!isContainerCountingNeeded) {
-      itemAmount = Math.min(itemAmount, shop.getRemainingStock());
+      itemAmount = Math.min(itemAmount, precomputedStock);
     }
     if(itemAmount < 0) {
       itemAmount = 0;

@@ -100,16 +100,12 @@ public class SimpleTradeService implements TradeService {
     }
 
     try {
+      // adopted as-is, same exclusive-ownership argument as the buy leg above
       final ItemStack item = shop.getItem();
       final SimpleInventoryTransaction transaction;
 
       if(shop.isUnlimited()) {
-        transaction = SimpleInventoryTransaction.builder()
-                .from(null)
-                .to(buyerInventory)
-                .item(item)
-                .amount(normalizedAmount)
-                .build();
+        transaction = SimpleInventoryTransaction.adopting(null, buyerInventory, item, normalizedAmount);
       } else {
         if(locatedChest == null) {
           return failedResult(
@@ -123,12 +119,7 @@ public class SimpleTradeService implements TradeService {
                   outcome.observation());
         }
 
-        transaction = SimpleInventoryTransaction.builder()
-                .from(locatedChest)
-                .to(buyerInventory)
-                .item(item)
-                .amount(normalizedAmount)
-                .build();
+        transaction = SimpleInventoryTransaction.adopting(locatedChest, buyerInventory, item, normalizedAmount);
       }
 
       if(options.commit() && !transaction.failSafeCommit()) {
@@ -211,16 +202,14 @@ public class SimpleTradeService implements TradeService {
     }
 
     try {
+      // the fresh getItem() clone is adopted as-is: nothing else references it and the
+      // transaction commits immediately, so the historical second (and per-operation
+      // third and fourth) defensive copies of the same stack were pure allocation
       final ItemStack item = shop.getItem();
       final SimpleInventoryTransaction transaction;
 
       if(shop.isUnlimited()) {
-        transaction = SimpleInventoryTransaction.builder()
-                .from(sellerInventory)
-                .to(null)
-                .item(item)
-                .amount(normalizedAmount)
-                .build();
+        transaction = SimpleInventoryTransaction.adopting(sellerInventory, null, item, normalizedAmount);
       } else {
         if(locatedChest == null) {
           return failedResult(
@@ -234,12 +223,7 @@ public class SimpleTradeService implements TradeService {
                   outcome.observation());
         }
 
-        transaction = SimpleInventoryTransaction.builder()
-                .from(sellerInventory)
-                .to(locatedChest)
-                .item(item)
-                .amount(normalizedAmount)
-                .build();
+        transaction = SimpleInventoryTransaction.adopting(sellerInventory, locatedChest, item, normalizedAmount);
       }
 
       if(options.commit() && !transaction.failSafeCommit()) {
