@@ -127,12 +127,15 @@ public final class MarketUtils {
     final List<MarketItemGroup> groups = new ArrayList<>();
     final Map<Material, List<MarketItemGroup>> groupsByMat = new EnumMap<>(Material.class);
     final ItemMatcher matcher = QuickShop.getInstance().getItemMatcher();
+    // the builtin matcher treats both arguments as read-only (the same trust
+    // full-inventory scans and ContainerShop#matches pass live stacks under), so its
+    // container-shop probes read the live prototype; third-party matchers and
+    // third-party shop implementations keep the historical per-shop defensive copy
+    final boolean liveProbes = matcher instanceof com.ghostchu.quickshop.util.matcher.item.QuickShopItemMatcherImpl;
 
     for(final Shop shop : shops) {
-      // one defensive clone per shop, reused by the type gate, every group-probe and the
-      // new-group construction (each shop.getItem() call is a full stack copy in
-      // production; the type gate reads the clone-free getMaterial instead)
-      final ItemStack shopItem = shop.getItem();
+      final ItemStack shopItem = liveProbes && shop instanceof final com.ghostchu.quickshop.shop.ContainerShop containerShop
+              ? containerShop.getItemDirect() : shop.getItem();
       MarketItemGroup matchingGroup = null;
       List<MarketItemGroup> matGroups = groupsByMat.computeIfAbsent(shopItem.getType(), k->new ArrayList<>());
       // Find existing group that matches this shop's item; the package-private
@@ -145,7 +148,9 @@ public final class MarketUtils {
         }
       }
 
-      // Create new group if no match found
+      // Create new group if no match found; the constructor clones whatever it receives
+      // into its own private representative, so handing it the live prototype costs the
+      // one ownership copy per new group instead of one per shop plus one per group
       if(matchingGroup == null) {
         matchingGroup = new MarketItemGroup(shopItem);
         matGroups.add(matchingGroup);
@@ -494,8 +499,12 @@ public final class MarketUtils {
 
     final String query = searchQuery.toLowerCase(Locale.ROOT).trim();
 
+    // matchesSearch only reads (type, hasItemMeta, and getItemMeta() — which hands out
+    // its own copy per the Bukkit contract), so container shops probe the live
+    // prototype; third-party shop implementations keep their defensive getItem()
     return shops.stream()
-            .filter(shop->matchesSearch(shop.getItem(), query))
+            .filter(shop->matchesSearch(shop instanceof final com.ghostchu.quickshop.shop.ContainerShop containerShop
+                                                ? containerShop.getItemDirect() : shop.getItem(), query))
             .toList();
   }
 
@@ -517,8 +526,10 @@ public final class MarketUtils {
 
     final String query = searchQuery.toLowerCase(Locale.ROOT).trim();
 
+    // read-only probe: the uncloned representative feeds matchesSearch directly
+    // (same-package read contract as groupShopsByItem's probes)
     return groups.stream()
-            .filter(group->matchesSearch(group.getRepresentativeItem(), query))
+            .filter(group->matchesSearch(group.getRepresentativeItemUncloned(), query))
             .toList();
   }
 
@@ -543,10 +554,13 @@ public final class MarketUtils {
       return true;
     }
 
-    // Check custom display name if present
-    if(item.hasItemMeta() && item.getItemMeta().hasDisplayName()) {
-      final String displayName = item.getItemMeta().getDisplayName().toLowerCase(Locale.ROOT);
-      return displayName.contains(query);
+    // Check custom display name if present; one meta read for both the flag and the
+    // name (getItemMeta hands out a fresh copy per call in production)
+    if(item.hasItemMeta()) {
+      final org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+      if(meta.hasDisplayName()) {
+        return meta.getDisplayName().toLowerCase(Locale.ROOT).contains(query);
+      }
     }
 
     return false;

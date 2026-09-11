@@ -474,6 +474,22 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     return this.item.clone();
   }
 
+  /**
+   * The live prototype stack without {@link #getItem()}'s defensive copy (an NBT deep
+   * copy in production). Read-only consumers only: the builtin item matcher treats both
+   * arguments as read-only — full-inventory scans and {@link #matches(ItemStack)}
+   * already pass live stacks under that same trust — and the browse pipeline's material
+   * and display-name probes only read. Anything that can mutate the stack must keep
+   * using {@link #getItem()}.
+   *
+   * @return the shop's own prototype reference; do not mutate
+   */
+  @org.jetbrains.annotations.ApiStatus.Internal
+  public @NotNull ItemStack getItemDirect() {
+
+    return this.item;
+  }
+
   @Override
   public int getItemUnitSize() {
 

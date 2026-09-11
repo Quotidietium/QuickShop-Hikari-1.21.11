@@ -277,18 +277,23 @@ public class GroupedItemPage {
       // Build item lore with market statistics
       final List<Component> lore = buildGroupLore(id, player.getWorld().getName(), group);
 
+      // all three reads below are type-only: one uncloned representative (same-package
+      // read contract) serves the display name, the icon material and the shop filter —
+      // each getRepresentative() call used to pay a full defensive stack copy
+      final ItemStack representative = group.getRepresentativeItemUncloned();
+      final org.bukkit.Material representativeMaterial = representative.getType();
+
       // Get display name for the item
-      final String itemName = CommonUtil.prettifyText(group.getRepresentativeItem().getType().name());
+      final String itemName = CommonUtil.prettifyText(representativeMaterial.name());
 
       final AbstractItemStack<ItemStack> stack = new BukkitItemStack()
-              .of(group.getRepresentativeItem().getType().key().asString(), 1)
+              .of(representativeMaterial.key().asString(), 1)
               .display(getConfigDisplay(id, groupedConfig, "<yellow>{0}</yellow>", itemName))
               .lore(lore);
 
       // Find ALL shops for this item type from unfiltered list (so filter can be changed on ShopListPage)
-      final ItemStack representativeItem = group.getRepresentativeItem();
       final List<Shop> allShopsForItem = allShops.stream()
-              .filter(s->s.getMaterial() == representativeItem.getType())
+              .filter(s->s.getMaterial() == representativeMaterial)
               .toList();
 
       menuPage.addIcon(new IconBuilder(stack)
