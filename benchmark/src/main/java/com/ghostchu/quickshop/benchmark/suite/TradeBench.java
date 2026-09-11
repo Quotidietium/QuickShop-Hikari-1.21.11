@@ -197,7 +197,41 @@ public final class TradeBench {
       consume(ctx.index);
     });
 
-    // per-trade purchase-log listener (InternalListener.shopPurchase with log-actions on):
+    // per-click trade entry (ShopUtil.sellToShop, direct=false): the default interaction
+    // mapping (standing left-click on a shop block -> TRADE_INTERACTION) runs this whole
+    // chain on every shop click that opens the how-many prompt — info panel, sign
+    // refresh, click dispatch, out-of-space gate, sell-cap calculation. The baseline pays
+    // the panel's duplicated stock/space scan and one defensive getItem() clone per line,
+    // an explicit sign render that onClick repeats in the same locale, and the space
+    // measurement twice; the R51 candidate collapses each duplicate (listener-gated for
+    // the render: with listeners registered every historic render stays). The panel's
+    // sends are no-ops (empty-component stubs), so the case isolates measurement and
+    // render work, not chat traffic. Same body on both sides — behavior differs by jar.
+    // locale for the entry chain: the trade environment stubs the QUser overload, this
+    // adds the CommandSender overload ShopUtil/onClick resolve for a Player
+    final var entryLocale = Env.pin(Env.hotMock(com.ghostchu.quickshop.api.localization.text.ProxiedLocale.class));
+    lenient().when(entryLocale.getLocale()).thenReturn("en_us");
+    lenient().when(Env.plugin().text().findRelativeLanguages(any(org.bukkit.command.CommandSender.class)))
+            .thenReturn(entryLocale);
+    // the entry chain consults the shop permission manager (the action cases short-circuit
+    // past it through the "quickshop.other.use" permission stub)
+    final var shopPermManager = Env.pin(Env.hotMock(com.ghostchu.quickshop.shop.SimpleShopPermissionManager.class));
+    lenient().when(shopPermManager.hasGroup(anyString())).thenReturn(true);
+    lenient().when(Env.plugin().getShopPermissionManager()).thenReturn(shopPermManager);
+    lenient().when(actionFixtures.manager().getInteractiveManager())
+            .thenReturn(Env.pin(Env.hotMock(com.ghostchu.quickshop.api.shop.ShopManager.InteractiveManager.class)));
+    final AtomicInteger entryCounter = new AtomicInteger();
+    harness.bench("trade/clickTradeEntry", ctx -> {
+      ctx.index++;
+      try {
+        com.ghostchu.quickshop.util.ShopUtil.sellToShop(actionFixtures.trader(), fixtures.buyingShop(), false, false);
+      } catch(final Throwable t) {
+        throw new IllegalStateException("click trade entry failed, run #" + entryCounter.incrementAndGet(), t);
+      }
+      consume(ctx.index);
+    });
+
+
     // measures the listener's main-thread cost — baseline builds the log entry eagerly
     // (shop snapshot + two item encodes + name render + Gson), candidate defers via
     // logEventLazy and only captures the supplier
@@ -222,7 +256,7 @@ public final class TradeBench {
   /** Fixtures shared by the bench cases. */
   record Fixtures(InventoryWrapper chest, InventoryWrapper player, ContainerShop shop,
                   ItemStack shopItem, Inventory chestInventory, World world, ContainerShop tradeShop,
-                  ContainerShop buyingShop, InventoryWrapper sellerInventory) {
+                  ContainerShop buyingShop, InventoryWrapper sellerInventory, ItemStack[] playerContents) {
 
   }
 
@@ -296,7 +330,7 @@ public final class TradeBench {
     lenient().when(chestInventory.getHolder(false)).thenReturn(Env.hotMock(InventoryHolder.class));
 
     return new Fixtures(new BukkitInventoryWrapper(chestInventory), wrap(playerContents),
-            shop, shopItem, chestInventory, world, tradeShop, buyingShop, wrap(sellerContents));
+            shop, shopItem, chestInventory, world, tradeShop, buyingShop, wrap(sellerContents), playerContents);
   }
 
   /**
@@ -446,6 +480,12 @@ public final class TradeBench {
     lenient().when(trader.getLocation()).thenReturn(new Location(fixtures.world(), 1000, 64, 1002));
     final var traderInventory = Env.hotMock(org.bukkit.inventory.PlayerInventory.class);
     lenient().when(trader.getInventory()).thenReturn(traderInventory);
+    // the click-entry case wraps the live player inventory itself (unlike the action
+    // cases, which receive a prepared wrapper), so it needs the same CraftInventory
+    // mirror semantics over the shared player-contents fixture
+    lenient().when(traderInventory.getStorageContents()).thenAnswer(inv -> fixtures.playerContents().clone());
+    lenient().when(traderInventory.getContents()).thenAnswer(inv -> fixtures.playerContents().clone());
+    lenient().when(traderInventory.getMaxStackSize()).thenReturn(64);
 
     // shop owner is online so owner notifications take the direct-message path
     final org.bukkit.entity.Player ownerPlayer = Env.hotMock(org.bukkit.entity.Player.class);
