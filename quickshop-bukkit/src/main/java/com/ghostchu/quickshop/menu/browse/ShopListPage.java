@@ -25,7 +25,6 @@ import com.ghostchu.quickshop.config.GuiConfig;
 import net.kyori.adventure.text.Component;
 import net.tnemc.item.AbstractItemStack;
 import net.tnemc.item.bukkit.BukkitItemStack;
-import net.tnemc.menu.core.Page;
 import net.tnemc.menu.core.builder.IconBuilder;
 import net.tnemc.menu.core.callbacks.page.PageOpenCallback;
 import net.tnemc.menu.core.icon.action.impl.DataAction;
@@ -78,7 +77,6 @@ public class ShopListPage {
     if(viewerOpt.isEmpty()) return;
 
     final MenuViewer viewer = viewerOpt.get();
-    final Page menuPage = callback.getPage();
 
     final Optional<Object> shopsData = viewer.findData(SELECTED_ITEM_SHOPS);
     final UUID id = viewer.uuid();
@@ -86,7 +84,12 @@ public class ShopListPage {
 
     if(shopsData.isEmpty() || player == null) return;
 
-    menuPage.getIcons().clear();
+    // per-player icons: the teleport buttons capture this viewer's shop list — a shared
+    // page would teleport a clicker to another player's list destination
+    if(!(callback.getPage() instanceof final com.ghostchu.quickshop.menu.shared.QuickShopPlayerPage playerPage)) {
+      return;
+    }
+    playerPage.instanceIcons(id).clear();
 
     // Load GUI configuration
     final GuiConfig.MenuConfig menuConfig = QuickShop.getInstance().getGuiConfig().getMenuConfig("browse");
@@ -136,7 +139,7 @@ public class ShopListPage {
     final IconBuilder borderBuilder = new IconBuilder(QuickShop.getInstance().stack().of(borderMaterial, 1));
     final List<Integer> borderRows = borderConfig != null? borderConfig.getRows() : List.of(1, 6);
     for(final int row : borderRows) {
-      menuPage.setRow(row, borderBuilder);
+      playerPage.setRow(id, row, borderBuilder);
     }
 
     // === Control Row (Row 1) ===
@@ -160,13 +163,13 @@ public class ShopListPage {
                       QuickShop.getInstance().platform().miniMessage().deserialize("<gray>Average price: <gold>" + formatPrice(avgPrice) + "</gold></gray>")
                            ));
 
-      menuPage.addIcon(new IconBuilder(infoStack).withSlot(itemInfoSlot).build());
+      playerPage.addIcon(id, new IconBuilder(infoStack).withSlot(itemInfoSlot).build());
     }
 
     // Sort button (slot 2)
     final String sortMaterial = sortConfig != null? sortConfig.getMaterial() : "HOPPER";
     final int sortSlot = sortConfig != null? sortConfig.getSlot() : 2;
-    menuPage.addIcon(new IconBuilder(QuickShop.getInstance().stack().of(sortMaterial, 1)
+    playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(sortMaterial, 1)
                                              .display(getConfigDisplay(id, sortConfig, "<green>Sort: {0}</green>", getSortDisplayName(sortMode)))
                                              .lore(getConfigLore(id, sortConfig)))
                              .withSlot(sortSlot)
@@ -182,7 +185,7 @@ public class ShopListPage {
     final String filterMaterial = filterConfig != null? filterConfig.getMaterial() : "NAME_TAG";
     final int filterSlot = filterConfig != null? filterConfig.getSlot() : 4;
 
-    menuPage.addIcon(new IconBuilder(QuickShop.getInstance().stack().of(filterMaterial, 1)
+    playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(filterMaterial, 1)
                                              .display(getConfigDisplay(id, filterConfig, "<aqua>Filter: {0}</aqua>", getFilterDisplayName(filterMode)))
                                              .lore(getConfigLore(id, filterConfig)))
                              .withSlot(filterSlot)
@@ -199,7 +202,7 @@ public class ShopListPage {
     final int stockSlot = stockConfig != null? stockConfig.getSlot() : 6;
     final String stockStatus = stockOnly? "ON" : "OFF";
 
-    menuPage.addIcon(new IconBuilder(QuickShop.getInstance().stack().of(stockMaterial, 1)
+    playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(stockMaterial, 1)
                                              .display(getConfigDisplay(id, stockConfig, "<gold>In Stock Only: {0}</gold>", stockStatus))
                                              .lore(getConfigLore(id, stockConfig)))
                              .withSlot(stockSlot)
@@ -214,7 +217,7 @@ public class ShopListPage {
     final String backMaterial = backConfig != null? backConfig.getMaterial() : "OAK_DOOR";
     final int backSlot = backConfig != null? backConfig.getSlot() : 8;
 
-    menuPage.addIcon(new IconBuilder(QuickShop.getInstance().stack().of(backMaterial, 1)
+    playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(backMaterial, 1)
                                              .display(getConfigDisplay(id, backConfig, "<white>Back to Market</white>")))
                              .withSlot(backSlot)
                              .withActions(
@@ -232,13 +235,13 @@ public class ShopListPage {
     final int pageInfoSlot = pageInfoConfig != null? pageInfoConfig.getSlot() : 49;
 
     if(maxPages > 1) {
-      menuPage.addIcon(new IconBuilder(QuickShop.getInstance().stack().of(prevMaterial, 1)
+      playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(prevMaterial, 1)
                                                .display(getConfigDisplay(id, prevPageConfig, "<white><< Previous Page</white>")))
                                .withSlot(prevSlot)
                                .withActions(new DataAction(SHOP_LIST_PAGE, prev), new SwitchPageAction(menuName, 2))
                                .build());
 
-      menuPage.addIcon(new IconBuilder(QuickShop.getInstance().stack().of(nextMaterial, 1)
+      playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(nextMaterial, 1)
                                                .display(getConfigDisplay(id, nextPageConfig, "<white>Next Page >></white>")))
                                .withSlot(nextSlot)
                                .withActions(new DataAction(SHOP_LIST_PAGE, next), new SwitchPageAction(menuName, 2))
@@ -246,7 +249,7 @@ public class ShopListPage {
     }
 
     // Page info
-    menuPage.addIcon(new IconBuilder(QuickShop.getInstance().stack().of(pageInfoMaterial, 1)
+    playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(pageInfoMaterial, 1)
                                              .display(getConfigDisplay(id, pageInfoConfig, "<yellow>Page {0}/{1}</yellow>", page, Math.max(1, maxPages))))
                              .withSlot(pageInfoSlot)
                              .build());
@@ -307,7 +310,7 @@ public class ShopListPage {
         }));
       }
 
-      menuPage.addIcon(iconBuilder.build());
+      playerPage.addIcon(id, iconBuilder.build());
 
       i++;
     }

@@ -46,9 +46,12 @@ public class ShopHistoryMenu extends Menu {
 
     setOpen((open)->open.getMenu().setTitle(QuickShop.getInstance().text().of(open.getPlayer().identifier(), "history.shop.gui-title").legacy()));
 
-    final Page main = new Page(1);
+    final com.ghostchu.quickshop.menu.shared.QuickShopPlayerPage main = new com.ghostchu.quickshop.menu.shared.QuickShopPlayerPage(1);
     final MainPage mainPageOpen = new MainPage(this.name, this.name, 1, 1, SHOPS_PAGE, this.rows, "history.shop.log-icon-description-with-store-name");
     main.setOpen(mainPageOpen::handle);
     addPage(main);
+
+    // per-player icon instances must not outlive their viewer
+    setClose((close)->main.clearInstance(close.getPlayer().identifier()));
   }
 }

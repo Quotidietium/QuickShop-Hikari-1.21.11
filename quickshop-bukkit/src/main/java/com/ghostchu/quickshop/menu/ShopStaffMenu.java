@@ -20,9 +20,11 @@ package com.ghostchu.quickshop.menu;
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.config.GuiConfig;
 import com.ghostchu.quickshop.menu.shared.QuickShopMenu;
+import com.ghostchu.quickshop.menu.shared.QuickShopPlayerPage;
 import com.ghostchu.quickshop.menu.staff.PlayerSelectionPage;
 import com.ghostchu.quickshop.menu.staff.StaffSelectionPage;
-import net.tnemc.menu.core.Page;
+
+import java.util.UUID;
 
 import static com.ghostchu.quickshop.menu.ShopKeeperMenu.KEEPER_MAIN;
 
@@ -53,15 +55,24 @@ public class ShopStaffMenu extends QuickShopMenu {
 
     setOpen((open)->open.getMenu().setTitle(legacy(open.getPlayer().identifier(), "gui.staff.title")));
 
-    final Page main = new Page(STAFF_MAIN);
+    // per-player pages: staff add/remove actions capture this viewer's shop and staff
+    // list at render — a shared page would run them against the last opener's shop
+    final QuickShopPlayerPage main = new QuickShopPlayerPage(STAFF_MAIN);
     final StaffSelectionPage staffSelection = new StaffSelectionPage("qs:keeper", this.name, STAFF_MAIN, KEEPER_MAIN, STAFF_PAGE, this.rows, "gui.staff.head-icon.lore");
     main.setOpen(staffSelection::handle);
 
-    final Page add = new Page(STAFF_ADD);
+    final QuickShopPlayerPage add = new QuickShopPlayerPage(STAFF_ADD);
     final PlayerSelectionPage playerSelection = new PlayerSelectionPage(this.name, this.name, STAFF_ADD, STAFF_MAIN, PLAYER_PAGE, this.rows, "gui.player.select");
     add.setOpen(playerSelection::handle);
 
     addPage(main);
     addPage(add);
+
+    // per-player icon instances must not outlive their viewer
+    setClose((close)->{
+      final UUID closeId = close.getPlayer().identifier();
+      main.clearInstance(closeId);
+      add.clearInstance(closeId);
+    });
   }
 }

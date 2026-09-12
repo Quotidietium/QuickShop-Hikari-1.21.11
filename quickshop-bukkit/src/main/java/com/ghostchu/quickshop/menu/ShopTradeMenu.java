@@ -39,6 +39,9 @@ public class ShopTradeMenu extends QuickShopMenu {
 
     setOpen((open)->open.getMenu().setTitle(legacy(open.getPlayer().identifier(), "gui.trade.title")));
 
-    addPage(new MainPage());
+    final MainPage tradePage = new MainPage();
+    addPage(tradePage);
+    // per-player icon instances must not outlive their viewer
+    setClose((close)->tradePage.clearInstance(close.getPlayer().identifier()));
   }
 }

@@ -21,7 +21,6 @@ import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.config.GuiConfig;
 import net.kyori.adventure.text.Component;
-import net.tnemc.menu.core.Page;
 import net.tnemc.menu.core.viewer.MenuViewer;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -41,7 +40,7 @@ import static com.ghostchu.quickshop.menu.ShopKeeperMenu.SHOP_DATA_ID;
  * @author creatorfromhell
  * @since 6.2.0.8
  */
-public class QuickShopPage extends Page {
+public class QuickShopPage extends QuickShopPlayerPage {
 
   public QuickShopPage(final int pageNumber) {
 

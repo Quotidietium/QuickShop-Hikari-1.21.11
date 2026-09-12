@@ -43,6 +43,9 @@ public class ShopKeeperMenu extends QuickShopMenu {
 
     setOpen((open)->open.getMenu().setTitle(legacy(open.getPlayer().identifier(), "gui.keeper.title")));
 
-    addPage(new MainPage());
+    final MainPage keeperPage = new MainPage();
+    addPage(keeperPage);
+    // per-player icon instances must not outlive their viewer
+    setClose((close)->keeperPage.clearInstance(close.getPlayer().identifier()));
   }
 }

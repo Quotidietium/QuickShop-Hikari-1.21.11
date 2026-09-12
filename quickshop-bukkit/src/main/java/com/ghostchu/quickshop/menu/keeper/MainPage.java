@@ -81,6 +81,12 @@ public class MainPage extends QuickShopPage {
 
     final UUID id = open.getPlayer().identifier();
 
+    // per-player icons: keeper actions (price/freeze/mode/delete) capture this shop and
+    // player at render — the shared page would run them against the last opener's shop
+    if(!(open.getPage() instanceof final com.ghostchu.quickshop.menu.shared.QuickShopPlayerPage playerPage)) {
+      return;
+    }
+
     final Optional<MenuViewer> viewer = open.getPlayer().viewer();
     if(viewer.isPresent()) {
 
@@ -89,7 +95,7 @@ public class MainPage extends QuickShopPage {
       if(shop.isPresent() && player != null) {
 
         // Clear existing icons to ensure fresh data on reopen
-        open.getPage().getIcons().clear();
+        playerPage.instanceIcons(id).clear();
 
         // Load GUI configuration
         final GuiConfig.MenuConfig menuConfig = QuickShop.getInstance().getGuiConfig().getMenuConfig("keeper");
@@ -112,13 +118,13 @@ public class MainPage extends QuickShopPage {
         // Rows 2 and 4 for modern 4-row layout
         final List<Integer> borderRows = borderConfig != null? borderConfig.getRows() : List.of(2, 4);
         for(final int row : borderRows) {
-          open.getPage().setRow(row, borderBuilder);
+          playerPage.setRow(id, row, borderBuilder);
         }
 
         // Shop item preview - top center (slot 4)
         final ItemStack shopItem = shop.get().getItem();
         final int shopItemSlot = shopItemConfig != null? shopItemConfig.getSlot() : 4;
-        open.getPage().addIcon(new IconBuilder(new BukkitItemStack().of(shopItem)).withSlot(shopItemSlot).build());
+        playerPage.addIcon(id, new IconBuilder(new BukkitItemStack().of(shopItem)).withSlot(shopItemSlot).build());
 
         // Always read price directly from shop to get the latest value
         final double currentPrice = shop.get().getPrice();
@@ -161,7 +167,7 @@ public class MainPage extends QuickShopPage {
           changeIcon.setSlot(displayToggleSlot);
           changeIcon.addState("ACTIVE", activeStack);
           changeIcon.addState("INACTIVE", inactiveStack);
-          open.getPage().addIcon(changeIcon);
+          playerPage.addIcon(id, changeIcon);
         }
 
         // Change price icon from config (GOLD_NUGGET for "price")
@@ -170,7 +176,7 @@ public class MainPage extends QuickShopPage {
 
         if(shop.get().playerAuthorize(id, BuiltInShopPermission.SET_PRICE)
            || QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.price")) {
-          open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(changePriceMaterial, 1)
+          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(changePriceMaterial, 1)
                                                          .display(getConfigDisplay(id, changePriceConfig, "<bold><green>Change Price</green></bold>"))
                                                          .lore(getConfigLore(id, changePriceConfig, currentPrice)))
                                          .withActions(new GuiChatAction((message)->{
@@ -232,7 +238,7 @@ public class MainPage extends QuickShopPage {
           changeIcon.setSlot(freezeToggleSlot);
           changeIcon.addState("FROZEN", freezeStack);
           changeIcon.addState("ACTIVE", unfreezeStack);
-          open.getPage().addIcon(changeIcon);
+          playerPage.addIcon(id, changeIcon);
         }
 
         // Mode Toggle Icon from config (concrete for clean look)
@@ -276,7 +282,7 @@ public class MainPage extends QuickShopPage {
           changeIcon.setSlot(modeToggleSlot);
           changeIcon.addState("SELLING", buyingStack);
           changeIcon.addState("BUYING", sellingStack);
-          open.getPage().addIcon(changeIcon);
+          playerPage.addIcon(id, changeIcon);
         }
 
         final InventoryWrapper inventory = shop.get().getInventory();
@@ -289,7 +295,7 @@ public class MainPage extends QuickShopPage {
         if(inventoryConfig != null && shop.get().playerAuthorize(player.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)
            || inventoryConfig != null && QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.open")) {
 
-          open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(inventoryConfig.getMaterial(), 1)
+          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(inventoryConfig.getMaterial(), 1)
                                                          .display(getConfigDisplay(id, inventoryConfig, "<bold><green>View Inventory</green></bold>"))
                                                          .lore(getConfigLore(id, inventoryConfig)))
                                          .withSlot(inventoryConfig.getSlot())
@@ -324,13 +330,13 @@ public class MainPage extends QuickShopPage {
         if((!shop.get().playerAuthorize(id, BuiltInShopPermission.MANAGEMENT_PERMISSION)
             && !QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.staff"))) {
 
-          open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(staffMaterial, 1)
+          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(staffMaterial, 1)
                                                          .display(getConfigDisplay(id, staffConfig, "<gray>Shop Staff (No Permission)</gray>"))
                                                          .profile(profile))
                                          .withSlot(staffSlot).build());
         } else {
 
-          open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(staffMaterial, 1)
+          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(staffMaterial, 1)
                                                          .display(getConfigDisplay(id, staffConfig, "<bold><aqua>Shop Staff</aqua></bold>"))
                                                          .lore(getConfigLore(id, staffConfig))
                                                          .profile(profile))
@@ -344,7 +350,7 @@ public class MainPage extends QuickShopPage {
 
         if(shop.get().playerAuthorize(id, BuiltInShopPermission.VIEW_PURCHASE_LOGS)
            || QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.history")) {
-          open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(historyMaterial, 1)
+          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(historyMaterial, 1)
                                                          .display(getConfigDisplay(id, historyConfig, "<bold><light_purple>Transaction History</light_purple></bold>"))
                                                          .lore(getConfigLore(id, historyConfig)))
                                          .withActions(new RunnableAction((click)->{
@@ -369,6 +375,9 @@ public class MainPage extends QuickShopPage {
                                                }
 
                                                final MenuViewer historyViewer = new MenuViewer(id);
+                                               // a stale viewer would keep its old data map
+                                               // (addViewer only merges scalars) — start clean
+                                               MenuManager.instance().removeViewer(id);
                                                MenuManager.instance().addViewer(historyViewer);
                                                historyViewer.addData(SHOPS_DATA, shops);
                                                historyViewer.addData(HISTORY_RECORDS, queryResult);
@@ -394,7 +403,7 @@ public class MainPage extends QuickShopPage {
 
         if(shop.get().playerAuthorize(id, BuiltInShopPermission.DELETE)
            || QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.destroy")) {
-          open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(removeMaterial, 1)
+          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(removeMaterial, 1)
                                                          .display(getConfigDisplay(id, removeConfig, "<bold><red>Delete Shop</red></bold>"))
                                                          .lore(getConfigLore(id, removeConfig)))
                                          .withActions(new GuiChatAction((message)->{
@@ -415,7 +424,7 @@ public class MainPage extends QuickShopPage {
         // Close button - OAK_DOOR for "exit" (slot 31)
         final String closeMaterial = closeConfig != null? closeConfig.getMaterial() : "OAK_DOOR";
         final int closeSlot = closeConfig != null? closeConfig.getSlot() : 31;
-        open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(closeMaterial, 1)
+        playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(closeMaterial, 1)
                                                        .display(getConfigDisplay(id, closeConfig, "<red>Close</red>")))
                                        .withActions(new RunnableAction((click->viewer.get().close(QuickShop.getInstance().createMenuPlayer(player)))))
                                        .withSlot(closeSlot).build());

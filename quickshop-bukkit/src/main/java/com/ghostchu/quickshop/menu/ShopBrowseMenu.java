@@ -21,8 +21,8 @@ import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.config.GuiConfig;
 import com.ghostchu.quickshop.menu.browse.GroupedItemPage;
 import com.ghostchu.quickshop.menu.browse.ShopListPage;
+import com.ghostchu.quickshop.menu.shared.QuickShopPlayerPage;
 import net.tnemc.menu.core.Menu;
-import net.tnemc.menu.core.Page;
 
 /**
  * ShopBrowseMenu - Enhanced market browser with grouping, filtering, sorting, and search
@@ -54,16 +54,25 @@ public class ShopBrowseMenu extends Menu {
 
     setOpen((open)->open.getMenu().setTitle(QuickShop.getInstance().text().of(open.getPlayer().identifier(), "gui.browse.title").legacy()));
 
-    // Page 1: Grouped item view (market overview)
-    final Page groupedPage = new Page(1);
+    // Page 1: Grouped item view (market overview) — per-player icons: the shared TNML
+    // page resolves every viewer's clicks against the last opener's actions (teleport
+    // targets, search state) which cross-wires concurrent browsers
+    final QuickShopPlayerPage groupedPage = new QuickShopPlayerPage(1);
     final GroupedItemPage groupedPageHandler = new GroupedItemPage(this.name, this.rows);
     groupedPage.setOpen(groupedPageHandler::handle);
     addPage(groupedPage);
 
     // Page 2: Shop list view (all shops for a specific item)
-    final Page shopListPage = new Page(2);
+    final QuickShopPlayerPage shopListPage = new QuickShopPlayerPage(2);
     final ShopListPage shopListPageHandler = new ShopListPage(this.name, this.rows);
     shopListPage.setOpen(shopListPageHandler::handle);
     addPage(shopListPage);
+
+    // per-player icon instances must not outlive their viewer
+    setClose((close)->{
+      final java.util.UUID id = close.getPlayer().identifier();
+      groupedPage.clearInstance(id);
+      shopListPage.clearInstance(id);
+    });
   }
 }

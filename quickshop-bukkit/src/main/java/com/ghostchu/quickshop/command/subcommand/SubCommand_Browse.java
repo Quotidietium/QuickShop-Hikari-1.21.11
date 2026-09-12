@@ -39,6 +39,8 @@ public class SubCommand_Browse implements CommandHandler<Player> {
   public void onCommand(@NotNull final Player sender, @NotNull final String commandLabel, @NotNull final CommandParser parser) {
 
     final MenuViewer viewer = new MenuViewer(sender.getUniqueId());
+    // a stale viewer would keep its old data map (addViewer only merges scalars) — start clean
+    MenuManager.instance().removeViewer(sender.getUniqueId());
     MenuManager.instance().addViewer(viewer);
 
     final MenuPlayer menuPlayer = QuickShop.getInstance().createMenuPlayer(sender);
@@ -73,7 +75,10 @@ public class SubCommand_Browse implements CommandHandler<Player> {
       }
 
       viewer.addData(SHOPS_DATA, shops);
-      MenuManager.instance().open("qs:browse", 1, menuPlayer);
+      // the menu open builds the per-player icon map and reads the player's world —
+      // it must not race main-thread click resolution on the page maps, and world
+      // access is region-sensitive under Folia
+      Util.mainThreadRun(()->MenuManager.instance().open("qs:browse", 1, menuPlayer));
     });
   }
 

@@ -106,8 +106,13 @@ public class MainPage {
 
         final ProxiedLocale locale = QuickShop.getInstance().getTextManager().findRelativeLanguages(player);
 
-        callback.getPage().getIcons().clear();
+        // per-player icons: the history icons capture this viewer's records — the shared
+        // page would render one viewer's history into everyone's clicks
+        if(!(callback.getPage() instanceof final com.ghostchu.quickshop.menu.shared.QuickShopPlayerPage playerPage)) {
+          return;
+        }
         final UUID id = viewer.get().uuid();
+        playerPage.instanceIcons(id).clear();
 
         // Load GUI configuration
         final GuiConfig.MenuConfig menuConfig = QuickShop.getInstance().getGuiConfig().getMenuConfig("history");
@@ -126,7 +131,9 @@ public class MainPage {
         final int offset = 9;
         final int page = (Integer)viewer.get().dataOrDefault(staffPageID, 1);
         final int items = (menuRows - 1) * offset;
-        final int start = ((page - 1) * offset);
+        // pages advance by a full page of items — the old single-row step made pages
+        // overlap 36 of 45 entries and left the tail records unreachable
+        final int start = ((page - 1) * items);
 
         final List<Shop> shops = (ArrayList<Shop>)shopsData.get();
         final List<ShopHistory.ShopHistoryRecord> queryResult = (List<ShopHistory.ShopHistoryRecord>)historyData.get();
@@ -142,7 +149,7 @@ public class MainPage {
         final IconBuilder borderBuilder = new IconBuilder(QuickShop.getInstance().stack().of(borderMaterial, 1));
         final List<Integer> borderRows = (borderConfig != null)? borderConfig.getRows() : List.of(1, 6);
         for(final int row : borderRows) {
-          callback.getPage().setRow(row, borderBuilder);
+          playerPage.setRow(id, row, borderBuilder);
         }
 
         //header icon
@@ -175,7 +182,7 @@ public class MainPage {
             ownerProfile.setUuid(owner.getUniqueId());
           }
 
-          callback.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(shopInfoMaterial, 1)
+          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(shopInfoMaterial, 1)
                                                              .display(shopName)
                                                              .lore(getConfigLore(id, shopInfoConfig,
                                                                                  shopType,
@@ -191,7 +198,7 @@ public class MainPage {
                                              .build());
         } else {
 
-          callback.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(multiShopMaterial, 1)
+          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(multiShopMaterial, 1)
                                                              .display(getConfigDisplay(id, multiShopConfig, "<yellow>Multiple Shops ({0})</yellow>", shops.size())))
                                              .withSlot(multiShopSlot)
                                              .build());
@@ -201,7 +208,7 @@ public class MainPage {
         final String summaryMaterial = (summaryConfig != null)? summaryConfig.getMaterial() : "OAK_SIGN";
         final int summarySlot = (summaryConfig != null)? summaryConfig.getSlot() : 0;
 
-        callback.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(summaryMaterial, 1)
+        playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(summaryMaterial, 1)
                                                            .display(getConfigDisplay(id, summaryConfig, "<yellow>Summary</yellow>"))
                                                            .lore(getConfigLore(id, summaryConfig, locale.getNumberFormat().format(summary.totalPurchases()),
                                                                                locale.getNumberFormat().format(summary.uniquePurchasers()),
@@ -229,7 +236,7 @@ public class MainPage {
                                                                                          entry.getKey()).getDisplay(), entry.getValue()));
         }
 
-        callback.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(topCustomersMaterial, 1)
+        playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(topCustomersMaterial, 1)
                                                            .display(getConfigDisplay(id, topCustomersConfig, "<aqua>Top Customers ({0})</aqua>", summary.valuableCustomers().size()))
                                                            .lore(valuableDescription)).withSlot(topCustomersSlot).build());
 
@@ -241,14 +248,14 @@ public class MainPage {
 
         if(maxPages > 1) {
 
-          callback.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(prevPageMaterial, 1)
+          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(prevPageMaterial, 1)
                                                              .display(getConfigDisplay(id, prevPageConfig, "<white><< Previous Page</white>"))
                                                              .lore(getConfigLore(id, prevPageConfig, page)))
                                              .withActions(new DataAction(staffPageID, prev), new SwitchPageAction(menuName, menuPage))
                                              .withSlot(prevPageSlot)
                                              .build());
 
-          callback.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(nextPageMaterial, 1)
+          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(nextPageMaterial, 1)
                                                              .display(getConfigDisplay(id, nextPageConfig, "<white>Next Page >></white>"))
                                                              .lore(getConfigLore(id, nextPageConfig, page)))
                                              .withActions(new DataAction(staffPageID, next), new SwitchPageAction(menuName, menuPage))
@@ -319,7 +326,7 @@ public class MainPage {
                                            record.amount(), record.money(), record.tax(),
                                            record.money() - record.tax()));
 
-          callback.getPage().addIcon(new IconBuilder(stack).withSlot(listStartSlot + (i - start)).build());
+          playerPage.addIcon(id, new IconBuilder(stack).withSlot(listStartSlot + (i - start)).build());
 
           i++;
         }
