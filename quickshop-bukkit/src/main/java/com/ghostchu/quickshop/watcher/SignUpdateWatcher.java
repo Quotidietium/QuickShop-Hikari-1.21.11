@@ -20,10 +20,9 @@ public class SignUpdateWatcher implements Runnable {
   //while run() polls on the async timer thread - a plain LinkedList would corrupt under that
   private final Queue<SignUpdateEntry> signUpdateQueue = new ConcurrentLinkedQueue<>();
 
-  // O(1) companion of the historic queue scan: shops carry identity equality (no
-  // equals/hashCode override), so a concurrent key set answers "already scheduled"
-  // exactly like walking the queue did - hopper-fed shops schedule on every item move
-  // and the queue holds every shop of the current drain window
+  // O(1) companion of the historic queue scan: a concurrent key set answers "already
+  // scheduled" exactly like walking the queue did - hopper-fed shops schedule on every
+  // item move and the queue holds every shop of the current drain window
   private final Set<Shop> pendingShops = ConcurrentHashMap.newKeySet();
 
   private WrappedTask task = null;
@@ -34,10 +33,15 @@ public class SignUpdateWatcher implements Runnable {
     // async repeating tasks die silently on an uncaught throwable — contain failures so
     // one broken shop/sign cannot stop sign updates server-wide until restart
     try {
-      final Instant startTime = Instant.now();
-      final Instant endTime = startTime.plusMillis(50);
-      SignUpdateEntry entry = signUpdateQueue.poll();
-      while(entry != null && !Instant.now().isAfter(endTime)) {
+      final Instant endTime = Instant.now().plusMillis(50);
+      // check the budget BEFORE polling: an entry polled and then dropped by the old
+      // loop's time check was never processed yet never removed from pendingShops, so
+      // every later schedule for that shop was ignored — its signs froze until restart
+      while(!Instant.now().isAfter(endTime)) {
+        final SignUpdateEntry entry = signUpdateQueue.poll();
+        if(entry == null) {
+          break;
+        }
         pendingShops.remove(entry.shop());
         try {
           final Shop shop = entry.shop();
@@ -47,7 +51,6 @@ public class SignUpdateWatcher implements Runnable {
         } catch(final Throwable t) {
           QuickShop.getInstance().logger().warn("Failed to update sign for shop {}; entry dropped.", entry.shop().getShopId(), t);
         }
-        entry = signUpdateQueue.poll();
       }
     } catch(final Throwable t) {
       QuickShop.getInstance().logger().warn("Sign update watcher cycle failed; task kept alive.", t);

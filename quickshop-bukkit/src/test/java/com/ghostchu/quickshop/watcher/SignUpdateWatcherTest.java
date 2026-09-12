@@ -112,6 +112,43 @@ class SignUpdateWatcherTest {
     assertEquals(1, queue.size(), "a drained shop must be schedulable again");
   }
 
+  @Test
+  void entriesStillQueuedWhenTheBudgetExpiresStaySchedulable() throws Exception {
+
+    // regression: the old loop polled an entry, failed the time check and dropped it
+    // without processing AND without removing it from pendingShops — every later
+    // schedule for that shop was then ignored and its signs froze until restart
+    final SignUpdateWatcher watcher = new SignUpdateWatcher();
+    final Queue<?> queue = queueOf(watcher);
+    final var locale = mock(com.ghostchu.quickshop.api.localization.text.ProxiedLocale.class);
+
+    // an entry whose sign render blocks past the 50ms budget: the first entry eats the
+    // whole window, so anything queued behind it must survive the cycle untouched
+    final Shop slow = mock(Shop.class);
+    org.mockito.Mockito.doAnswer(inv->{
+      Thread.sleep(120);
+      return null;
+    }).when(slow).setSignText(locale);
+    final Shop behind = mock(Shop.class);
+
+    watcher.scheduleSignUpdate(slow, locale);
+    watcher.scheduleSignUpdate(behind, locale);
+    assertEquals(2, queue.size());
+
+    watcher.run();
+
+    assertEquals(1, queue.size(), "the unprocessed entry must stay queued, not be dropped");
+    // the shop never rendered is still pending-deduplicated, but after a drain that
+    // processes it, it must become schedulable again — not permanently frozen
+    watcher.run();
+    assertTrue(queue.isEmpty());
+    watcher.scheduleSignUpdate(behind, locale);
+    assertEquals(1, queue.size(), "a shop whose entry waited out a cycle must stay schedulable");
+    watcher.run();
+    watcher.scheduleSignUpdate(behind, locale);
+    assertEquals(1, queue.size(), "and schedulable again after a real drain");
+  }
+
   private static Queue<?> queueOf(final SignUpdateWatcher watcher) throws Exception {
 
     final Field queueField = SignUpdateWatcher.class.getDeclaredField("signUpdateQueue");
