@@ -127,19 +127,21 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @NotNull
   private ItemStack originalItem;
   // memoized save-path item encodings, keyed on stack identity + amount (the only
-  // mutation paths are setItem's fresh snapshots and the allow-stack amount flip)
+  // mutation paths are setItem's fresh snapshots and the allow-stack amount flip).
+  // volatile: the flush thread writes these while region threads call setItem — a torn
+  // (key from one save, value from another) pair would persist a wrong encoding
   @EqualsAndHashCode.Exclude
-  private transient ItemStack encodedItemKey;
+  private transient volatile ItemStack encodedItemKey;
   @EqualsAndHashCode.Exclude
-  private transient int encodedItemKeyAmount = -1;
+  private transient volatile int encodedItemKeyAmount = -1;
   @EqualsAndHashCode.Exclude
-  private transient String encodedItemValue;
+  private transient volatile String encodedItemValue;
   @EqualsAndHashCode.Exclude
-  private transient ItemStack encodedOriginalKey;
+  private transient volatile ItemStack encodedOriginalKey;
   @EqualsAndHashCode.Exclude
-  private transient int encodedOriginalKeyAmount = -1;
+  private transient volatile int encodedOriginalKeyAmount = -1;
   @EqualsAndHashCode.Exclude
-  private transient String encodedOriginalValue;
+  private transient volatile String encodedOriginalValue;
   @Nullable
   @EqualsAndHashCode.Exclude
   private AbstractDisplayItem displayItem = null;
@@ -2156,7 +2158,10 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
             && this.encodedItemValue != null) {
       return this.encodedItemValue;
     }
-    final String encoded = plugin.platform().encodeStack(getItem());
+    // encode the exact snapshot we key on: getItem() re-reads this.item, and a setItem
+    // landing between the two reads would pin the OLD key to the NEW encoding — every
+    // later save would persist the wrong item until the next setItem
+    final String encoded = plugin.platform().encodeStack(source);
     this.encodedItemKey = source;
     this.encodedItemKeyAmount = source.getAmount();
     this.encodedItemValue = encoded;
@@ -2174,7 +2179,8 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
             && this.encodedOriginalValue != null) {
       return this.encodedOriginalValue;
     }
-    final String encoded = QuickShop.getInstance().platform().encodeStack(this.originalItem);
+    // encode the snapshot, not the field — same re-read hazard as encodedItemForSave
+    final String encoded = QuickShop.getInstance().platform().encodeStack(source);
     this.encodedOriginalKey = source;
     this.encodedOriginalKeyAmount = source.getAmount();
     this.encodedOriginalValue = encoded;

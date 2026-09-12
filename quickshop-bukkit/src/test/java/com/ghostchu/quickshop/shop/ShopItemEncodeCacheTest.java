@@ -18,6 +18,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -139,5 +140,44 @@ class ShopItemEncodeCacheTest {
     assertEquals("enc-2", after.getItem(), "the new stack state must re-encode");
     shop.createDataRecord();
     verify(platform, times(2)).encodeStack(any(ItemStack.class));
+  }
+
+  @Test
+  void testEncodeConsumesTheKeyedSnapshotNotAReRead() {
+
+    // regression: encodeStack(getItem()) re-read this.item after the memo key was
+    // captured — a setItem between the two reads pinned the old key to the new
+    // encoding, persisting a wrong item on every later save. The encode must consume
+    // the exact snapshot it keys on, observable when clone() yields distinct instances
+    final ItemStack proto = mock(ItemStack.class);
+    lenient().when(proto.getType()).thenReturn(Material.DIAMOND);
+    lenient().when(proto.getAmount()).thenReturn(64);
+    lenient().when(proto.hasItemMeta()).thenReturn(false);
+    lenient().when(proto.clone()).thenAnswer(inv->{
+      final ItemStack copy = mock(ItemStack.class);
+      lenient().when(copy.getType()).thenReturn(Material.DIAMOND);
+      lenient().when(copy.getAmount()).thenReturn(64);
+      lenient().when(copy.hasItemMeta()).thenReturn(false);
+      lenient().when(copy.clone()).thenReturn(copy);
+      return copy;
+    });
+
+    final Location location = new Location(world, 2, 64, 2);
+    final var owner = com.ghostchu.quickshop.obj.QUserImpl.createFullFilled(
+            UUID.nameUUIDFromBytes("encode-snapshot".getBytes()), "encode-snapshot", true);
+    final var benefit = mock(com.ghostchu.quickshop.api.economy.benefit.BenefitProvider.class);
+    lenient().when(benefit.serialize()).thenReturn("{}");
+    final ContainerShop shop = new ContainerShop(
+            plugin, -1L, location, 10.0d, proto, owner, false,
+            SimpleShopManager.SELLING_TYPE, SimpleShopManager.ACTIVE_STATE,
+            new org.bukkit.configuration.file.YamlConfiguration(), false, null,
+            "Bukkit", "2;2;64;2;world", null,
+            new HashMap<>(), benefit);
+
+    shop.createDataRecord();
+    final var captor = org.mockito.ArgumentCaptor.forClass(ItemStack.class);
+    verify(platform, times(1)).encodeStack(captor.capture());
+    assertSame(shop.getItemDirect(), captor.getValue(),
+               "encodeStack must receive the memo-keyed snapshot, not a fresh defensive clone");
   }
 }
