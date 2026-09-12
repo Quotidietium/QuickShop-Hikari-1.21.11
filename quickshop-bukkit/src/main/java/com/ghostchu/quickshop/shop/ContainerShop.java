@@ -154,6 +154,11 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   // written on the DB executor inside update()'s callback, polled by ShopDataSaveWatcher
   @EqualsAndHashCode.Exclude
   private volatile boolean dirty;
+  // bumped by every setDirty(): update() clears the dirty flag only when no change
+  // landed after the save's data snapshot, or the flush's unconditional clear would
+  // silently drop writes that raced the SQL round-trip
+  @EqualsAndHashCode.Exclude
+  private transient volatile long dirtyGeneration = 0L;
   @Nullable
   private volatile boolean disableDisplay;
   private volatile QUser taxAccount;
@@ -1863,6 +1868,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   public void setDirty() {
 
     this.dirty = true;
+    this.dirtyGeneration++;
   }
 
   /**
@@ -2080,12 +2086,18 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     //Start a new update
     // publish the future BEFORE attaching the completing callback: a concurrent caller
     // that fails the CAS must observe the real in-flight future, not a completed one
+    // generation captured before the save: updateShop snapshots the record NOW, so any
+    // setDirty after this point marks state newer than what this write persists — the
+    // completion callback must keep the dirty flag for the next flush to pick up
+    final long savedGeneration = dirtyGeneration;
     final CompletableFuture<Void> f = plugin.getDatabaseHelper().updateShop(this);
     inFlightUpdate = f;
     f.whenComplete((r, th) -> {
               updatingAtomic.set(false);
               if (th == null) {
-                dirty = false;
+                if(dirtyGeneration == savedGeneration) {
+                  dirty = false;
+                }
               } else {
                 plugin.logger().warn("Could not update shop in DB!", th);
               }
