@@ -294,8 +294,15 @@ public class MsgUtil {
       }
     }
     final var hover = node.style().hoverEvent();
-    if(hover != null && hover.value() instanceof final Component component && containsOpenBrace(component)) {
-      return true;
+    if(hover != null) {
+      if(hover.value() instanceof final Component component && containsOpenBrace(component)) {
+        return true;
+      }
+      // show_entity renders its name component through the same replacer path
+      if(hover.value() instanceof final HoverEvent.ShowEntity showEntity
+              && showEntity.name() != null && containsOpenBrace(showEntity.name())) {
+        return true;
+      }
     }
     for(final Component child : node.children()) {
       if(containsOpenBrace(child)) {

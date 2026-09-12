@@ -130,6 +130,59 @@ class TextRenderPipelineR45Test {
     assertTrue(PreParsedTemplate.isBroken(template), "the sentinel-in-tag case must be frozen at parse");
   }
 
+  @Test
+  void placeholderInsideClickCommandIsBrokenAtParse() {
+
+    // the shipped pagination footer: {0}/{3} are run_command values. Their sentinels
+    // live in ClickEvent strings, invisible to the content/children walk — unless the
+    // validation scan covers click values the template freezes as usable and the
+    // prev/next buttons run commands containing private-use characters
+    final String raw = "<light_purple>[<click:run_command:\"{0}\">"
+                       + "<hover:show_text:\"<gray>Previous page\"><white><</white></hover></click>]</light_purple> "
+                       + "<gray>{1}/{2}</gray> "
+                       + "<light_purple>[<click:run_command:\"{3}\">"
+                       + "<hover:show_text:\"<gray>Next page\"><white>></white></hover></click>]</light_purple>";
+    final PreParsedTemplate template = PreParsedTemplate.parse(raw, MM, NO_RESOLVERS);
+    assertTrue(PreParsedTemplate.isBroken(template), "sentinel in a click value must be frozen at parse");
+    // the legacy fallback splices real commands before parsing, so pagination works
+    final Component legacy = MM.deserialize(MiniMessageFiller.fillRaw(
+            raw, Component.text("/qs tag view 2"), Component.text("1"), Component.text("5"), Component.text("/qs tag view 4")), NO_RESOLVERS);
+    assertTrue(MM.serialize(legacy).contains("/qs tag view 2"), "legacy path carries the real command");
+  }
+
+  @Test
+  void placeholderInsideInsertionIsBrokenAtParse() {
+
+    final PreParsedTemplate template = PreParsedTemplate.parse(
+            "<insert:{0}>shift-click to copy</insert>", MM, NO_RESOLVERS);
+    assertTrue(PreParsedTemplate.isBroken(template), "sentinel in an insertion value must be frozen at parse");
+  }
+
+  @Test
+  void sentinelInsideShowEntityHoverNameArgumentFallsBack() {
+
+    // MiniMessage cannot produce show_entity hovers (the tag is unparsed and stays
+    // literal), so the name component can only arrive through a programmatically
+    // built argument — a sentinel hiding there must still trigger the fallback
+    final PreParsedTemplate template = PreParsedTemplate.parse("Item: {0}", MM, NO_RESOLVERS);
+    assertFalse(PreParsedTemplate.isBroken(template));
+    final HoverEvent.ShowEntity entity = HoverEvent.ShowEntity.showEntity(
+            net.kyori.adventure.key.Key.key("minecraft:zombie"), java.util.UUID.randomUUID(),
+            Component.text("weird " + PreParsedTemplate.SENTINEL_START));
+    final Component hostile = Component.text("hover").hoverEvent(HoverEvent.showEntity(entity));
+    assertNull(template.render(hostile));
+  }
+
+  @Test
+  void placeholderInsideTranslatableArgumentIsBrokenAtParse() {
+
+    // component-valued translation arguments are outside children() but inside the
+    // replaceText domain — the compiled form cannot split them either
+    final PreParsedTemplate template = PreParsedTemplate.parse(
+            "<lang:custom.key:'value {0}'>translated</lang>", MM, NO_RESOLVERS);
+    assertTrue(PreParsedTemplate.isBroken(template), "sentinel in a translation argument must be frozen at parse");
+  }
+
   // ---- fillArgs brace-scan fast path ----
 
   /** The exact historical body: sequential literal passes plus the trailing compact. */
@@ -203,5 +256,19 @@ class TextRenderPipelineR45Test {
     final String actual = MM.serialize(MsgUtil.fillArgs(origin, Component.text("x")));
     assertEquals(slowPathReference(origin, Component.text("x")), actual);
     assertTrue(actual.contains("inner"));
+  }
+
+  @Test
+  void braceInsideShowEntityHoverNameIsDetectedAndFilled() {
+
+    // the show_entity hover's name component is rendered by the same replacer path as
+    // show_text; missing it in the fast-path scan would leave "{0}" literal
+    final HoverEvent.ShowEntity entity = HoverEvent.ShowEntity.showEntity(
+            net.kyori.adventure.key.Key.key("minecraft:zombie"), java.util.UUID.randomUUID(),
+            Component.text("tip {0}"));
+    final Component origin = Component.text("hover me").hoverEvent(HoverEvent.showEntity(entity));
+    final String actual = MM.serialize(MsgUtil.fillArgs(origin, Component.text("HIT")));
+    assertTrue(actual.contains("HIT"), "show_entity names participate in the scan domain");
+    assertEquals(slowPathReference(origin, Component.text("HIT")), actual);
   }
 }

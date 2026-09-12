@@ -2,6 +2,9 @@ package com.ghostchu.quickshop.localization.text;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.TranslatableComponent;
+import net.kyori.adventure.text.TranslationArgument;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.jetbrains.annotations.NotNull;
@@ -353,13 +356,37 @@ final class PreParsedTemplate {
     if(node instanceof final TextComponent text && text.content().indexOf(SENTINEL_START) >= 0) {
       return true;
     }
-    // a placeholder inside a MiniMessage tag argument (e.g. hover text) lands its
-    // sentinel in the event value, outside children()
-    final var hover = node.style().hoverEvent();
+    // a placeholder inside a MiniMessage tag argument lands its sentinel outside
+    // children(): click/insertion string values, hover values and translatable
+    // component arguments — every spot the compile walk cannot split must be
+    // visible here or a sentinel-bearing template freezes as usable and ships
+    // private-use characters (e.g. inside run_command, breaking the button)
+    final var style = node.style();
+    final var click = style.clickEvent();
+    if(click != null && click.value().indexOf(SENTINEL_START) >= 0) {
+      return true;
+    }
+    final String insertion = style.insertion();
+    if(insertion != null && insertion.indexOf(SENTINEL_START) >= 0) {
+      return true;
+    }
+    final var hover = style.hoverEvent();
     if(hover != null) {
       final var value = hover.value();
       if(value instanceof final Component component && containsSentinel(component)) {
         return true;
+      }
+      if(value instanceof final HoverEvent.ShowEntity showEntity
+              && showEntity.name() != null && containsSentinel(showEntity.name())) {
+        return true;
+      }
+    }
+    if(node instanceof final TranslatableComponent translatable) {
+      for(final TranslationArgument argument : translatable.arguments()) {
+        if(argument != null && argument.value() instanceof final Component component
+                && containsSentinel(component)) {
+          return true;
+        }
       }
     }
     for(final Component child : node.children()) {
