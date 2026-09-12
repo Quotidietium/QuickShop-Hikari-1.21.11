@@ -336,6 +336,12 @@ public class ShopUtil {
     // below (both consult the same unchanged quantity)
     final int shopStock = shop.getRemainingStock();
     if(shopStock == 0) {
+      // the flow below never reaches onClick (the no-listener path's only refresh), so
+      // an out-of-stock click would leave the sign stale — refresh it here instead,
+      // matching the listener path which always renders once before this gate
+      if(!com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+        shop.onClick(p);
+      }
       QuickShop.getInstance().text().of(p, "purchase-out-of-stock", shop.ownerName()).send();
       return true;
     }

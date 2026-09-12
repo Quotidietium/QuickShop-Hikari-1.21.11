@@ -555,10 +555,11 @@ public final class MarketUtils {
     }
 
     // Check custom display name if present; one meta read for both the flag and the
-    // name (getItemMeta hands out a fresh copy per call in production)
+    // name (getItemMeta hands out a fresh copy per call in production); a null meta
+    // here would only mean "no custom name", same as hasItemMeta() being false
     if(item.hasItemMeta()) {
       final org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
-      if(meta.hasDisplayName()) {
+      if(meta != null && meta.hasDisplayName()) {
         return meta.getDisplayName().toLowerCase(Locale.ROOT).contains(query);
       }
     }

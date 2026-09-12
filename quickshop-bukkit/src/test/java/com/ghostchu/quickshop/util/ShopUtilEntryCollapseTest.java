@@ -228,6 +228,23 @@ class ShopUtilEntryCollapseTest {
   }
 
   @Test
+  void buyEntryOutOfStockStillRefreshesTheSign() {
+
+    when(shop.isBuying()).thenReturn(false);
+    when(shop.isSelling()).thenReturn(true);
+    when(shop.getRemainingStock()).thenReturn(0);
+
+    assertTrue(ShopUtil.buyFromShop(player, shop, false, false));
+
+    // the refusal early-return never reaches the regular onClick below; on the
+    // no-listener path onClick is the only sign refresh, so the gate itself must
+    // render once — otherwise an out-of-stock click leaves the sign stale
+    // (panel stock line + the gate itself: exactly two reads, like the sell side)
+    verify(shop, times(2)).getRemainingStock();
+    verify(shop, times(1)).onClick(player);
+  }
+
+  @Test
   void sellEntryOutOfSpaceRefusesAfterTwoScans() {
 
     when(shop.isBuying()).thenReturn(true);
