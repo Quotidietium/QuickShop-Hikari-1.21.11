@@ -83,33 +83,38 @@ public class SubCommand_Database implements CommandHandler<CommandSender> {
   private void saveShops(final CommandSender sender, @NotNull final List<String> subParams) {
 
     plugin.logger().info("Saving all in-memory changed shops...");
-    final List<CompletableFuture> futures = plugin.getShopManager().getAllShops().stream().filter(Shop::isDirty).map(Shop::update).toList();
+    // run off the main thread: the join() below can block up to 15s and the fallback
+    // loop blocks even longer, which would freeze every tick on a large server
+    Util.asyncThreadRun(()->{
+      final List<CompletableFuture> futures = plugin.getShopManager().getAllShops().stream().filter(Shop::isDirty).map(Shop::update).toList();
 
-    plugin.logger().info("Shops needed saved: " + futures.size());
-    final CompletableFuture<?>[] completableFutures = futures.toArray(new CompletableFuture<?>[0]);
+      plugin.logger().info("Shops needed saved: " + futures.size());
+      final CompletableFuture<?>[] completableFutures = futures.toArray(new CompletableFuture<?>[0]);
 
-    try {
+      try {
 
-      CompletableFuture.allOf(completableFutures)
-              .orTimeout(15, TimeUnit.SECONDS)
-              .join();
+        CompletableFuture.allOf(completableFutures)
+                .orTimeout(15, TimeUnit.SECONDS)
+                .join();
 
-    } catch(final CompletionException ex) {
+      } catch(final CompletionException ex) {
 
-      plugin.logger().info("Timed out, running saving synchronously to determine shop with issue.", ex);
-      for(final Shop shop : plugin.getShopManager().getAllShops()) {
+        plugin.logger().info("Timed out, running saving synchronously to determine shop with issue.", ex);
+        for(final Shop shop : plugin.getShopManager().getAllShops()) {
 
-        if(shop.isDirty()) {
-          try {
+          if(shop.isDirty()) {
+            try {
 
-            shop.updateSync();
-          } catch(final RuntimeException re) {
+              shop.updateSync();
+            } catch(final RuntimeException re) {
 
-            plugin.logger().warn("Issue occurred while saving a shop. This may cause data loss. Please check the logs for more information. ID: " + shop.getShopId() + " Location: " + shop.bukkitLocation(), re);
+              plugin.logger().warn("Issue occurred while saving a shop. This may cause data loss. Please check the logs for more information. ID: " + shop.getShopId() + " Location: " + shop.bukkitLocation(), re);
+            }
           }
         }
       }
-    }
+      plugin.text().of(sender, "database.save-complete").send();
+    });
   }
 //
 //    private void handleStatus(@NotNull CommandSender sender) {
@@ -147,8 +152,14 @@ public class SubCommand_Database implements CommandHandler<CommandSender> {
     }
     try {
       final int days = Integer.parseInt(subParams.getFirst());
+      if(days < 0) {
+        // a positive offset would push the cutoff into the future and delete the whole
+        // log table; the parameter means "purge logs older than <days> days"
+        plugin.text().of(sender, "not-a-number", subParams.getFirst()).send();
+        return;
+      }
       final Calendar calendar = Calendar.getInstance();
-      calendar.add(Calendar.DATE, days);
+      calendar.add(Calendar.DATE, -days);
       plugin.text().of(sender, "database.purge-task-created").send();
       final SimpleDatabaseHelperV2 databaseHelper = (SimpleDatabaseHelperV2)plugin.getDatabaseHelper();
       databaseHelper.purgeLogsRecords(calendar.getTime()).whenComplete((r, e)->{

@@ -517,12 +517,14 @@ command:
   no-trade-item: <green>请在主手手持想要切换到的新物品
   wrong-args: <red>无效参数。使用 <bold>/quickshop help <red>来查看命令帮助。
   some-shops-removed: <yellow>{0} <green>个商店已被移除
+  removeall-warning: <red><bold>警告：</bold><yellow>这将永久删除目标玩家（未指定玩家时为你自己）的全部商店并向其支付删除退款。确认请执行 <aqua>/quickshop removeall [玩家名] confirm</aqua>。
   new-owner: '<green>新的商店所有者: <yellow>{0}'
   format: <green>/{0} {1} <yellow>- {2}
   transfer-success: <green>已将<yellow> {0} <green>个商店转移到玩家<yellow> {1}
   now-buying: <green>现在开始 <light_purple>收购 <yellow>{0}
   now-selling: <green>现在开始 <aqua>出售 <yellow>{0}
   cleaned: <green>清理了 <yellow>{0} <green>个商店.
+  clean-warning: <red><bold>警告：</bold><yellow>这将永久删除所有已加载的零库存出售商店与全部黑名单物品商店，并向每位店主支付删除退款。确认请执行 <aqua>/quickshop clean confirm</aqua>。
   trade-item-now: <green>现在开始交易 <yellow>{0} 个 {1}
   no-world-given: <red>请指定一个世界名称
   format-disabled: <red>/{0} {1} <gray>- {2}
@@ -540,6 +542,7 @@ no-permission: <red>你没有权限这样去操作。
 chest-was-removed: <red>当前箱子已被移除。
 you-cant-afford-to-buy: <red>余额不足！购买该商店物品需要 {0}，但是你只有 {1}。
 shops-removed-in-world: <yellow>已删除世界 <aqua>{1}<yellow> 中的 <aqua>{0}<yellow> 个商店。
+removeworld-warning: <red><bold>警告：</bold><yellow>这将永久删除世界 <aqua>{0}</aqua> 中的全部商店并向每位店主支付删除退款。确认请执行 <aqua>/quickshop removeworld {0} confirm</aqua>。
 client-language-unsupported: <yellow>QuickShop不支持您的客户端语言，我们现在退回到 {0} 语言。
 language-version: '63'
 not-managed-shop: <red>你不是该商店的所有者或助手
@@ -687,6 +690,7 @@ database:
   report-time: <yellow>上次扫描时间 {0}
   auto-scan-alert: <yellow>此服务器上的 QuickShop 数据库需要维护。找到 <gold>{0}</gold> 个孤立的数据等待清理。
   auto-trim: <green>自动清理已在此服务器上启用，不需要手动清理。
+  save-complete: <green>数据库保存已完成。
   trim-complete: <green>数据库清理已完成， <yellow>{0}</yellow> 个孤立的数据已被清理。
   auto-trim-started: <green>自动清理已经开始，请稍候...
   trim-start: <green>数据库清理已开始，请稍候...

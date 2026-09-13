@@ -121,6 +121,10 @@ public class SubCommand_TransferAll implements CommandHandler<Player> {
           plugin.text().of(sender, "unknown-player", "targetPlayer").send();
           return;
         }
+        if(fromPlayer.getUniqueId().equals(targetPlayer.getUniqueId())) {
+          plugin.text().of(sender, "transfer-no-self", parser.getArgs().get(1)).send();
+          return;
+        }
 
         final List<Shop> shopList = plugin.getShopManager().getAllShops(fromQUser);
         final ShopUtil.PendingTransferTask task = new ShopUtil.PendingTransferTask(fromQUser, targetQUser, shopList);

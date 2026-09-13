@@ -27,9 +27,15 @@ public class SubCommand_Clean implements CommandHandler<CommandSender> {
   @Override
   public void onCommand(@NotNull final CommandSender sender, @NotNull final String commandLabel, @NotNull final CommandParser parser) {
 
+    // mass deletion with refunds fired to every affected owner: require the same
+    // explicit confirm step the other destructive commands use
+    if(parser.getArgs().isEmpty() || !"confirm".equalsIgnoreCase(parser.getArgs().getFirst())) {
+      plugin.text().of(sender, "command.clean-warning").send();
+      return;
+    }
+
     plugin.text().of(sender, "command.cleaning").send();
     final List<Shop> pendingRemoval = new ArrayList<>();
-    int i = 0;
 
     for(final Shop shop : plugin.getShopManager().getAllShops()) {
       try {
@@ -39,10 +45,8 @@ public class SubCommand_Clean implements CommandHandler<CommandSender> {
           pendingRemoval.add(
                   shop); // Is selling, but has no stock, and is a chest shop, but is not a double shop.
           // Can be deleted safely.
-          i++;
         } else if(plugin.getShopItemBlackList().isBlacklisted(shop.getItem())) {
           pendingRemoval.add(shop);
-          i++;
         }
       } catch(final IllegalStateException e) {
         pendingRemoval.add(shop);
@@ -57,7 +61,9 @@ public class SubCommand_Clean implements CommandHandler<CommandSender> {
     }
 
     MsgUtil.clean();
-    plugin.text().of(sender, "command.cleaned", i).send();
+    // the IllegalStateException fallback also queues shops without touching the old
+    // counter, so report the actual queue size
+    plugin.text().of(sender, "command.cleaned", pendingRemoval.size()).send();
   }
 
 }

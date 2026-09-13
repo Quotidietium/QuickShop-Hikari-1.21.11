@@ -34,6 +34,12 @@ public class SubCommand_RemoveWorld implements CommandHandler<CommandSender> {
       plugin.text().of(sender, "world-not-exists", parser.getArgs().getFirst()).send();
       return;
     }
+    // wiping a whole world's shops is irreversible and refunds every owner: require an
+    // explicit confirm step like the other destructive commands
+    if(parser.getArgs().size() < 2 || !"confirm".equalsIgnoreCase(parser.getArgs().get(1))) {
+      plugin.text().of(sender, "removeworld-warning", world.getName()).send();
+      return;
+    }
     int shopsDeleted = 0;
     for(final Shop shop : plugin.getShopManager().getAllShops()) {
 

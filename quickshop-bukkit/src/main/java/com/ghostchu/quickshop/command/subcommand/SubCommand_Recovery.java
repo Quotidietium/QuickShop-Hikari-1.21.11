@@ -61,6 +61,15 @@ public class SubCommand_Recovery implements CommandHandler<ConsoleCommandSender>
       } catch(final SQLException | IOException | ClassNotFoundException e) {
         plugin.text().of(sender, "importing-failed", e.getMessage()).send();
         plugin.logger().warn("Failed to import the database from backup file.", e);
+        // the in-memory shop state was already wiped before the import; leaving it empty
+        // would silently disable all trading, so restore from the database — and drop the
+        // write-path caches first, since a partially-failed import may have replaced
+        // tables the cached data row ids still point into
+        ((SimpleDatabaseHelperV2)plugin.getDatabaseHelper()).invalidateCaches();
+        Util.mainThreadRun(()->{
+          Log.debug("Re-loading shops from the surviving database after failed import...");
+          plugin.getShopLoader().loadShops();
+        });
       }
     });
   }

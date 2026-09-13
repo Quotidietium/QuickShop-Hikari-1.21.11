@@ -31,7 +31,12 @@ public class SubCommand_Reset implements CommandHandler<CommandSender> {
     switch(parser.getArgs().getFirst()) {
       case "config" -> {
         final File config = new File(plugin.getDataFolder(), "config.yml");
-        config.delete();
+        // a failed delete (file lock, permissions) must not report success: the old file
+        // stays and saveDefaultConfig() silently keeps it
+        if(!config.delete() && config.exists()) {
+          plugin.text().of(sender, "internal-error", "Failed to delete config.yml (file locked?)").send();
+          return;
+        }
         plugin.getJavaPlugin().saveDefaultConfig();
         plugin.getJavaPlugin().reloadConfig();
         plugin.getReloadManager().reload();

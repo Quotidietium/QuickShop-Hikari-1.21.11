@@ -601,12 +601,20 @@ command:
   no-trade-item: <green>Please hold a trade item to change in the main hand
   wrong-args: <red>Invalid argument. Use <bold>/quickshop help</bold> to see a list of commands.
   some-shops-removed: <yellow>{0} <green>shop(s) removed
+  removeall-warning: <red><bold>Warning:</bold> <yellow>This will permanently delete every
+    shop owned by the target player (or by you when no player is given) and refund
+    them for each one. Once you are ready, execute <aqua>/quickshop removeall [player]
+    confirm</aqua> to continue.
   new-owner: '<green>New owner: <yellow>{0}'
   format: <green>/{0} {1} <yellow>- {2}
   transfer-success: <green>Transferred <yellow>{0}</yellow> shop(s) to <yellow>{1}
   now-buying: <green>Now <light_purple>BUYING</light_purple> {0}
   now-selling: <green>Now <aqua>SELLING</aqua> {0}
   cleaned: <green>Removed <yellow>{0}</yellow> shops.
+  clean-warning: <red><bold>Warning:</bold> <yellow>This will permanently delete every
+    loaded selling shop with zero stock and every blacklisted-item shop, refunding
+    each owner. Once you are ready, execute <aqua>/quickshop clean confirm</aqua> to
+    continue.
   trade-item-now: <green>Now trading <yellow>{0}x {1}
   no-world-given: <red>Please specify a world name
   format-disabled: <red>/{0} {1} <gray>- {2}
@@ -629,6 +637,9 @@ no-permission: <red>You do not have permission to do that.
 chest-was-removed: <red>The chest was removed.
 you-cant-afford-to-buy: <red>It costs {0}, but you only have {1}
 shops-removed-in-world: <yellow>A total of <aqua>{0}</aqua> shops have been deleted
+removeworld-warning: <red><bold>Warning:</bold> <yellow>This will permanently delete every
+  shop in world <aqua>{0}</aqua> and refund each owner. Once you are ready, execute
+  <aqua>/quickshop removeworld {0} confirm</aqua> to continue.
   in world <aqua>{1}</aqua>.
 client-language-unsupported: <yellow>QuickShop doesn't support your client language.
   Falling back to locale {0}...
@@ -831,6 +842,7 @@ database:
     Found <gold>{0}</gold> isolated data waiting for trimming.
   auto-trim: <green>Auto-trimming has been enabled on this server. No manual trimming
     required.
+  save-complete: <green>Database save complete.
   trim-complete: <green>Database trimming complete. <yellow>{0}</yellow> isolated
     data trimmed.
   auto-trim-started: <green>Auto-trimming started, please wait...

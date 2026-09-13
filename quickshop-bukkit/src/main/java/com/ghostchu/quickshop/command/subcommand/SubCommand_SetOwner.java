@@ -9,6 +9,7 @@ import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.obj.QUserImpl;
 import com.ghostchu.quickshop.util.Util;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
@@ -45,7 +46,15 @@ public class SubCommand_SetOwner implements CommandHandler<Player> {
       plugin.text().of(sender, "no-permission").send();
       return;
     }
-    QUserImpl.createAsync(plugin.getPlayerFinder(), parser.getArgs().getFirst())
+    // the player finder's name resolution never fails (it silently falls back to a
+    // deterministic offline-mode hash UUID), so without this gate a typo would transfer
+    // the shop to a ghost owner no real player can ever claim
+    final String newOwnerName = parser.getArgs().getFirst();
+    if(Bukkit.getPlayerExact(newOwnerName) == null && Bukkit.getOfflinePlayerIfCached(newOwnerName) == null) {
+      plugin.text().of(sender, "unknown-player").send();
+      return;
+    }
+    QUserImpl.createAsync(plugin.getPlayerFinder(), newOwnerName)
             .thenAccept(newShopOwner->{
               if(newShopOwner == null) {
                 plugin.text().of(sender, "unknown-player").send();

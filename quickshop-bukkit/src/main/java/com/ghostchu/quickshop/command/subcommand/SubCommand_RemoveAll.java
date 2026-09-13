@@ -31,9 +31,18 @@ public class SubCommand_RemoveAll implements CommandHandler<CommandSender> {
   @Override
   public void onCommand(@NotNull final CommandSender sender, @NotNull final String commandLabel, @NotNull final CommandParser parser) {
 
+    // deleting a player's every shop is irreversible (and refunds that player for each
+    // one): require an explicit confirm step like the other destructive commands
+    if(parser.getArgs().isEmpty() || !"confirm".equalsIgnoreCase(parser.getArgs().getLast())) {
+      plugin.text().of(sender, "command.removeall-warning").send();
+      return;
+    }
+    final List<String> targetArgs = new ArrayList<>(parser.getArgs());
+    targetArgs.remove(targetArgs.size() - 1); // strip the trailing "confirm"
+
     final CompletableFuture<QUser> qUserFuture;
-    if(parser.getArgs().size() == 1) {
-      qUserFuture = QUserImpl.createAsync(plugin.getPlayerFinder(), parser.getArgs().getFirst());
+    if(!targetArgs.isEmpty()) {
+      qUserFuture = QUserImpl.createAsync(plugin.getPlayerFinder(), targetArgs.getFirst());
     } else {
       qUserFuture = QUserImpl.createAsync(plugin.getPlayerFinder(), sender);
     }
@@ -74,6 +83,8 @@ public class SubCommand_RemoveAll implements CommandHandler<CommandSender> {
   @Override
   public @Nullable List<String> onTabComplete(@NotNull final CommandSender sender, @NotNull final String commandLabel, @NotNull final CommandParser parser) {
 
-    return parser.getArgs().size() <= 1? getPlayerList(sender) : Collections.emptyList();
+    final List<String> list = new ArrayList<>(getPlayerList(sender));
+    list.add("confirm");
+    return parser.getArgs().size() <= 1? list : Collections.emptyList();
   }
 }
