@@ -1,6 +1,7 @@
 package com.ghostchu.quickshop.listener;
 
 import com.ghostchu.quickshop.QuickShop;
+import com.ghostchu.quickshop.menu.shared.GuiChatInputManager;
 import com.ghostchu.quickshop.util.logger.Log;
 import com.ghostchu.quickshop.util.performance.PerfMonitor;
 import com.ghostchu.simplereloadlib.ReloadResult;
@@ -40,7 +41,15 @@ public class ChatListener extends AbstractQSListener {
   public void onChat(final AsyncPlayerChatEvent e) {
 
     if(e.isCancelled() && ignoreCancelChatEvent) {
-      Log.debug("Ignored a chat event (Cancelled by another plugin, you can force process by turn on ignore-cancel-chat-event)");
+      Log.debug("Ignored a chat event (cancelled by another plugin; turn off ignore-cancel-chat-event to keep processing cancelled messages)");
+      return;
+    }
+
+    // a pending GUI chat input (menu search/amount prompts) owns this message: the GUI
+    // manager consumes and cancels it itself, so without this yield the same line would
+    // also be applied to a lingering trade/create prompt and e.g. buy from a shop the
+    // player clicked before opening the menu
+    if(GuiChatInputManager.getInstance().hasPendingInput(e.getPlayer().getUniqueId())) {
       return;
     }
 
