@@ -51,7 +51,10 @@ public class SubCommand_Refill implements CommandHandler<Player> {
       }
     } else {
       if(parser.getArgs().getFirst().equals(plugin.getConfig().getString("shop.word-for-trade-all-items"))) {
-        add = shop.getRemainingSpace();
+        // getRemainingSpace() reports whole trade units while add() moves single items;
+        // refill "all" on a stacking shop must fill every slot, not 1/unitSize of them
+        final int space = shop.getRemainingSpace();
+        add = space > 0? space * Math.max(1, shop.getItemUnitSize()) : space;
       } else {
         plugin.text().of(sender, "not-a-number", parser.getArgs().getFirst()).send();
         return;

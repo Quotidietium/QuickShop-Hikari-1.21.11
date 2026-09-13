@@ -315,7 +315,10 @@ public class SimpleTradeService implements TradeService {
       }
       final int requestedUnits = normalizeAmount(shop, amount) / stackSize;
       if(stock < requestedUnits) {
-        final int allowedTrades = stock / stackSize;
+        // countItems already reports trade units, so the stock itself is the number of
+        // trades still possible — dividing by the unit size again would under-report
+        // stacking shops by a full unitSize factor
+        final int allowedTrades = stock;
         return new PreviewOutcome(new TradePreview(
                 TradeType.BUY_FROM_SHOP,
                 amount,
@@ -395,7 +398,8 @@ public class SimpleTradeService implements TradeService {
     final int sellerStock = Util.countItems(sellerInventory, shop);
     final TradeObservation traderObservation = observation(null, null, sellerStock, null);
     if(sellerStock < requestedUnits) {
-      final int allowedTrades = sellerStock / stackSize;
+      // same as the buy side: countItems reports trade units, not items
+      final int allowedTrades = sellerStock;
       return new PreviewOutcome(new TradePreview(
               TradeType.SELL_TO_SHOP,
               amount,
