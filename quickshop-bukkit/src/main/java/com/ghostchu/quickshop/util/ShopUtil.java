@@ -493,7 +493,10 @@ public class ShopUtil {
     // typed 'all', check if player has enough money than price * amount
     final double price = shop.getPrice();
     final double balance = eco.balance(QUserImpl.createFullFilled(p), shop.bukkitLocation().getWorld().getName()).doubleValue();
-    amount = Math.min(amount, (int)Math.floor(balance / price));
+    // a zero price (free shop) turns balance/price into 0/0 = NaN, which casts to 0 and
+    // wrongly reports the player as unable to afford a free trade; a positive balance
+    // divides to Infinity and caps at MAX_VALUE on its own
+    amount = Math.min(amount, price > 0? (int)Math.floor(balance / price) : Integer.MAX_VALUE);
     if(amount < 1) { // typed 'all' but the auto set amount is 0
       // when typed 'all' but player can't buy any items
       if(!shop.isUnlimited() && shopHaveItems < 1) {

@@ -407,10 +407,10 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     }
     BigDecimal fromTax = BigDecimal.ZERO;
     final QSEconomyTransaction transaction;
-    final QSEconomyTransactionBuilder builder = QSEconomyTransaction.builder().amount(BigDecimal.valueOf(total)).toTax(new BigDecimal(effectiveTax.interactorRate())).taxer(taxAccount).world(shop.bukkitLocation().getWorld().getName()).to(buyerQUser);
+    final QSEconomyTransactionBuilder builder = QSEconomyTransaction.builder().amount(BigDecimal.valueOf(total)).toTax(BigDecimal.valueOf(effectiveTax.interactorRate())).taxer(taxAccount).world(shop.bukkitLocation().getWorld().getName()).to(buyerQUser);
 
     if(!shop.isUnlimited() || (this.payUnlimitedShopOwner && shop.isUnlimited())) {
-      fromTax = new BigDecimal(effectiveTax.shopRate());
+      fromTax = BigDecimal.valueOf(effectiveTax.shopRate());
       transaction = builder.from(shop.getOwner()).fromTax(fromTax).build();
     } else {
       transaction = builder.from(null).build();
@@ -498,7 +498,9 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       // one fetch for the whole notification (getItem clones + fires RETRIEVE per call)
       final ItemStack notifyItem = shop.getItem();
       final Component itemName = Util.getItemStackName(notifyItem);
-      final Function<String, Component> notify = langCode->plugin.platform().setItemStackHoverEvent(plugin.text().of("player-sold-to-your-store", buyerQUser.getDisplay(), amount, itemName).forLocale(langCode), notifyItem);
+      // item count, matching notifyBought on the other trade direction (stacking shops)
+      final int itemCount = amount * notifyItem.getAmount();
+      final Function<String, Component> notify = langCode->plugin.platform().setItemStackHoverEvent(plugin.text().of("player-sold-to-your-store", buyerQUser.getDisplay(), itemCount, itemName).forLocale(langCode), notifyItem);
       sendList.add(notify);
       if(space == amount) {
         Function<String, Component> spaceWarn;
@@ -661,11 +663,11 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         taxAccount = this.cacheTaxAccount;
       }
     }
-    final BigDecimal fromTax = new BigDecimal(effectiveTax.interactorRate());
+    final BigDecimal fromTax = BigDecimal.valueOf(effectiveTax.interactorRate());
     final QSEconomyTransactionBuilder builder = QSEconomyTransaction.builder().from(sellerQUser).amount(BigDecimal.valueOf(total)).fromTax(fromTax).taxer(taxAccount).benefitManager(shop.getShopBenefit()).world(shop.bukkitLocation().getWorld().getName());
 
     if(!shop.isUnlimited() || (this.payUnlimitedShopOwner && shop.isUnlimited())) {
-      transaction = builder.to(shop.getOwner()).toTax(new BigDecimal(effectiveTax.shopRate())).build();
+      transaction = builder.to(shop.getOwner()).toTax(BigDecimal.valueOf(effectiveTax.shopRate())).build();
     } else {
       transaction = builder.to(null).build();
     }
@@ -910,7 +912,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       case REACHED_PRICE_MIN_LIMIT ->
               plugin.text().of(p, "price-too-cheap", Component.text((useDecFormat)? MsgUtil.decimalFormat(priceCheckResult.getMin()) : Double.toString(priceCheckResult.getMin()))).send();
       case REACHED_PRICE_MAX_LIMIT ->
-              plugin.text().of(p, "price-too-high", Component.text((useDecFormat)? MsgUtil.decimalFormat(priceCheckResult.getMax()) : Double.toString(priceCheckResult.getMin()))).send();
+              plugin.text().of(p, "price-too-high", Component.text((useDecFormat)? MsgUtil.decimalFormat(priceCheckResult.getMax()) : Double.toString(priceCheckResult.getMax()))).send();
       case PRICE_RESTRICTED ->
               plugin.text().of(p, "restricted-prices", Util.getItemStackName(shop.getItem()), Component.text(priceCheckResult.getMin()), Component.text(priceCheckResult.getMax())).send();
       case NOT_VALID -> plugin.text().of(p, "not-a-number", shop.getPrice()).send();
@@ -1039,6 +1041,12 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     final QSHandleChatEvent qsHandleChatEvent = new QSHandleChatEvent(qUser, message);
     qsHandleChatEvent.callEvent();
     message = qsHandleChatEvent.getMessage();
+    if(message == null || message.isEmpty()) {
+      // a listener can null the message (the event setter is unvalidated); downstream
+      // equalsIgnoreCase/parse calls would NPE inside the scheduled task with the
+      // session already consumed
+      return;
+    }
     // Use from the main thread, because Bukkit hates life
     final String finalMessage = message;
 
@@ -1051,6 +1059,14 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       final Info info = getInteractiveManager().remove(p.getUniqueId());
       if(info == null) {
         return; // multithreaded means this can happen
+      }
+      if(info != pending) {
+        // the player started a NEW interaction (clicked another shop) inside the
+        // scheduling gap: applying this message to the newer session would trade a
+        // different shop than the one the player answered — restore theirs and drop
+        // this stale reply
+        getInteractiveManager().put(p.getUniqueId(), info);
+        return;
       }
       if(info.getLocation().getWorld() != p.getLocation().getWorld() || info.getLocation().distanceSquared(p.getLocation()) > 25) {
         plugin.text().of(p, "not-looking-at-shop").send();
@@ -1124,7 +1140,9 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     chatSheetPrinter.printHeader();
     chatSheetPrinter.printLine(plugin.text().of(seller, "menu.successfully-sold").forLocale());
     final ItemStack receiptItem = shop.getItem();
-    chatSheetPrinter.printLine(plugin.text().of(seller, "menu.item-name-and-price", amount, Util.getItemStackName(receiptItem), format(total, shop)).forLocale());
+    // same item-count unit the purchase receipt reports: for stacking shops the raw
+    // trade amount would print "2" while 32 items actually changed hands
+    chatSheetPrinter.printLine(plugin.text().of(seller, "menu.item-name-and-price", Component.text(amount * receiptItem.getAmount()), Util.getItemStackName(receiptItem), format(total, shop)).forLocale());
     if(showTax) {
       if(tax != 0) {
         if(!seller.equals(shop.getOwner())) {
@@ -1621,7 +1639,10 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     // typed 'all', check if player has enough money than price * amount
     final double price = shop.getPrice();
     final double balance = eco.balance(QUserImpl.createFullFilled(p), shop.bukkitLocation().getWorld().getName()).doubleValue();
-    amount = Math.min(amount, (int)Math.floor(balance / price));
+    // a zero price (free shop) turns balance/price into 0/0 = NaN, which casts to 0 and
+    // wrongly reports the player as unable to afford a free trade; a positive balance
+    // divides to Infinity and caps at MAX_VALUE on its own
+    amount = Math.min(amount, price > 0? (int)Math.floor(balance / price) : Integer.MAX_VALUE);
     if(amount < 1) { // typed 'all' but the auto set amount is 0
       // when typed 'all' but player can't buy any items
       if(!shop.isUnlimited() && shopHaveItems < 1) {
