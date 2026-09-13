@@ -122,6 +122,11 @@ public class SimpleInfo implements Info {
   @Override
   public boolean hasChanged(@NotNull final Shop shop) {
 
+    // the 5-arg constructor leaves shopData null; a caller that later flips the action
+    // to a trading one via setAction would otherwise NPE here
+    if(this.shopData == null) {
+      return true;
+    }
     return !this.shopData.equals(JsonUtil.getGson().toJson(shop.saveToInfoStorage()));
   }
 

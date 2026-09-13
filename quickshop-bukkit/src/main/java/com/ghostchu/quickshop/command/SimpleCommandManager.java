@@ -682,7 +682,9 @@ public class SimpleCommandManager implements CommandManager, TabCompleter, Comma
       final String[] passThroughArgs = new String[cmdArg.length - 1];
       System.arraycopy(cmdArg, 1, passThroughArgs, 0, passThroughArgs.length);
       for(final CommandContainer container : cmds) {
-        if(!container.getPrefix().toLowerCase().startsWith(cmdArg[0])) {
+        // execution matches subcommand names case-insensitively; completion must too,
+        // or "/qs HE<tab>" completes nothing while "/qs help" executes
+        if(!container.getPrefix().toLowerCase().startsWith(cmdArg[0].toLowerCase())) {
           continue;
         }
         if(!isAdapt(container, sender)) {
