@@ -151,12 +151,15 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
             .build().execute()) {
       final ResultSet result = query.getResultSet();
       if(!result.next()) {
-        return -1; // Default latest version
+        return -1; // no version row: fresh database (checkTables just stamped LATEST)
       }
       return Integer.parseInt(result.getString("value"));
     } catch(final SQLException e) {
-      Log.debug("Failed to getting database version! Err: " + e.getMessage());
-      return -1;
+      // -1 also means "fresh database, skip migrations" — conflating a failed read with
+      // that silently skips every pending migration on an old-schema database and lets
+      // the server run against missing columns. Fail the boot instead; the admin
+      // retries once the database is reachable.
+      throw new IllegalStateException("Failed to read the database schema version - cannot decide whether migrations are needed", e);
     }
   }
 

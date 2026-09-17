@@ -98,19 +98,37 @@ public class BatchingQueue<T> {
   private void reoffer(final List<T> drained) {
 
     int requeued = 0;
+    int evictedOldest = 0;
     for(final T item : drained) {
+      // honor the documented oldest-lossy contract: free room at the ceiling by
+      // evicting from the HEAD of the pending queue. The previous tail-drop kept the
+      // oldest values and discarded the newest — the exact wrong direction for
+      // last-write-wins cache rows (the database would settle on a stale value).
+      while(size.get() >= MAX_PENDING) {
+        final T oldest = pending.poll();
+        if(oldest == null) {
+          break;
+        }
+        size.decrementAndGet();
+        evictedOldest++;
+      }
       if(size.get() >= MAX_PENDING) {
         final int dropped = drained.size() - requeued;
         plugin.logger().error("Batching queue '" + name + "' flush failed and the re-queue ceiling (" + MAX_PENDING
-                                      + ") is reached; dropping " + dropped + " items to protect server memory.");
+                                      + ") is reached (pending queue exhausted); dropping " + dropped + " items to protect server memory.");
         return;
       }
       pending.add(item);
       size.incrementAndGet();
       requeued++;
     }
-    plugin.logger().warn("Batching queue '" + name + "' flush failed; re-queued " + requeued
-                                 + " items for the next flush cycle.");
+    if(evictedOldest > 0) {
+      plugin.logger().error("Batching queue '" + name + "' flush failed; re-queued " + requeued
+                                    + " items and dropped the " + evictedOldest + " OLDEST pending items (ceiling " + MAX_PENDING + ").");
+    } else {
+      plugin.logger().warn("Batching queue '" + name + "' flush failed; re-queued " + requeued
+                                   + " items for the next flush cycle.");
+    }
   }
 
   private List<T> drain() {
