@@ -63,34 +63,41 @@ public class DisplayAutoDespawnWatcher implements Runnable, Reloadable, SubPaste
   @Override
   public void run() {
 
-    for(final Shop shop : plugin.getShopManager().getLoadedShops()) {
-      //Shop may be deleted or unloaded when iterating
-      if(!shop.isLoaded()) {
-        continue;
-      }
-      if(shop.isDisableDisplay()) {
-        continue;
-      }
-      final Location location = shop.bukkitLocation();
-      final World world = shop.bukkitLocation().getWorld(); //Cache this, because it will took some time.
-      final AbstractDisplayItem displayItem = ((ContainerShop)shop).getDisplayItem();
-      if(displayItem != null) {
-        // Check the range has player?
-        boolean anyPlayerInRegion = false;
-        for(final Player player : Bukkit.getOnlinePlayers()) {
-          if((player.getWorld() == world) && (player.getLocation().distance(location) <= range)) {
-            anyPlayerInRegion = true;
-            break;
+    try {
+      for(final Shop shop : plugin.getShopManager().getLoadedShops()) {
+        //Shop may be deleted or unloaded when iterating
+        if(!shop.isLoaded()) {
+          continue;
+        }
+        if(shop.isDisableDisplay()) {
+          continue;
+        }
+        final Location location = shop.bukkitLocation();
+        final World world = shop.bukkitLocation().getWorld(); //Cache this, because it will took some time.
+        final AbstractDisplayItem displayItem = ((ContainerShop)shop).getDisplayItem();
+        if(displayItem != null) {
+          // Check the range has player?
+          boolean anyPlayerInRegion = false;
+          for(final Player player : Bukkit.getOnlinePlayers()) {
+            if((player.getWorld() == world) && (player.getLocation().distance(location) <= range)) {
+              anyPlayerInRegion = true;
+              break;
+            }
+          }
+          if(anyPlayerInRegion) {
+            if(!displayItem.isSpawned()) {
+              displayItem.spawn();
+            }
+          } else if(displayItem.isSpawned()) {
+            displayItem.remove(false);
           }
         }
-        if(anyPlayerInRegion) {
-          if(!displayItem.isSpawned()) {
-            displayItem.spawn();
-          }
-        } else if(displayItem.isSpawned()) {
-          displayItem.remove(false);
-        }
       }
+    } catch(final Throwable t) {
+      // this timer drives every display's appear/disappear; one shop throwing used to
+      // kill the task (Bukkit drops escaping repeating tasks) and displays froze
+      // world-wide until a restart
+      plugin.logger().warn("Display auto-despawn check failed this cycle; retrying next cycle", t);
     }
   }
 

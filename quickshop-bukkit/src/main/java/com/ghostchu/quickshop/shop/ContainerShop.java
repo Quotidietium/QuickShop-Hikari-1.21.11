@@ -2109,7 +2109,20 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     // setDirty after this point marks state newer than what this write persists — the
     // completion callback must keep the dirty flag for the next flush to pick up
     final long savedGeneration = dirtyGeneration;
-    final CompletableFuture<Void> f = plugin.getDatabaseHelper().updateShop(this);
+    final CompletableFuture<Void> f;
+    try {
+      f = plugin.getDatabaseHelper().updateShop(this);
+    } catch(final Throwable t) {
+      // updateShop snapshots the record synchronously on the CALLING thread; if that
+      // throws (item serialization etc.) the CAS above is already flipped and no
+      // whenComplete will ever run — without this reset the shop can never save again
+      // (every later update() short-circuits on the stale CAS, quietly reporting success)
+      updatingAtomic.set(false);
+      final CompletableFuture<Void> failed = new CompletableFuture<>();
+      failed.completeExceptionally(t);
+      plugin.logger().warn("Could not update shop in DB!", t);
+      return failed;
+    }
     inFlightUpdate = f;
     f.whenComplete((r, th) -> {
               updatingAtomic.set(false);

@@ -340,6 +340,8 @@ public class QuickShop implements QuickShopAPI, Reloadable {
 
   private LockListener shopLockListener;
   private DisplayProtectionListener displayProtectionListener;
+  /** Handle of the legacy (non-virtual) display check timer; kept so /qs reload can cancel it instead of stacking a new one. */
+  private com.tcoded.folialib.wrapper.task.WrappedTask displayItemCheckTask;
 
   public QuickShop(final QuickShopBukkit javaPlugin, final Logger logger, final Platform platform) {
 
@@ -1067,19 +1069,34 @@ public class QuickShop implements QuickShopAPI, Reloadable {
 
   private void registerDisplayItem() {
 
+    // reloadModule() re-runs this on every /qs reload: cancel the previous timer first
+    // or each reload stacks another full-shop scan onto the scheduler forever
+    if(this.displayItemCheckTask != null) {
+      try {
+        this.displayItemCheckTask.cancel();
+      } catch(final IllegalStateException ignore) {
+      }
+      this.displayItemCheckTask = null;
+    }
     if(this.display && AbstractDisplayItem.getNowUsing() != DisplayType.VIRTUALITEM) {
       if(getDisplayItemCheckTicks() > 0) {
         if(getConfig().getInt("shop.display-items-check-ticks") < 3000) {
           logger.error("Shop.display-items-check-ticks is too low! It may cause HUGE lag! Pick a number > 3000");
         }
         logger.info("Registering DisplayCheck task....");
-        folia.getScheduler().runTimerAsync(()->{
-          for(final Shop<?, ?> shop : getShopManager().getLoadedShops()) {
-            //Shop may be deleted or unloaded when iterating
-            if(!shop.isLoaded()) {
-              continue;
+        this.displayItemCheckTask = folia.getScheduler().runTimerAsync(()->{
+          try {
+            for(final Shop<?, ?> shop : getShopManager().getLoadedShops()) {
+              //Shop may be deleted or unloaded when iterating
+              if(!shop.isLoaded()) {
+                continue;
+              }
+              folia.getScheduler().runAtLocationLater((Location)shop.bukkitLocation(), shop::checkDisplay, 1L);
             }
-            folia.getScheduler().runAtLocationLater((Location)shop.bukkitLocation(), shop::checkDisplay, 1L);
+          } catch(final Throwable t) {
+            // a single bad shop/location used to kill this repeating task (the scheduler
+            // drops escaping timers), leaving ghost display items uncleaned until restart
+            logger.warn("Display-item check task failed this cycle; retrying next cycle", t);
           }
         }, 1L, getDisplayItemCheckTicks());
       } else if(getDisplayItemCheckTicks() == 0) {

@@ -45,12 +45,18 @@ public class CalendarWatcher implements Runnable {
   @Override
   public void run() {
 
-    if(!plugin.getJavaPlugin().isEnabled()) {
-      return;
-    }
+    try {
+      if(!plugin.getJavaPlugin().isEnabled()) {
+        return;
+      }
 
-    final CalendarEvent.CalendarTriggerType type = getAndUpdate();
-    Util.mainThreadRun(()->new CalendarEvent(type).callEvent());
+      final CalendarEvent.CalendarTriggerType type = getAndUpdate();
+      Util.mainThreadRun(()->new CalendarEvent(type).callEvent());
+    } catch(final Throwable t) {
+      // keep the calendar timer alive: one escaping exception used to silently stop the
+      // day-crossing events (ongoing fee / purger depend on them) until a restart
+      plugin.logger().warn("Calendar watcher failed this cycle; retrying next cycle", t);
+    }
   }
 
   public CalendarEvent.CalendarTriggerType getAndUpdate() {

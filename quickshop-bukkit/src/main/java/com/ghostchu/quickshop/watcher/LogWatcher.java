@@ -117,6 +117,9 @@ public class LogWatcher implements AutoCloseable, Runnable {
 
   public void log(@NotNull final String log) {
 
+    if(printWriter == null) {
+      return; // the file never opened (read-only FS / disk full): dropping beats OOM
+    }
     logs.add(()->"[" + DATETIME_FORMATTER.format(Instant.now()) + "] " + log);
   }
 
@@ -128,6 +131,9 @@ public class LogWatcher implements AutoCloseable, Runnable {
    */
   public void logLazy(@NotNull final java.util.function.Supplier<String> line) {
 
+    if(printWriter == null) {
+      return; // see log(String): never queue when nothing can ever drain it
+    }
     logs.add(()->"[" + DATETIME_FORMATTER.format(Instant.now()) + "] " + line.get());
   }
 
