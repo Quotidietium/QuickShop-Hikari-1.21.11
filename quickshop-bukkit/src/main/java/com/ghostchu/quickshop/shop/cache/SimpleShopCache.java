@@ -43,7 +43,10 @@ public class SimpleShopCache implements SubPasteItem, ShopCache {
       }
       Cache<Location, BoxedShop> cacheContainer = pair.getRight();
       if(cacheContainer == null) {
-        cacheContainer = CacheBuilder.newBuilder().expireAfterAccess(3, TimeUnit.MINUTES).recordStats().build();
+        // maximumSize matters: expireAfterAccess only evicts on later maintenance
+        // writes, so a burst of distinct-location lookups (hopper events, menu
+        // renders) could balloon the cache inside one 3-minute window
+        cacheContainer = CacheBuilder.newBuilder().expireAfterAccess(3, TimeUnit.MINUTES).maximumSize(8192).recordStats().build();
       }
       CACHES.put(namespacedKey, cacheContainer);
       CACHE_VALUE_PROVIDER.put(namespacedKey, valueProvider);

@@ -62,7 +62,11 @@ public class GuiChatInputManager implements Listener {
   @NotNull
   public static GuiChatInputManager getInstance() {
 
-    if(instance == null) {
+    // a full disable/enable cycle (PlugMan, /reload) unregisters our listener with the
+    // old plugin but leaves `registered == true` on this static singleton — without the
+    // instance check the "new" manager would never re-register (chat input dead) and the
+    // old plugin's whole object graph stays pinned by the static field
+    if(instance == null || instance.plugin != QuickShop.getInstance()) {
       instance = new GuiChatInputManager(QuickShop.getInstance());
     }
     return instance;

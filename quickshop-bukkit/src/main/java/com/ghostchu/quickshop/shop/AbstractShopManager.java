@@ -168,10 +168,13 @@ public abstract class AbstractShopManager implements ShopManager {
       return;
     }
     if(oldOwner != null) {
-      final List<Shop> owned = this.shopsByOwner.get(oldOwner);
-      if(owned != null) {
+      // atomic remove-and-prune: an isEmpty check OUTSIDE the map's bin lock races a
+      // concurrent indexShop re-adding to the same list and could drop the whole owner
+      // entry with the new shop inside
+      this.shopsByOwner.computeIfPresent(oldOwner, (owner, owned)->{
         owned.remove(shop);
-      }
+        return owned.isEmpty()? null : owned;
+      });
     }
     if(newOwner != null) {
       this.shopsByOwner
@@ -273,10 +276,13 @@ public abstract class AbstractShopManager implements ShopManager {
 
     this.shopIdLookup.remove(shop.getShopId(), shop);
     this.shopRuntimeIdLookup.remove(shop.getRuntimeRandomUniqueId(), shop);
-    final List<Shop> owned = this.shopsByOwner.get(shop.getOwner());
-    if(owned != null) {
+    // same atomic remove-and-prune as handleShopOwnerChanged: empty per-owner lists
+    // used to stay in the map forever (one entry per historical owner — slow unbounded
+    // growth on servers with heavy shop churn)
+    this.shopsByOwner.computeIfPresent(shop.getOwner(), (owner, owned)->{
       owned.remove(shop);
-    }
+      return owned.isEmpty()? null : owned;
+    });
   }
 
 

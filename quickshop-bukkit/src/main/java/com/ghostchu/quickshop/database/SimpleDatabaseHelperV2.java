@@ -481,7 +481,9 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
 
     final UUID uuid = qUser.getUniqueIdIfRealPlayer().orElse(null);
     if(uuid == null) {
-      return null;
+      // API contract: the FUTURE is non-null (callers chain on it) — its VALUE is null
+      // for virtual users (nil/username-only) who have no DB row
+      return CompletableFuture.completedFuture(null);
     }
     return getPlayerLocale(uuid);
   }
