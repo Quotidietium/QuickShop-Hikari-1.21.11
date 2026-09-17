@@ -117,7 +117,9 @@ class MarketBrowseItemAccessTest {
     shops.add(shop(Material.DIAMOND));   // equal key must keep encounter order
     shops.add(shop(Material.IRON_INGOT));
 
-    final List<Shop> sorted = MarketUtils.sortShops(new ArrayList<>(shops), BrowseSortMode.NAME);
+    // NAME ordering never touches the inventory snapshot; an empty map is the standard
+    // no-cache stand-in now that the no-snapshot overload is gone
+    final List<Shop> sorted = MarketUtils.sortShops(new ArrayList<>(shops), BrowseSortMode.NAME, java.util.Map.of());
 
     // reference: the historical comparator semantics (stable sort by prettified name)
     final List<Shop> expected = new ArrayList<>(shops);

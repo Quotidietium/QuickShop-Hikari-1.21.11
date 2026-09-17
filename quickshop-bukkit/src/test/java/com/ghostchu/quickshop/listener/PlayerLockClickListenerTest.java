@@ -93,6 +93,11 @@ class PlayerLockClickListenerTest {
 
   private PlayerInteractEvent rightClick(final UUID playerId) {
 
+    return rightClick(playerId, org.bukkit.inventory.EquipmentSlot.HAND);
+  }
+
+  private PlayerInteractEvent rightClick(final UUID playerId, final org.bukkit.inventory.EquipmentSlot hand) {
+
     final Block block = mock(Block.class);
     lenient().when(block.getLocation()).thenReturn(new Location(null, 5, 60, 5));
     final Player player = mock(Player.class);
@@ -101,7 +106,25 @@ class PlayerLockClickListenerTest {
     lenient().when(event.getClickedBlock()).thenReturn(block);
     lenient().when(event.getAction()).thenReturn(Action.RIGHT_CLICK_BLOCK);
     lenient().when(event.getPlayer()).thenReturn(player);
+    lenient().when(event.getHand()).thenReturn(hand);
     return event;
+  }
+
+  @Test
+  void offHandClickIsIgnoredEntirely() {
+
+    // the same right click reports both hands — the off-hand event must not double the
+    // lock message nor add the UUID to inShop a second time
+    configValues.put("shop.lock", Boolean.FALSE);
+    listener = new PlayerLockClickListener(plugin);
+    final UUID id = UUID.randomUUID();
+
+    listener.onClick(rightClick(id, org.bukkit.inventory.EquipmentSlot.HAND));
+    listener.onClick(rightClick(id, org.bukkit.inventory.EquipmentSlot.OFF_HAND));
+
+    assertTrue(QuickShop.inShop.contains(id));
+    assertTrue(QuickShop.inShop.remove(id), "first occurrence removed");
+    assertFalse(QuickShop.inShop.contains(id), "off-hand must not have added a second entry");
   }
 
   @Test
