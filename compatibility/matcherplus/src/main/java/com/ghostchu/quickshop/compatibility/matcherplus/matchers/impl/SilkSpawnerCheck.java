@@ -56,7 +56,21 @@ public class SilkSpawnerCheck implements ItemCheck {
       return false;
     }
 
+    // eggs and spawners resolving to the same entity id are still different trade goods
+    // (a spawn egg is a fraction of a spawner's price): without this gate a cheap egg
+    // satisfies any spawner shop of the same creature and vice versa, because the
+    // ShopItemMatchEvent result short-circuits the material check in the core matcher
+    if(isEgg(stack) != isEgg(compare)) {
+
+      return false;
+    }
+
     return originalCreature.equals(compareCreature);
+  }
+
+  private boolean isEgg(@Nullable final ItemStack stack) {
+
+    return stack != null && util.getStoredEggEntityID(stack) != null;
   }
 
   @Nullable

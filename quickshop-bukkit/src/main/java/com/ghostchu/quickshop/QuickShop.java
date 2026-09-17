@@ -621,6 +621,16 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     return inventoryWrapperRegistry;
   }
 
+  /**
+   * The built-in block-container manager (registry key = this plugin's name). Ownership
+   * transfers use it to rebind plugin-linked shops (ender chest shops) back to the
+   * physical container at the shop's location.
+   */
+  public @NotNull InventoryWrapperManager getInventoryWrapperManager() {
+
+    return inventoryWrapperManager;
+  }
+
   @Override
   public ItemMatcher getItemMatcher() {
 

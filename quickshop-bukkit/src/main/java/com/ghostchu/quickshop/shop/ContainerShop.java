@@ -28,6 +28,7 @@ import com.ghostchu.quickshop.api.inventory.InventoryWrapperManager;
 import com.ghostchu.quickshop.api.localization.text.ProxiedLocale;
 import com.ghostchu.quickshop.api.obj.QUser;
 import com.ghostchu.quickshop.api.serialize.BlockPos;
+import com.ghostchu.quickshop.shop.inventory.BukkitInventoryWrapper;
 import com.ghostchu.quickshop.api.shop.IShopType;
 import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.api.shop.ShopInfoStorage;
@@ -64,6 +65,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -590,6 +592,23 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     }
     this.owner = owner;
     setDirty();
+    // Plugin-linked inventories (ender chest shops) are keyed to the OLD owner's account:
+    // keeping the link through a transfer lets the new owner trade away the previous
+    // owner's goods while collecting the revenue. Rebind to the physical container at
+    // the shop block; if that block is not a container the old link stays (and we log).
+    final String bukkitProviderName = plugin.getInventoryWrapperRegistry().find(plugin.getInventoryWrapperManager());
+    if(bukkitProviderName != null && !bukkitProviderName.equals(inventoryWrapperProvider)) {
+      try {
+        if(bukkitLocation().getBlock().getState(false) instanceof final InventoryHolder holder) {
+          setInventory(new BukkitInventoryWrapper(holder.getInventory()), plugin.getInventoryWrapperManager());
+          Log.debug("Ownership transfer rebound shop " + shopId + " from plugin-linked inventory back to its block container.");
+        } else {
+          plugin.logger().warn("Shop {} transferred to a new owner but its inventory is plugin-linked (provider {}) and the shop block is not a container; the link still points at the previous owner's inventory.", shopId, inventoryWrapperProvider);
+        }
+      } catch(final Throwable t) {
+        plugin.logger().warn("Failed to rebind shop " + shopId + " to its block container during ownership transfer; the plugin-linked inventory is still in effect.", t);
+      }
+    }
     // keep the manager's owner index coherent across ownership transfers
     if(plugin.getShopManager() instanceof final AbstractShopManager manager) {
       manager.handleShopOwnerChanged(previousOwner, owner, this);

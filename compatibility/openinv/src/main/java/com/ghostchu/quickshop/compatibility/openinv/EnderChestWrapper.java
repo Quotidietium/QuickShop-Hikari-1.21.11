@@ -59,7 +59,16 @@ public class EnderChestWrapper implements InventoryWrapper {
   @Override
   public @NotNull ItemStack[] createSnapshot() {
 
-    return player.getEnderChest().getContents();
+    // BukkitInventoryWrapper clones per slot for a reason: getContents() hands out live
+    // mirrors, so an uncloned "snapshot" mutates with the chest and the rollback path
+    // (restoreSnapshot) writes back the already-deducted state — a rollback that
+    // silently deletes the owner's items whenever a trade fails after the item step.
+    final ItemStack[] content = this.player.getEnderChest().getContents();
+    final ItemStack[] snapshot = new ItemStack[content.length];
+    for(int i = 0; i < content.length; i++) {
+      snapshot[i] = content[i] == null? null : content[i].clone();
+    }
+    return snapshot;
   }
 
   /**
