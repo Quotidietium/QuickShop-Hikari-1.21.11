@@ -3,13 +3,14 @@ package com.ghostchu.quickshop.addon.discount;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
 public class DiscountStatusManager {
 
-  private final Map<UUID, String> PLAYER_STATUS = new HashMap<>();
+  // install commands run in the clicker's context while purchase events fire in the shop's
+  // region — a plain HashMap races under Folia (and async-adjacent Paper edge paths)
+  private final Map<UUID, String> PLAYER_STATUS = new java.util.concurrent.ConcurrentHashMap<>();
 
   public void set(@NotNull final UUID player, @NotNull final DiscountCode code) {
 

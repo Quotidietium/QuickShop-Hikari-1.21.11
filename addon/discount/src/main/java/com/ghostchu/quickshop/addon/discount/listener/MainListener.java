@@ -4,6 +4,7 @@ import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.addon.discount.DiscountCode;
 import com.ghostchu.quickshop.addon.discount.Main;
 import com.ghostchu.quickshop.api.event.economy.ShopPurchaseEvent;
+import com.ghostchu.quickshop.api.event.economy.ShopSuccessPurchaseEvent;
 import com.ghostchu.quickshop.api.event.general.ShopInfoPanelEvent;
 import com.ghostchu.quickshop.api.obj.QUser;
 import com.ghostchu.quickshop.api.shop.Shop;
@@ -104,6 +105,32 @@ public class MainListener implements Listener {
               quickshop.text().of(purchaser, "addon.discount.discount-code-no-permission", code).send();
       case EXPIRED ->
               quickshop.text().of(purchaser, "addon.discount.discount-code-expired", code).send();
+    }
+  }
+
+  @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
+  public void onPurchaseSuccess(final ShopSuccessPurchaseEvent event) {
+
+    final QUser purchaserQUser = event.getPurchaser();
+    final UUID purchaser = purchaserQUser.getUniqueIdIfRealPlayer().orElse(null);
+    if(purchaser == null) {
+      return;
+    }
+    final Shop shop = event.getShop();
+    final DiscountCode codeInstalled = main.getStatusManager().get(purchaser, main.getCodeManager());
+    if(codeInstalled == null) {
+      return;
+    }
+    if(!shop.isSelling()) {
+      return;
+    }
+    // count the use only now that the trade actually committed — the purchase-time
+    // counting burned uses on trades that later failed (cancelled by another listener,
+    // insufficient funds/items), deleting maxUsage=1 codes for nothing
+    switch(codeInstalled.applicableShop(purchaser, shop)) {
+      case APPLICABLE, APPLICABLE_WITH_THRESHOLD -> codeInstalled.use(purchaser);
+      default -> {
+      }
     }
   }
 

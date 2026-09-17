@@ -44,21 +44,23 @@ public final class Main extends CompatibilityModule {
     questSellShop = getConfig().getString("quest-sell-name");
 
     //check to see if the quest names are valid
+    //a wrong name silently degrades the gate to "disabled" (fail-open) — that must be
+    // visible to admins, not hidden behind debug logging
     if(this.questRequiredCreate && plugin.getLoadedQuests().stream().noneMatch(q -> q.getName().equalsIgnoreCase(this.questCreateShop))) {
 
-      Log.debug("Unable to find Quest: " + this.questCreateShop + ". Disabling Create requirement.");
+      this.getLogger().warning("Unable to find Quest: " + this.questCreateShop + ". Disabling Create requirement.");
       this.questRequiredCreate = false;
     }
 
     if(this.questRequiredBuy && plugin.getLoadedQuests().stream().noneMatch(q -> q.getName().equalsIgnoreCase(this.questBuyShop))) {
 
-      Log.debug("Unable to find Quest: " + this.questBuyShop + ". Disabling Buy requirement.");
+      this.getLogger().warning("Unable to find Quest: " + this.questBuyShop + ". Disabling Buy requirement.");
       this.questRequiredBuy = false;
     }
 
     if(this.questRequiredSell && plugin.getLoadedQuests().stream().noneMatch(q -> q.getName().equalsIgnoreCase(this.questSellShop))) {
 
-      Log.debug("Unable to find Quest: " + this.questSellShop + ". Disabling Buy requirement.");
+      this.getLogger().warning("Unable to find Quest: " + this.questSellShop + ". Disabling Sell requirement.");
       this.questRequiredSell = false;
     }
   }

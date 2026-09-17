@@ -25,15 +25,19 @@ public class PlanHook {
     try {
       if(capabilities.hasCapability("DATA_EXTENSION_TABLES")
          && capabilities.hasCapability("DATA_EXTENSION_VALUES")) {
-        ExtensionService.getInstance().register(new HikariDataExtension(main));
+        final HikariDataExtension extension = new HikariDataExtension(main);
+        ExtensionService.getInstance().register(extension);
+        // kept so onDisable can unregister it — Plan would keep polling the extension
+        // (and its SQL against a closed pool) after this plugin disabled
+        main.setDataExtension(extension);
       } else {
         main.getLogger().severe("Your Plan build doesn't support DATA_EXTENSION_TABLES or DATA_EXTENSION_VALUES capability!");
         Bukkit.getPluginManager().disablePlugin(main);
       }
-    } catch(IllegalStateException planIsNotEnabled) {
-      // Plan is not enabled, handle exception
-    } catch(IllegalArgumentException dataExtensionImplementationIsInvalid) {
-      // The DataExtension implementation has an implementation error, handle exception
+    } catch(final IllegalStateException planIsNotEnabled) {
+      main.getLogger().warning("Plan is not enabled; the QuickShop data extension was not registered.");
+    } catch(final IllegalArgumentException dataExtensionImplementationIsInvalid) {
+      main.getLogger().warning("The QuickShop data extension implementation was rejected by Plan: " + dataExtensionImplementationIsInvalid.getMessage());
     }
   }
 

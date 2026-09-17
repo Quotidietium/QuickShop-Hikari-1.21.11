@@ -40,13 +40,24 @@ public class HikariDataExtension implements DataExtension {
   private final Main main;
   private final MetricQuery metricQuery;
   private final DataUtil dataUtil;
-  private final DecimalFormat df = new DecimalFormat("#.00");
 
   public HikariDataExtension(final Main main) {
 
     this.main = main;
     this.dataUtil = new DataUtil(main);
-    this.metricQuery = new MetricQuery(main.getQuickShop(), (SimpleDatabaseHelperV2)main.getQuickShop().getDatabaseHelper());
+    if(!(main.getQuickShop().getDatabaseHelper() instanceof final SimpleDatabaseHelperV2 helper)) {
+      // a foreign database helper implementation cannot serve these queries — fail
+      // registration loudly instead of blowing up the provider thread with a CCE
+      throw new IllegalArgumentException("QuickShop-Hikari Plan extension requires the V2 database helper, got "
+                                             + main.getQuickShop().getDatabaseHelper().getClass().getName());
+    }
+    this.metricQuery = new MetricQuery(main.getQuickShop(), helper);
+  }
+
+  /** Plan calls providers from its own thread pool — DecimalFormat is not thread-safe. */
+  private static String formatPrice(final double price) {
+
+    return new DecimalFormat("#.00").format(price);
   }
 
   @Override
@@ -118,8 +129,9 @@ public class HikariDataExtension implements DataExtension {
     for(final Shop shop : main.getQuickShop().getShopManager().getAllShops()) {
       final String owner = PlainTextComponentSerializer.plainText().serialize(shop.ownerName());
       final String item = dataUtil.getItemName(shop.getItem()) + " x" + shop.getShopStackingAmount();
-      String price = df.format(shop.getPrice());
-      if(main.getQuickShop().getEconomyManager().provider() != null) {
+      String price = formatPrice(shop.getPrice());
+      // unloaded worlds answer getWorld() with null — that NPE failed the whole tab
+      if(main.getQuickShop().getEconomyManager().provider() != null && shop.bukkitLocation().getWorld() != null) {
         price = main.getQuickShop().getEconomyManager().provider().format(BigDecimal.valueOf(shop.getPrice()), shop.bukkitLocation().getWorld().getName());
       }
 
@@ -157,6 +169,10 @@ public class HikariDataExtension implements DataExtension {
       //noinspection deprecation
       case PURCHASE, PURCHASE_BUYING_SHOP, PURCHASE_SELLING_SHOP -> true;
       default -> false;
+    }).filter(record->{
+      // this is the per-player tab: the query returned global rows and the parameter
+      // was ignored, showing every player's purchase history on everyone's Plan page
+      return record.getPlayer() != null && record.getPlayer().equalsIgnoreCase(playerUUID.toString());
     }).toList();
     try {
       final LinkedHashMap<ShopMetricRecord, DataRecord> recordsMapped = this.metricQuery.mapToDataRecord(records);
@@ -185,8 +201,8 @@ public class HikariDataExtension implements DataExtension {
     for(final Shop shop : main.getQuickShop().getShopManager().getAllShops(playerUUID)) {
 
       final String item = dataUtil.getItemName(shop.getItem()) + " x" + shop.getShopStackingAmount();
-      String price = df.format(shop.getPrice());
-      if(main.getQuickShop().getEconomyManager().provider() != null) {
+      String price = formatPrice(shop.getPrice());
+      if(main.getQuickShop().getEconomyManager().provider() != null && shop.bukkitLocation().getWorld() != null) {
         price = shop.format(shop.bukkitLocation().getWorld().getName());
       }
 

@@ -20,6 +20,9 @@ public final class Main extends JavaPlugin implements Listener {
   private final DiscountStatusManager discountStatusManager = new DiscountStatusManager();
   private QuickShop plugin;
   private DiscountCodeManager codeManager;
+  private com.tcoded.folialib.wrapper.task.WrappedTask cleanupTask;
+  private com.tcoded.folialib.wrapper.task.WrappedTask saveTask;
+  private CommandContainer commandContainer;
 
   @Override
   public void onLoad() {
@@ -30,7 +33,32 @@ public final class Main extends JavaPlugin implements Listener {
   @Override
   public void onDisable() {
 
-    codeManager.saveDatabase();
+    // onEnable may have aborted before the manager exists (init IOException → disablePlugin)
+    if(codeManager != null) {
+      // timers must stop with the plugin: they keep touching the disabled plugin's
+      // state (and stack up across PlugMan-style disable/enable cycles)
+      if(cleanupTask != null) {
+        cleanupTask.cancel();
+        cleanupTask = null;
+      }
+      if(saveTask != null) {
+        saveTask.cancel();
+        saveTask = null;
+      }
+      codeManager.saveDatabase();
+    }
+    if(commandContainer != null) {
+      plugin.getCommandManager().unregisterCmd(commandContainer);
+      commandContainer = null;
+    }
+    // registerPermission appends without dedupe — without the unregister, every
+    // disable/enable cycle duplicated the four group entries
+    if(plugin != null) {
+      plugin.getShopPermissionManager().unregisterPermission(BuiltInShopPermissionGroup.ADMINISTRATOR.getNamespacedNode(), this, "discount_code_create");
+      plugin.getShopPermissionManager().unregisterPermission(BuiltInShopPermissionGroup.ADMINISTRATOR.getNamespacedNode(), this, "discount_code_use");
+      plugin.getShopPermissionManager().unregisterPermission(BuiltInShopPermissionGroup.EVERYONE.getNamespacedNode(), this, "discount_code_use");
+      plugin.getShopPermissionManager().unregisterPermission(BuiltInShopPermissionGroup.STAFF.getNamespacedNode(), this, "discount_code_use");
+    }
     HandlerList.unregisterAll((Plugin)this);
   }
 
@@ -51,19 +79,19 @@ public final class Main extends JavaPlugin implements Listener {
     plugin.getShopPermissionManager().registerPermission(BuiltInShopPermissionGroup.ADMINISTRATOR.getNamespacedNode(), this, "discount_code_use");
     plugin.getShopPermissionManager().registerPermission(BuiltInShopPermissionGroup.EVERYONE.getNamespacedNode(), this, "discount_code_use");
     plugin.getShopPermissionManager().registerPermission(BuiltInShopPermissionGroup.STAFF.getNamespacedNode(), this, "discount_code_use");
-    QuickShop.folia().getScheduler().runTimerAsync(()->codeManager.cleanExpiredCodes(), 1L, 20 * 60 * 30);
-    QuickShop.folia().getScheduler().runTimerAsync(()->codeManager.saveDatabase(), 1L, 20 * 60 * 15);
+    cleanupTask = QuickShop.folia().getScheduler().runTimerAsync(()->codeManager.cleanExpiredCodes(), 1L, 20 * 60 * 30);
+    saveTask = QuickShop.folia().getScheduler().runTimerAsync(()->codeManager.saveDatabase(), 1L, 20 * 60 * 15);
     getLogger().info("Registering the listeners...");
     Bukkit.getPluginManager().registerEvents(this, this);
     Bukkit.getPluginManager().registerEvents(new MainListener(this), this);
-    plugin.getCommandManager().registerCmd(
-            CommandContainer
-                    .builder()
-                    .prefix("discount")
-                    .description((locale)->plugin.text().of("addon.discount.commands.discount.description").forLocale(locale))
-                    .permission("quickshopaddon.discount.use")
-                    .executor(new DiscountCommand(this, plugin))
-                    .build());
+    commandContainer = CommandContainer
+            .builder()
+            .prefix("discount")
+            .description((locale)->plugin.text().of("addon.discount.commands.discount.description").forLocale(locale))
+            .permission("quickshopaddon.discount.use")
+            .executor(new DiscountCommand(this, plugin))
+            .build();
+    plugin.getCommandManager().registerCmd(commandContainer);
   }
 
   public DiscountStatusManager getStatusManager() {

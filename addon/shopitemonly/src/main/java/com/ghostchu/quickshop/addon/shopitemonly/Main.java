@@ -82,9 +82,12 @@ public final class Main extends JavaPlugin implements Listener {
     if(pendingForRemoval.isEmpty()) {
       return;
     }
+    // Location.add mutates in place — dropping N items used to stack them into a rising
+    // column (+1, +2, +3... blocks above the container); one fixed drop point for all
+    final Location dropLocation = invLocation.clone().add(0, 1, 0);
     for(final ItemStack item : pendingForRemoval) {
       inventory.remove(item);
-      invLocation.getWorld().dropItemNaturally(invLocation.add(0, 1, 0), item);
+      invLocation.getWorld().dropItemNaturally(dropLocation, item);
     }
     plugin.text().of(event.getPlayer(), "addon.shopitemonly.message", pendingForRemoval.size()).send();
   }

@@ -13,6 +13,7 @@ public final class Main extends JavaPlugin implements Listener {
 
   static Main instance;
   private QuickShop plugin;
+  private CommandContainer commandContainer;
 
   @Override
   public void onLoad() {
@@ -23,6 +24,12 @@ public final class Main extends JavaPlugin implements Listener {
   @Override
   public void onDisable() {
 
+    // without the unregister, a PlugMan-style disable/enable cycle stacks a second
+    // "list" container whose executor still references the disabled plugin instance
+    if(commandContainer != null && plugin != null) {
+      plugin.getCommandManager().unregisterCmd(commandContainer);
+      commandContainer = null;
+    }
     HandlerList.unregisterAll((Plugin)this);
   }
 
@@ -33,14 +40,14 @@ public final class Main extends JavaPlugin implements Listener {
     plugin = QuickShop.getInstance();
     getLogger().info("Registering the per shop permissions...");
     Bukkit.getPluginManager().registerEvents(this, this);
-    plugin.getCommandManager().registerCmd(
-            CommandContainer
-                    .builder()
-                    .prefix("list")
-                    .description((locale)->plugin.text().of("addon.list.commands.list").forLocale(locale))
-                    .selectivePermission("quickshopaddon.list.self")
-                    .selectivePermission("quickshopaddon.list.other")
-                    .executor(new SubCommand_List(plugin))
-                    .build());
+    commandContainer = CommandContainer
+            .builder()
+            .prefix("list")
+            .description((locale)->plugin.text().of("addon.list.commands.list").forLocale(locale))
+            .selectivePermission("quickshopaddon.list.self")
+            .selectivePermission("quickshopaddon.list.other")
+            .executor(new SubCommand_List(plugin))
+            .build();
+    plugin.getCommandManager().registerCmd(commandContainer);
   }
 }

@@ -47,6 +47,9 @@ public class SubCommand_DisplayControl implements CommandHandler<Player> {
       try {
         final Integer i = plugin.getDatabaseHelper().setDisplayDisableForPlayer(sender.getUniqueId(), optionFinCopy);
         Log.debug("Execute DisplayToggle with id " + i + " affected");
+        // the in-memory map only loads at pre-login — mirror the change or the toggle
+        // silently does nothing until the player re-logs
+        plugin.updateDisplayOption(sender.getUniqueId(), optionFinCopy);
         qs.text().of(sender, "addon.displaycontrol.toggle", optionFinCopy.name()).send();
       } catch(SQLException e) {
         qs.text().of(sender, "addon.displaycontrol.toggle-exception").send();

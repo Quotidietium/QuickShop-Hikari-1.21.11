@@ -12,6 +12,7 @@ import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.logger.Log;
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteStreams;
+import com.tcoded.folialib.wrapper.task.WrappedTask;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -40,6 +41,8 @@ public final class Main extends JavaPlugin implements Listener, PluginMessageLis
   private final Map<UUID, DisplayOption> playerDisplayStatus = new ConcurrentHashMap<>();
   private QuickShop plugin;
   private DisplayControlDatabaseHelper databaseHelper;
+  private WrappedTask cleanupTask;
+  private CommandContainer commandContainer;
 
   @Override
   public void onLoad() {
@@ -50,6 +53,14 @@ public final class Main extends JavaPlugin implements Listener, PluginMessageLis
   @Override
   public void onDisable() {
 
+    if(cleanupTask != null) {
+      cleanupTask.cancel();
+      cleanupTask = null;
+    }
+    if(commandContainer != null && plugin != null) {
+      plugin.getCommandManager().unregisterCmd(commandContainer);
+      commandContainer = null;
+    }
     HandlerList.unregisterAll((Plugin)this);
   }
 
@@ -66,13 +77,19 @@ public final class Main extends JavaPlugin implements Listener, PluginMessageLis
       return;
     }
     Bukkit.getPluginManager().registerEvents(this, this);
-    QuickShop.folia().getScheduler().runTimerAsync(()->this.playerClientMapping.entrySet().removeIf(e->Bukkit.getPlayer(e.getKey()) == null), 60 * 20 * 60, 60 * 20 * 60);
-    plugin.getCommandManager().registerCmd(CommandContainer.builder()
-                                                   .prefix("displaycontrol")
-                                                   .permission("quickshopaddon.displaycontrol.use")
-                                                   .description((locale)->plugin.text().of("addon.displaycontrol.command.displaycontrol").forLocale(locale))
-                                                   .executor(new SubCommand_DisplayControl(plugin, this))
-                                                   .build());
+    cleanupTask = QuickShop.folia().getScheduler().runTimerAsync(()->{
+      // both maps: pre-login entries never clear for players whose join was refused
+      // after pre-login (ban/full), and client mappings outlive relogs otherwise
+      this.playerClientMapping.entrySet().removeIf(e->Bukkit.getPlayer(e.getKey()) == null);
+      this.playerDisplayStatus.entrySet().removeIf(e->Bukkit.getPlayer(e.getKey()) == null);
+    }, 60 * 20 * 60, 60 * 20 * 60);
+    commandContainer = CommandContainer.builder()
+            .prefix("displaycontrol")
+            .permission("quickshopaddon.displaycontrol.use")
+            .description((locale)->plugin.text().of("addon.displaycontrol.command.displaycontrol").forLocale(locale))
+            .executor(new SubCommand_DisplayControl(plugin, this))
+            .build();
+    plugin.getCommandManager().registerCmd(commandContainer);
     getLogger().info("BungeeCord: " + Util.checkIfBungee());
     if(Util.checkIfBungee()) {
       getLogger().info("Detected BungeeCord, register the BungeeCord client information forward module, you will need install Compat-BungeeCord-Geyser module to make this feature work.");
@@ -119,6 +136,15 @@ public final class Main extends JavaPlugin implements Listener, PluginMessageLis
   public DisplayControlDatabaseHelper getDatabaseHelper() {
 
     return databaseHelper;
+  }
+
+  /**
+   * Applies a display-option change to the in-memory map. The map was only loaded at
+   * pre-login, so without this the toggle command took effect after re-login only.
+   */
+  public void updateDisplayOption(@NotNull final UUID player, @NotNull final DisplayOption option) {
+
+    this.playerDisplayStatus.put(player, option);
   }
 
   @Override

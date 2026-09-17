@@ -13,8 +13,6 @@ import org.bukkit.command.CommandSender;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -40,8 +38,11 @@ public class DiscountCode {
     this.codeType = codeType;
     this.rate = rate;
     this.maxUsage = maxUsage;
-    this.usages = usages;
-    this.shopScope = shopScope;
+    // the deserialized maps are plain HashMap/HashSet (Gson) — purchases mutate them on
+    // the main thread while the save timer serializes them on an async thread
+    this.usages = new java.util.concurrent.ConcurrentHashMap<>(usages);
+    this.shopScope = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    this.shopScope.addAll(shopScope);
     this.threshold = threshold;
     this.expiredTime = expiredTime;
   }
@@ -54,8 +55,8 @@ public class DiscountCode {
     this.rate = rate;
     this.maxUsage = maxUsage;
     this.threshold = threshold;
-    this.usages = new HashMap<>();
-    this.shopScope = new HashSet<>();
+    this.usages = new java.util.concurrent.ConcurrentHashMap<>();
+    this.shopScope = java.util.concurrent.ConcurrentHashMap.newKeySet();
     this.expiredTime = expiredTime;
   }
 
@@ -96,6 +97,14 @@ public class DiscountCode {
       rate = JsonUtil.getGson().fromJson(data.getRate(), PercentageDiscountRate.class);
     } else {
       rate = JsonUtil.getGson().fromJson(data.getRate(), FixedDiscountRate.class);
+    }
+    if(rate == null) {
+      return null;
+    }
+    // Gson bypasses the constructors' validation, and the command path rejects 0%/100%
+    // rates — a hand-edited data.yml must not smuggle in a "free purchase" code
+    if(rate instanceof PercentageDiscountRate && (rate.apply(100d) <= 0d || rate.apply(100d) >= 100d)) {
+      return null;
     }
     return new DiscountCode(data.getOwner(),
                             data.getCode(),
@@ -175,6 +184,7 @@ public class DiscountCode {
     return usages;
   }
 
+  /** Pure price computation — usage counting happens in {@link #use(UUID)} on trade success. */
   public double apply(@NotNull final UUID player, final double total) {
 
     if(isExpired()) {
@@ -186,13 +196,17 @@ public class DiscountCode {
     if(getRemainsUsage(player) - 1 < 0) {
       return total;
     }
-    if(usages.containsKey(player)) {
-      final int usage = usages.get(player);
-      usages.put(player, usage + 1);
-    } else {
-      usages.put(player, 1);
-    }
     return rate.apply(total);
+  }
+
+  /**
+   * Records one use against the per-player quota. Called only after a trade actually
+   * committed — burning a use on a failed purchase made maxUsage=1 codes vanish without
+   * the player ever getting the discount.
+   */
+  public void use(@NotNull final UUID player) {
+
+    usages.merge(player, 1, Integer::sum);
   }
 
   public boolean isExpired() {
@@ -243,7 +257,9 @@ public class DiscountCode {
     if(usages.containsKey(uuid)) {
       usage = usages.get(uuid);
     }
-    if(usage + 1 > maxUsage) {
+    // maxUsage == -1 means unlimited — `usage + 1 > -1` was trivially true and rejected
+    // every unlimited code (the create command's own default!) as REACHED_THE_LIMIT
+    if(maxUsage != -1 && usage + 1 > maxUsage) {
       return ApplicableType.REACHED_THE_LIMIT;
     }
     final ApplicableType type = switch(codeType) {

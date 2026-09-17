@@ -77,7 +77,7 @@ public final class Main extends JavaPlugin implements Listener {
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void shopClick(final ShopClickEvent event) {
 
-    if(event.isPhase(Phase.POST)) {
+    if(event.isPhase(Phase.POST) && event.shop().isPresent()) {
 
       final Shop shop = event.shop().get();
       final ConfigurationSection storage = shop.getExtra(this);

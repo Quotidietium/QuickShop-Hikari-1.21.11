@@ -91,6 +91,12 @@ public class MetricQuery {
         continue;
       }
       final DataRecord dataRecord = databaseHelper.getDataRecord(dataId).get();
+      if(dataRecord == null) {
+        // a purchase log row whose data row was purged: without the guard the null
+        // dereference inside the table render failed the whole provider
+        Log.debug("dataRecord is null for dataId " + dataId);
+        continue;
+      }
       dataRecords.put(metricRecord, dataRecord);
     }
     return dataRecords;
@@ -105,7 +111,7 @@ public class MetricQuery {
             .inTable(databaseHelper.getPrefix() + "log_purchase")
             .addTimeCondition("time", startTime, null)
             .selectColumns()
-            .setLimit(1000)
+            .setLimit((int)Math.max(1, limit))
             .orderBy("id", !descending).build().execute()) {
       final ResultSet set = query.getResultSet();
       while(set.next()) {

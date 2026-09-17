@@ -219,7 +219,9 @@ public class DiscountCommand implements CommandHandler<CommandSender> {
     final Component appliedTo = quickshop.text().of(sender, "addon.discount.code-type." + code.getCodeType().name()).forLocale();
     final String remainsUsage;
     final int remains = code.getRemainsUsage(((Player)sender).getUniqueId());
-    if(remains == -1) {
+    // getRemainsUsage reports unlimited as Integer.MAX_VALUE (never -1 — that branch
+    // was dead and unlimited codes displayed as 2147483647)
+    if(remains == Integer.MAX_VALUE || remains < 0) {
       remainsUsage = "Inf.";
     } else {
       remainsUsage = String.valueOf(remains);
@@ -342,7 +344,7 @@ public class DiscountCommand implements CommandHandler<CommandSender> {
   public @Nullable List<String> onTabComplete(@NotNull final CommandSender sender, @NotNull final String commandLabel, @NotNull final String[] cmdArg) {
 
     if(cmdArg.length == 1) {
-      return Arrays.asList("install", "uninstall", "create", "remove", "info", "config", "list");
+      return Arrays.asList("install", "uninstall", "create", "remove", "info", "config", "list", "listall");
     }
     if(cmdArg.length == 2) {
       return switch(cmdArg[0]) {
