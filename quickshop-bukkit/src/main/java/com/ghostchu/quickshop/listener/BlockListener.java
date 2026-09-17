@@ -90,6 +90,17 @@ public class BlockListener extends AbstractProtectionListener {
         return;
       }
 
+      // Fail-safe authorization gate: with shop.lock=true LockListener (LOW) already
+      // cancelled unauthorized breaks (this MONITOR handler then never runs), but with
+      // shop.lock=false that listener is unregistered — without this check ANY survival
+      // player (or creative player without permission) deletes any shop by breaking it
+      if(!shop.playerAuthorize(p.getUniqueId(), BuiltInShopPermission.DELETE)
+         && !plugin.perm().hasPermission(p, "quickshop.other.destroy")) {
+        e.setCancelled(true);
+        plugin.text().of(p, "no-permission").send();
+        return;
+      }
+
       // Cancel their current menu... Doesnt cancel other's menu's.
       final Info action = super.getPlugin().getShopManager().getInteractiveManager().get(p.getUniqueId());
 

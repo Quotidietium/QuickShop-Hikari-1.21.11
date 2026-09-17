@@ -28,6 +28,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.inventory.EquipmentSlot;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -54,6 +55,12 @@ public class PlayerLockClickListener extends AbstractProtectionListener {
   @EventHandler(ignoreCancelled = true)
   public void onClick(final PlayerInteractEvent e) {
 
+    // the same right click fires this event for the main hand and again for the off hand;
+    // processing both doubled the lock message and added the UUID to inShop twice (the
+    // queue allows duplicates but InventoryClose/Quit remove only one occurrence)
+    if(e.getHand() != EquipmentSlot.HAND) {
+      return;
+    }
     final Block b = e.getClickedBlock();
 
     if(b == null) {

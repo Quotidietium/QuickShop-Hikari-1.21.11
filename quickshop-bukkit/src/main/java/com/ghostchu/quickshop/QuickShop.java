@@ -47,6 +47,7 @@ import com.ghostchu.quickshop.listener.ChatListener;
 import com.ghostchu.quickshop.listener.ChunkListener;
 import com.ghostchu.quickshop.listener.CustomInventoryListener;
 import com.ghostchu.quickshop.listener.DisplayProtectionListener;
+import com.ghostchu.quickshop.listener.EconomySetupListener;
 import com.ghostchu.quickshop.listener.InternalListener;
 import com.ghostchu.quickshop.listener.LockListener;
 import com.ghostchu.quickshop.listener.PlayerListener;
@@ -1065,6 +1066,10 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     new PlayerLockClickListener(this).register();
     new MetricListener(this).register();
     new InternalListener(this).register();
+    // the "we have a listener to listen the ServiceRegisterEvent" promise next to the
+    // delayed economy load — VaultProvider covers Vault's service events itself, this
+    // covers non-Vault bridges that enable after our 1-tick delayed load
+    new EconomySetupListener(this).register();
   }
 
   private void registerDisplayItem() {

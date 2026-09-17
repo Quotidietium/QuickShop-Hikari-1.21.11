@@ -12,8 +12,9 @@ public abstract class AbstractProtectionListener extends AbstractQSListener {
 
   protected AbstractProtectionListener(@NotNull final QuickShop plugin) {
 
+    // AbstractQSListener's constructor already registers this instance with the reload
+    // manager; a second registration ran every reloadModule twice
     super(plugin);
-    plugin.getReloadManager().register(this);
   }
 
   public QuickShop getPlugin() {

@@ -22,7 +22,6 @@ import org.bukkit.plugin.RegisteredListener;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -30,7 +29,9 @@ import java.util.logging.Level;
 public class QSEventManager implements QuickEventManager, Listener, Reloadable {
 
   private final QuickShop plugin;
-  private final List<ListenerContainer> ignoredListener = new ArrayList<>();
+  // fireEvent iterates without holding the rescan lock while async QS events dispatch on
+  // worker threads — a plain ArrayList here races plugin enable/disable rescans (CME)
+  private final List<ListenerContainer> ignoredListener = new java.util.concurrent.CopyOnWriteArrayList<>();
 
   public QSEventManager(final QuickShop plugin) {
 

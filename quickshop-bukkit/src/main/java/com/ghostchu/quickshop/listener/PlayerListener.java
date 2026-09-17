@@ -193,6 +193,11 @@ public class PlayerListener extends AbstractQSListener {
   @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
   public void onDyeing(final PlayerInteractEvent e) {
 
+    // one right click reports both hands — process only the main one (the off-hand
+    // duplicate re-ran this whole probe, doubling the debug log)
+    if(e.getHand() != EquipmentSlot.HAND) {
+      return;
+    }
     if(e.getAction() != Action.RIGHT_CLICK_BLOCK || e.getItem() == null || !Util.isDyes(e.getItem().getType())) {
       return;
     }

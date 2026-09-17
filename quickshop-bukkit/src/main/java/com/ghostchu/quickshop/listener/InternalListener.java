@@ -47,9 +47,10 @@ public class InternalListener extends AbstractQSListener {
 
   public InternalListener(final QuickShop plugin) {
 
+    // AbstractQSListener's constructor already registers this instance with the reload
+    // manager; a second registration ran every reloadModule twice
     super(plugin);
     this.plugin = plugin;
-    plugin.getReloadManager().register(this);
     readConfig();
   }
 

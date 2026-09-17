@@ -240,7 +240,9 @@ public class ShopProtectionListener extends AbstractProtectionListener {
     final List<Block> affectedBlocks = event.getBlocks();
     for(final Block block : affectedBlocks) {
 
-      if(getShopNature(block.getLocation(), true) != null) {
+      // pistons are hot in farms — the cached lookup (same one the hopper path uses)
+      // answers repeat probes without the double hash + attached resolution per block
+      if(getShopRedstone(block.getLocation(), true) != null) {
         event.setCancelled(true);
         return;
       }
@@ -253,7 +255,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
     final List<Block> affectedBlocks = event.getBlocks();
 
     for(final Block block : affectedBlocks) {
-      if(getShopNature(block.getLocation(), true) != null) {
+      if(getShopRedstone(block.getLocation(), true) != null) {
         event.setCancelled(true);
         return;
       }

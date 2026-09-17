@@ -76,8 +76,10 @@ public class ChunkListener extends AbstractQSListener {
       // same dead null guard as onChunkLoad: getShops never returns null
       return;
     }
-    for(final Shop shop : inChunk.values()) {
-      try(PerfMonitor ignored = new PerfMonitor("Unload shops in chunk " + e.getChunk(), Duration.of(500, ChronoUnit.MILLIS))) {
+    // one monitor for the whole unload (mirrors onChunkLoad): a per-shop instance plus
+    // the chunk's toString cost nothing but was paid for every shop in the chunk
+    try(PerfMonitor ignored = new PerfMonitor("Unload shops in chunk " + e.getChunk(), Duration.of(500, ChronoUnit.MILLIS))) {
+      for(final Shop shop : inChunk.values()) {
         if(shop.isLoaded()) {
           plugin.getShopManager().unloadShop(shop);
         }
