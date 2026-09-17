@@ -314,17 +314,7 @@ translation-contributors: '开发贡献者：Timtower, Netherfoam, KaiNoMood Jac
 empty-success: <green>清空商店成功
 taxaccount-set: <green>该商店的税务帐户已设置为 <yellow>{0}
 support-disable-reason:
-  hot-reload: <yellow>热重载不受支持，请重启服务器并再次检查。
-  outdated: <yellow>该版本的QuickShop已过时，在请求帮助之前更新到最新版本！
-  bad-hosts: |-
-    <yellow>该服务器 HOSTS 已被修改，QuickShop 的一些功能需要连接到 Mojang API。
-    在请求支持之前修复HOSTS, Windows 路径 C:\windows\system32\drivers\et\hosts
-    Linux 路径/etc/hosts。
-  privacy: <yellow>该服务器在破解（离线）模式下运行。如果你在代理下运行bukkit服务器，并且在代理上的online-mode=true，请正确配置代理相关设置。
-  modified: <yellow>文件完整性检查失败，此QuickShop构建已被其他人修改。
   consolespamfix-installed: <yellow>检测到 ConsoleSpamFix 已安装，它将隐藏异常详情，在请求帮助前暂时禁用它。
-  authlib-injector-detected: <yellow>该服务器在第三方authlib提供商（如authlib-injector）下运行。
-  unsupported-server-software: <yellow>不受支持的服务端核心，任何修改过的混合服务端核心都不支持，包括MCPC, Cauldron, CatServer, Mohist, Magma, Fukkit, Cardboard等。
 supertool-is-disabled: <red>超级工具已被禁用，现已不能使用超级工具破坏任何商店。
 unknown-owner: 未知所有者
 restricted-prices: '<red>物品 {0} 的价格限制为 {1}（包含）到{2}（包含）'
@@ -393,6 +383,7 @@ controlpanel:
   lock: '<yellow>商店锁: <aqua>{0} <yellow>[<bold><light_purple>切换</light_purple></bold>]'
   mode-selling: '<green>商店模式: <aqua>出售 <yellow>[<bold><light_purple>更改</light_purple></bold>]'
   setowner-hover: <yellow>点击来修改店主
+  setowner-uuid: '<green>所有者: <aqua>{0} <white>({1}) <yellow>[<bold><light_purple>修改</light_purple></bold>]'
   mode-buying: '<green>商店模式: <aqua>收购 <yellow>[<bold><light_purple>更改</light_purple></bold>]'
   item: '<green>商店物品: {0} <yellow>[<bold><light_purple>修改</light_purple></bold>]'
   unlimited: '<green>无限模式: {0} <yellow>[<bold><light_purple>切换</light_purple></bold>]'
@@ -877,40 +868,6 @@ compat:
   advancedchests:
     created: <green>您已成功在 AdvancedChests 里创建了一个商店！
     permission-denied: <red>抱歉！您没有权限在AdvancedChests上创建商店！
-suite:
-  dynmap:
-    title: '{0} - {1} - {2}'
-    description: |-
-      物品: {0}
-      所有者: {1}
-      类型: {2} {3}
-      价格: {4}
-      位置: {5} {6}, {7}, {8}
-      空间: {9}
-      库存: {10}
-  limited:
-    command-description: <yellow>限制玩家在时间段内的交易。
-    reach-the-quota-limit: <red>您已达到该商店的交易限制（{0}/{1}）。
-    quota-reset-countdown: <yellow>此商店的交易限制将在 {0} 重置。
-    quota-reset-player-successfully: <green>已成功重置该商店中玩家 {0} 的交易限制
-    quota-reset-everybody-successfully: <green>已成功地重置此商店中所有人的交易限制。
-    quota-setup: <green>该商店的交易限制已设置成功！
-    quota-remove: <green>该商店的交易限制已成功重置！
-    subtitles:
-      title: <green>交易成功
-      subtitle: <aqua>您还可以在这个商店交易 <yellow>{0}</yellow> 个物品
-  list:
-    command-description: <yellow>列出自己或其他玩家拥有的所有商店
-    table-prefix: <yellow>您在此服务器中拥有 <aqua>{0}</aqua> 个商店。
-    entry-syntax: <aqua>- <yellow>{0}
-    entry-syntax-fallback-name: '<yellow>物品:{0} X:{1}, Y:{2}, Z:{3}, 世界: {4}'
-    hover-text: |-
-      <yellow>{0}
-      <gray>{1} {2}、 {3}、 {4}
-      <aqua>{5} - <yellow>{6}
-      {7} 物品
-  shopitemonly:
-    message: <red>您不能将非商店交易物品放入商店容器中，所有非商店交易的物品都会被扔到地上
 compatibility:
   elitemobs:
     soulbound-disallowed: 你不能交易拥有 EliteMobs 灵魂绑定附魔的物品。

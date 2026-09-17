@@ -45,7 +45,7 @@ public class SubCommand_Paste implements CommandHandler<CommandSender> {
       for(final String s : warningPluginList) {
         if(Bukkit.getPluginManager().getPlugin(s) != null) {
           if(parser.getArgs().stream().noneMatch(str->str.contains("--force"))) {
-            plugin.text().of(sender, "consolespamfix-installed", s).send();
+            plugin.text().of(sender, "support-disable-reason.consolespamfix-installed", s).send();
             return;
           }
         }

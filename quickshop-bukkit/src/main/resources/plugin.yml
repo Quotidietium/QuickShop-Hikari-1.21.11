@@ -127,6 +127,9 @@ permissions:
       quickshop.use: true
       quickshop.watch: true
       quickshop.watch.list: true
+      # ENDER_CHEST ships in the default shop-blocks list — players need this node to
+      # actually create ender chest shops
+      quickshop.create.enderchest: true
   quickshop.moderator:
     description: The permission that provide all moderator need have permissions
     default: op
@@ -142,8 +145,8 @@ permissions:
       quickshop.create.admin: true
       quickshop.history.*: true
       quickshop.transferownership.other: true
-      quickshop.other.changeitem: true
-      quickshop.other.changeamount: true
+      quickshop.other.item: true
+      quickshop.other.amount: true
       quickshop.other.staff: true
       quickshop.other.taxaccount: true
       quickshop.other.empty: true
@@ -172,6 +175,9 @@ permissions:
       default: op
   quickshop.create.double:
     description: Allows a player to create a double shop.
+    default: op
+  quickshop.create.enderchest:
+    description: Allows a player to create shops on ender chests (required by the default shop-blocks list).
     default: op
   quickshop.create.changeprice:
     description: Allows a player to change their shop's price.
@@ -252,7 +258,7 @@ permissions:
     description: Allows exporting the database to a plain file.
     default: op
   quickshop.alerts:
-    description: Recieve cheat alerts, plugin warnings and update notifications.
+    description: Recieve cheat alerts and plugin warnings.
     default: op
   quickshop.about:
     description: Show QuickShop's about message.
@@ -395,3 +401,21 @@ permissions:
   quickshop.self-trade:
     description: Allows a player to trade with their own shops
     default: true
+  quickshop.reload:
+    description: Permission to use /quickshop reload.
+    default: op
+  quickshop.clean:
+    description: Permission to use /quickshop clean.
+    default: op
+  quickshop.lookup:
+    description: Permission to use the lookup interactions.
+    default: op
+  quickshop.toggledisplayall:
+    description: Permission to use /quickshop toggledisplayall.
+    default: op
+  quickshop.toggledisplayall.admin:
+    description: Permission to use /quickshop toggledisplayall on any shop.
+    default: op
+  quickshop.permission.bypass:
+    description: Permission to use /quickshop permission without being a shop staff member.
+    default: op

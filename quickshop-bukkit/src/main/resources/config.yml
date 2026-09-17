@@ -153,7 +153,7 @@ shop-tag:
 #
 # Note:
 # - This does not affect existing unlimited shops automatically.
-# - You must toggle the shop to unlimited again to apply the change.>>>>>>> hikari
+# - You must toggle the shop to unlimited again to apply the change.
 unlimited-shop-owner-change: false
 
 # Target account used by unlimited-shop-owner-change.
@@ -184,10 +184,6 @@ logging:
   # 1 = database
   location: 1
 
-# Force Bukkit chat handler.
-# Related issue: https://github.com/KaiKikuchi/QuickShop/issues/10
-force-bukkit-chat-handler: false
-
 # Tab completion source:
 # false = Only online players (faster)
 # true  = All known offline players (may lag on large servers)
@@ -202,9 +198,6 @@ decimal-format: "#,###.##"
 
 # Send alerts if someone tries to exploit display item behavior.
 send-display-item-protection-alert: false
-
-# Send alerts if someone tries to steal from a shop.
-send-shop-protection-alert: false
 
 # Database Configuration
 # QuickShop supports:
@@ -532,10 +525,6 @@ shop:
   # NOTE: Only one enchantment is shown, chosen randomly.
   use-enchantment-for-enchanted-book: false
 
-  # Show one potion effect name on the sign (instead of "Potion").
-  # NOTE: Only one effect is shown, chosen randomly.
-  use-effect-for-potion-item: false
-
   # Worlds where shop creation is allowed.
   # If not empty, only worlds in this list can create shops.
   # Takes priority over blacklist-world.
@@ -586,9 +575,6 @@ shop:
   protection-checking-listener-blacklist:
     - ignored_listener
 
-  # Maximum number of shops checked per batch during existence checks.
-  max-shops-checks-in-once: 100
-
   # Apply custom name to spawned DisplayItem entities.
   display-item-use-name: false
 
@@ -628,9 +614,6 @@ shop:
     # 1 = Ask Bukkit to load the ItemStack directly
     method: 0
 
-  # If a block/entity triggers the protection system, remove it.
-  remove-protection-trigger: true
-
   # Allow trading multiple stacks in one transaction (bulk trades).
   allow-stacks: false
 
@@ -669,10 +652,6 @@ database-loading-blacklist-worlds:
 
 # Plugin Integrations
 plugin:
-  # If Multiverse-Core is present, QuickShop may attempt to load worlds that are missing.
-  # This may throw exceptions and then attempt to repair shop data.
-  Multiverse-Core: true
-
   # PlaceholderAPI integration settings.
   PlaceHolderAPI:
     enable: true
@@ -845,10 +824,7 @@ purge:
   skip-op: true
 
 # Debug Settings
-# Disabling debug logging improves performance but reduces support visibility.
 debug:
-  disable-debuglogger: false
-  shop-deletion: false
   delete-corrupt-shops: false
 
 # Command aliases for /qs main command.
@@ -861,10 +837,6 @@ custom-commands:
 # Command aliases for /qs sub-commands.
 custom-subcommands:
   help: help
-
-# Internal flag used to detect damaged configs.
-# Leave this false.
-config-damaged: false
 
 # Fixed translation overrides.
 # Example:
@@ -897,15 +869,10 @@ uuid-lookup:
 # Controls privacy-related features and reporting categories.
 #
 # Use `/quickshop paste` and review the "Privacy Logs" section to audit.
-# To fully disable bStats, edit: /plugins/bStats/config.yml
 privacy:
   type:
     # Diagnostics: /qs paste + error reporting systems
     DIAGNOSTIC: true
-    # bStats metrics with prefix "Statistic - "
-    STATISTIC: true
-    # bStats metrics with prefix "Research - "
-    RESEARCH: true
   module:
   #  SOME_MODULE_NAME_HERE: false
 

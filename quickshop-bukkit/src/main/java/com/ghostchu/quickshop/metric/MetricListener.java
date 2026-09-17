@@ -16,9 +16,25 @@ import org.bukkit.event.Listener;
 
 public class MetricListener extends AbstractQSListener implements Listener {
 
+  /** Config promises "Disabling stops transaction metric recording" — honor it on reload too. */
+  private volatile boolean metricEnabled = true;
+
   public MetricListener(final QuickShop plugin) {
 
     super(plugin);
+    readConfig();
+  }
+
+  private void readConfig() {
+
+    this.metricEnabled = plugin.getConfig().getBoolean("transaction-metric.enable", true);
+  }
+
+  @Override
+  public com.ghostchu.simplereloadlib.ReloadResult reloadModule() throws Exception {
+
+    readConfig();
+    return super.reloadModule();
   }
 
   @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
@@ -88,6 +104,9 @@ public class MetricListener extends AbstractQSListener implements Listener {
    */
   private void metric(final ShopMetricRecord record) {
 
+    if(!metricEnabled) {
+      return;
+    }
     final MetricBatcher batcher = plugin.getMetricBatcher();
     if(batcher != null) {
       batcher.offer(record);

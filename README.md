@@ -26,9 +26,7 @@
 
 [clearlagg]: https://www.spigotmc.org/resources/68271/
 
-[worldguard]: https://dev.bukkit.org/projects/worldguard
 
-[nocheatplus]: https://www.spigotmc.org/resources/nocheatplus.26/
 
 [openinv]: https://dev.bukkit.org/projects/openinv
 
@@ -41,10 +39,6 @@
 [googlejava]: https://google.github.io/styleguide/javaguide.html
 
 [adoptium]: https://adoptium.net/
-
-[bStats-site]: https://bstats.org
-
-[bStats-plugin]: https://bstats.org/plugin/bukkit/QuickShop-Hikari/14281
 
 <!-- Images/Badges -->
 
@@ -67,8 +61,6 @@
 [JavaVersion]: https://img.shields.io/badge/Java-Versions_21+_-orange.svg
 
 [MinecraftVersion]: https://img.shields.io/badge/Minecraft-Java%20Edition%201.20%2B-blueviolet
-
-[bStatsImage]: https://bstats.org/signatures/bukkit/QuickShop-Hikari.svg
 
 [Ver]: https://img.shields.io/spiget/version/100125?label=version
 
@@ -180,10 +172,6 @@ You can download optional modules [here][modrinth] for compatibility with other 
 
 - Stops clearlagg from deleting the Display Item on any Shop.
 
-### [NoCheatPlus][nocheatplus]
-
-- Prevents NCP's anti-cheat checks from triggering when creating a shop.
-
 ### [OpenInv][openinv]
 
 - Allow the usage of a Player's Ender Chest as Shop inventory by using `/quickshop echest`.
@@ -191,10 +179,6 @@ You can download optional modules [here][modrinth] for compatibility with other 
 ### [WorldEdit][worldedit]
 
 - Removes Shops that got deleted during a WorldEdit operation, to reduce "Ghost Shops".
-
-### [WorldGuard][worldguard]
-
-- Flag-based shop control.
 
 ## Contributing
 
@@ -222,21 +206,14 @@ If you make good changes to the project would we apreciate Pull requests for the
 To compile and debug QuickShop, please do the following steps:
 
 1. Make sure you're using Java 21. You can get the latest Java versions from the [Adoptium project][adoptium].
-2. Compile the main project without a signature by using `mvn install -Pgithub` with the GitHub Profile selected.
+2. Compile the main project by using `mvn install`.
 3. Put the compiled jar into your Test-server's `plugins` folder, start the server and begin debugging!
 
 To compile the QuickShop and debug it by yourself, please follow these steps:
 
 1. Make sure you're using Java21+ JDK in your PATH.
-2. Compile main-project without signature by using profile: `mvn install -Pgithub` with github profile selected.
+2. Compile main-project by using: `mvn install`.
 3. Start your server and go on.
-
-## bStats
-
-QuickShop-Hikari collects certain statistic through [bStats][bstats-site].  
-You may opt-out by setting `privacy.type.STATISTIC` and `privacy.type.RESEARCH` to `true` in the config.yml.
-
-[![bStatsImage]][bStats-plugin]
 
 ## License
 

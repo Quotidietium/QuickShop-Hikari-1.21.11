@@ -378,25 +378,7 @@ translation-contributors: 'Contributors: Timtower, Netherfoam, KaiNoMood, Mgazul
 empty-success: <green>Successfully emptied shop
 taxaccount-set: <green>This shop's tax account has been set to <yellow>{0}
 support-disable-reason:
-  hot-reload: <yellow>Unsupported hot-reload. Restart the server and check again.
-  outdated: <yellow>This version of QuickShop is outdated. Update before requesting
-    support!
-  bad-hosts: |-
-    <yellow>The server's HOSTS have been modified and certain QuickShop-functions require a connection to the Mojang API to work. Please fix the HOSTS settings before asking for support.
-    Windows: C:\\windows\\system32\\drivers\\etc\\hosts
-    Linux: /etc/hosts
-  privacy: <yellow>This server is running in Cracked (Offline) mode. If you're running
-    the server under a proxy and online mode is set to true in the proxy, configure
-    the proxy-related settings correctly.
-  modified: <yellow>File-integrity-check failed. This QuickShop build has been modified
-    by others.
   consolespamfix-installed: <yellow>ConsoleSpamFix is installed. It will hide Exception-details.
-    Disable it temporarily during support requests.
-  authlib-injector-detected: <yellow>This server runs with a 3rd-party Auth-library
-    provided such as AuthLib-Injector.
-  unsupported-server-software: <yellow>Unsupported Server software. Any modded Hybrid-Server
-    software is not supported, including MCPC, Cauldron, CatServer, Mohis, Magma,
-    Fukkit, Cardboard, etc.
 supertool-is-disabled: <red>Super tool is disabled. Cannot break any shops.
 unknown-owner: Unknown
 restricted-prices: '<red>Restricted price for {0}: Min {1}, max {2}'
@@ -473,6 +455,7 @@ controlpanel:
   lock: '<yellow>Shop lock: <aqua>{0} <yellow>[<bold><light_purple>Toggle</light_purple></bold>]'
   mode-selling: '<green>Shop mode: <aqua>Selling <yellow>[<bold><light_purple>Change</light_purple></bold>]'
   setowner-hover: <yellow>Click to switch owner.
+  setowner-uuid: '<green>Owner: <aqua>{0} <white>({1}) <yellow>[<bold><light_purple>Change</light_purple></bold>]'
   mode-buying: '<green>Shop mode: <aqua>Buying <yellow>[<bold><light_purple>Change</light_purple></bold>]'
   item: '<green>Shop Item: {0} <yellow>[<bold><light_purple>Change</light_purple></bold>]'
   unlimited: '<green>Unlimited: {0} <yellow>[<bold><light_purple>Change</light_purple></bold>]'
@@ -1083,44 +1066,6 @@ compat:
     created: <green>You're successfully created a shop on AdvancedChests container!
     permission-denied: <red>Sorry! You don't have the permission to create a shop
       on a AdvancedChests container!
-suite:
-  dynmap:
-    title: '{0} - {1} - {2}'
-    description: |-
-      Item: {0}
-      Owner: {1}
-      Type: {2} {3}
-      Price: {4}
-      Location: {5} {6}, {7}, {8}
-      Space: {9}
-      Stock: {10}
-  limited:
-    command-description: <yellow>Set a limit that restrict the purchase that player
-      can make in period.
-    reach-the-quota-limit: <red>You have reach the purchase limit in this shop ({0}/{1}).
-    quota-reset-countdown: <yellow>The quota in this shop will reset in {0}.
-    quota-reset-player-successfully: <green>The quota for player {0} in this shop
-      has been reset successfully.
-    quota-reset-everybody-successfully: <green>The quota for everyone in this shop
-      has been reset successfully.
-    quota-setup: <green>The purchase restriction now apply to this shop!
-    quota-remove: <green>The purchase restriction now removed from this shop!
-    subtitles:
-      title: <green>Purchase Success
-      subtitle: <aqua>You can purchase <yellow>{0}</yellow> more in this shop
-  list:
-    command-description: <yellow>List all shops owned by yourself or another player.
-    table-prefix: <yellow>You owned total <aqua>{0}</aqua> shops on this server.
-    entry-syntax: <aqua>- <yellow>{0}
-    entry-syntax-fallback-name: '<yellow>Item:{0} X:{1}, Y:{2}, Z:{3}, World: {4}'
-    hover-text: |-
-      <yellow>{0}
-      <gray>{1} {2}, {3}, {4}
-      <aqua>{5} - <yellow>{6}
-      {7} items each stack.
-  shopitemonly:
-    message: <red>You can't put non-shop items into shop container, all non-shop items
-      will dropped at your location.
 compatibility:
   elitemobs:
     soulbound-disallowed: You can't trade item which have EliteMobs Soulbound enchantment.

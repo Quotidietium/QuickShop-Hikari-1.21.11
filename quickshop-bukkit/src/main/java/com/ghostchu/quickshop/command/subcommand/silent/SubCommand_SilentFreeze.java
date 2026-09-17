@@ -27,7 +27,7 @@ public class SubCommand_SilentFreeze extends SubCommand_SilentBase {
 
     if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.SET_SHOPTYPE)
        && !plugin.perm().hasPermission(sender, "quickshop.create.admin")) {
-      plugin.text().of(sender, "not-permission").send();
+      plugin.text().of(sender, "no-permission").send();
       return;
     }
 
