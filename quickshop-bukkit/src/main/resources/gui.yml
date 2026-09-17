@@ -20,7 +20,7 @@
 # Common tags: <bold>, <italic>, <red>, <green>, <yellow>, <aqua>, <gradient:color1:color2>
 # If you wish to use a value from the language file for display names or lore, start your value with "lang:"
 
-version: 5
+version: 6
 
 # ===================
 # GLOBAL STYLE SETTINGS
@@ -338,11 +338,6 @@ history:
     custom-model-data: 0
     slot: 5
   
-  back:
-    material: OAK_DOOR
-    name: "lang:gui.shared.back.display"
-    custom-model-data: 0
-    slot: 49
   
   list-start-slot: 9
 
@@ -386,7 +381,7 @@ browse:
     slot: 2
 
   grouped-item:
-    display: "lang:gui.browse.grouped-item.display"
+    name: "lang:gui.browse.grouped-item.display"
   
   # Filter button - cycles through filter options
   # {0} = current filter

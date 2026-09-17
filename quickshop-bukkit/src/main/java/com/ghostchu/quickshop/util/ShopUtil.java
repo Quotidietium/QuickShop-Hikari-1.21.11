@@ -186,6 +186,13 @@ public class ShopUtil {
         plugin.text().of(user, "not-a-integer", price).send();
         return;
       }
+      // Infinity/NaN (e.g. a GUI chat input like "1e999" parses as BigDecimal but converts
+      // to an infinite double); without this arm the switch falls through and the shop
+      // price is set to the invalid value verbatim
+      case NOT_VALID -> {
+        plugin.text().of(user, "not-a-number", price).send();
+        return;
+      }
     }
 
     ShopPriceEvent event = new ShopPriceEvent(Phase.PRE, shop, shop.getPrice(), price);

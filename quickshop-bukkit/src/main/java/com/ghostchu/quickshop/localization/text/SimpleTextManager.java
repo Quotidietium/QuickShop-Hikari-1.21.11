@@ -187,8 +187,12 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
 
     final File configFile = new File(plugin.getDataFolder(), "color-scheme.yml");
     if(!configFile.exists()) {
-      try {
-        Files.copy(plugin.getJavaPlugin().getResource("color-scheme.yml"), configFile.toPath());
+      try(final java.io.InputStream resource = plugin.getJavaPlugin().getResource("color-scheme.yml")) {
+        if(resource != null) {
+          Files.copy(resource, configFile.toPath());
+        } else {
+          plugin.logger().warn("Bundled color-scheme.yml is missing from the jar; color scheme tags will fall back to white.");
+        }
       } catch(final IOException e) {
         plugin.logger().warn("Failed to copy color-scheme.yml to plugin folder!", e);
       }
@@ -196,9 +200,14 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
     final FileConfiguration colorSchemeYaml = YamlConfiguration.loadConfiguration(configFile);
     final ConfigurationSection colorSchemeSection = colorSchemeYaml.getConfigurationSection("color-scheme");
     if(colorSchemeSection == null) {
-      tagResolvers = new TagResolver[0];
+      // an explicitly-passed resolver set REPLACES MiniMessage's defaults, so an empty
+      // array here used to disable <yellow>/<bold>/... globally — standard tags must
+      // survive a missing or damaged color-scheme.yml
+      plugin.logger().warn("color-scheme section missing or unreadable in color-scheme.yml; <color_scheme:*> tags will render white, standard tags stay enabled.");
+      tagResolvers = new TagResolver[]{TagResolver.standard()};
       return;
     }
+    final java.util.Set<String> warnedUnknownTokens = java.util.concurrent.ConcurrentHashMap.newKeySet();
     final List<TagResolver> resolvers = new ArrayList<>();
     resolvers.add(TagResolver.standard());
     resolvers.add(TagResolver.resolver("color_scheme", (argumentQueue, context)->{
@@ -207,6 +216,9 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
       }
       final Tag.Argument argument = argumentQueue.pop();
       final String code = argument.value();
+      if(!colorSchemeSection.contains(code) && warnedUnknownTokens.add(code)) {
+        plugin.logger().warn("Color scheme token '" + code + "' is referenced but not defined in color-scheme.yml; rendering white.");
+      }
       final String hex = colorSchemeSection.getString(code, "#ffffff");
       final TextColor textColor = TextColor.fromHexString(hex);
       if(textColor == null) {

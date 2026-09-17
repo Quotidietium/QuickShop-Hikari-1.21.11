@@ -124,7 +124,6 @@ public class MainPage {
         final GuiConfig.IconConfig topCustomersConfig = (menuConfig != null)? menuConfig.getIcon("top-customers") : null;
         final GuiConfig.IconConfig prevPageConfig = (menuConfig != null)? menuConfig.getIcon("previous-page") : null;
         final GuiConfig.IconConfig nextPageConfig = (menuConfig != null)? menuConfig.getIcon("next-page") : null;
-        final GuiConfig.IconConfig backConfig = (menuConfig != null)? menuConfig.getIcon("back") : null;
 
         final int listStartSlot = (menuConfig != null)? menuConfig.getSection().getInt("list-start-slot", 9) : 9;
 

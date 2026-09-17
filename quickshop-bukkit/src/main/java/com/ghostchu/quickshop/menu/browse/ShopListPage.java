@@ -95,8 +95,7 @@ public class ShopListPage {
     final GuiConfig.MenuConfig menuConfig = QuickShop.getInstance().getGuiConfig().getMenuConfig("browse");
     final GuiConfig.IconConfig borderConfig = menuConfig != null? menuConfig.getIcon("border") : null;
     final GuiConfig.IconConfig backConfig = menuConfig != null? menuConfig.getIcon("back") : null;
-    final GuiConfig.IconConfig itemInfoConfig = menuConfig != null? menuConfig.getIcon("item-info") : null;
-    final GuiConfig.IconConfig sortConfig = menuConfig != null? menuConfig.getIcon("shop-list-sort") : null;
+    final GuiConfig.IconConfig sortConfig = menuConfig != null? menuConfig.getIcon("sort") : null;
     final GuiConfig.IconConfig closeConfig = menuConfig != null? menuConfig.getIcon("close") : null;
     final GuiConfig.IconConfig prevPageConfig = menuConfig != null? menuConfig.getIcon("previous-page") : null;
     final GuiConfig.IconConfig nextPageConfig = menuConfig != null? menuConfig.getIcon("next-page") : null;
@@ -170,7 +169,7 @@ public class ShopListPage {
     final String sortMaterial = sortConfig != null? sortConfig.getMaterial() : "HOPPER";
     final int sortSlot = sortConfig != null? sortConfig.getSlot() : 2;
     playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(sortMaterial, 1)
-                                             .display(getConfigDisplay(id, sortConfig, "<green>Sort: {0}</green>", getSortDisplayName(sortMode)))
+                                             .display(getConfigDisplay(id, sortConfig, "<green>Sort: {0}</green>", getSortDisplayName(id, sortMode)))
                                              .lore(getConfigLore(id, sortConfig)))
                              .withSlot(sortSlot)
                              .withActions(
@@ -186,7 +185,7 @@ public class ShopListPage {
     final int filterSlot = filterConfig != null? filterConfig.getSlot() : 4;
 
     playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(filterMaterial, 1)
-                                             .display(getConfigDisplay(id, filterConfig, "<aqua>Filter: {0}</aqua>", getFilterDisplayName(filterMode)))
+                                             .display(getConfigDisplay(id, filterConfig, "<aqua>Filter: {0}</aqua>", getFilterDisplayName(id, filterMode)))
                                              .lore(getConfigLore(id, filterConfig)))
                              .withSlot(filterSlot)
                              .withActions(
@@ -410,25 +409,25 @@ public class ShopListPage {
   /**
    * Get display name for sort mode
    */
-  private String getSortDisplayName(final BrowseSortMode mode) {
+  private String getSortDisplayName(final UUID id, final BrowseSortMode mode) {
 
     return switch(mode) {
-      case PRICE_ASC -> "Price ↑";
-      case PRICE_DESC -> "Price ↓";
-      case STOCK -> "Stock";
-      case NAME -> "Name";
+      case PRICE_ASC -> QuickShop.getInstance().text().of(id, "gui.browse.sort.price-asc").legacy();
+      case PRICE_DESC -> QuickShop.getInstance().text().of(id, "gui.browse.sort.price-desc").legacy();
+      case STOCK -> QuickShop.getInstance().text().of(id, "gui.browse.sort.stock").legacy();
+      case NAME -> QuickShop.getInstance().text().of(id, "gui.browse.sort.name").legacy();
     };
   }
 
   /**
    * Get display name for filter mode
    */
-  private String getFilterDisplayName(final BrowseFilterMode mode) {
+  private String getFilterDisplayName(final UUID id, final BrowseFilterMode mode) {
 
     return switch(mode) {
-      case ALL -> "All";
-      case BUYING -> "Buying";
-      case SELLING -> "Selling";
+      case ALL -> QuickShop.getInstance().text().of(id, "gui.browse.filter.all").legacy();
+      case BUYING -> QuickShop.getInstance().text().of(id, "gui.browse.filter.buying").legacy();
+      case SELLING -> QuickShop.getInstance().text().of(id, "gui.browse.filter.selling").legacy();
     };
   }
 

@@ -292,13 +292,17 @@ public class MainPage extends QuickShopPage {
           return;
         }
 
-        if(inventoryConfig != null && shop.get().playerAuthorize(player.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)
-           || inventoryConfig != null && QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.open")) {
+        // every other keeper button falls back to built-in material/slot when its gui.yml
+        // section is missing; the old null gate here made the button vanish entirely
+        final String invMaterial = (inventoryConfig != null)? inventoryConfig.getMaterial() : "CHEST";
+        final int invSlot = (inventoryConfig != null)? inventoryConfig.getSlot() : 22;
+        if(shop.get().playerAuthorize(player.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)
+           || QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.open")) {
 
-          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(inventoryConfig.getMaterial(), 1)
+          playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(invMaterial, 1)
                                                          .display(getConfigDisplay(id, inventoryConfig, "<bold><green>View Inventory</green></bold>"))
                                                          .lore(getConfigLore(id, inventoryConfig)))
-                                         .withSlot(inventoryConfig.getSlot())
+                                         .withSlot(invSlot)
                                          .withActions(new RunnableAction((click)->{
 
                                            if(QuickShop.getInstance().getConfig().getBoolean("shop.lock")

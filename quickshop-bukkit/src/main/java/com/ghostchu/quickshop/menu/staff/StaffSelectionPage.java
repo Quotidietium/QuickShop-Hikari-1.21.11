@@ -136,7 +136,9 @@ public class StaffSelectionPage {
           final int offset = 9;
           final int page = (Integer)viewer.get().dataOrDefault(staffPageID, 1);
           final int items = (menuRows - 2) * offset; // Adjusted for border rows
-          final int start = ((page - 1) * offset);
+          // pages advance by a full page of items — the old single-row step made pages
+          // overlap most entries and left the tail staff members unreachable
+          final int start = ((page - 1) * items);
 
           final int maxPages = (staffs.size() / items) + (((staffs.size() % items) > 0)? 1 : 0);
 
