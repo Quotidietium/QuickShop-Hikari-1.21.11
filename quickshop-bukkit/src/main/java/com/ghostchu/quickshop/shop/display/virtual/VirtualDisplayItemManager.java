@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -252,6 +253,21 @@ public class VirtualDisplayItemManager implements Reloadable {
 
       packetFactory.unregisterSendChunk();
       packetFactory.unregisterUnloadChunk();
+    }
+  }
+
+  /**
+   * Drops a player from every display's packet-sender set. Called on world change: the
+   * old world's chunks are not unloaded client-side across a dimension switch, so
+   * nothing else would retire those sender entries (and any later full-resend would
+   * spawn ghost displays in the player's new world).
+   */
+  public void clearPlayer(@NotNull final UUID player) {
+
+    for(final List<VirtualDisplayItem<?>> displays : chunksMapping.values()) {
+      for(final VirtualDisplayItem<?> display : displays) {
+        display.getPacketSenders().remove(player);
+      }
     }
   }
 

@@ -2,6 +2,7 @@ package com.ghostchu.quickshop.shop.display.virtual.packet.packetevents;
 
 import com.github.retrooper.packetevents.netty.buffer.ByteBufHelper;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Reads the leading chunk coordinates from a CHUNK_DATA packet buffer without parsing
@@ -22,8 +23,16 @@ public final class ChunkPacketPeek {
 
   }
 
-  public static @NotNull Coords peek(@NotNull final Object buffer) {
+  /**
+   * Reads the leading x/z. Returns null when the buffer is truncated/already consumed
+   * (fewer than 8 readable bytes): there is nothing sensible to peek and throwing here
+   * would travel up the netty pipeline.
+   */
+  public static @Nullable Coords peek(@NotNull final Object buffer) {
 
+    if(ByteBufHelper.readableBytes(buffer) < 8) {
+      return null;
+    }
     final int readerIndex = ByteBufHelper.readerIndex(buffer);
     try {
       return new Coords(ByteBufHelper.readInt(buffer), ByteBufHelper.readInt(buffer));

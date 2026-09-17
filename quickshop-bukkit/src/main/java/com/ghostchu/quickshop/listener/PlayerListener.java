@@ -333,6 +333,16 @@ public class PlayerListener extends AbstractQSListener {
   }
 
   @EventHandler(ignoreCancelled = true)
+  public void onPlayerChangedWorld(final org.bukkit.event.player.PlayerChangedWorldEvent e) {
+    // dimension switches don't unload the old world's chunks client-side, so virtual
+    // displays there keep this player as a packet sender; retire the entries now
+    // instead of at the next full resend (which would spawn ghosts in the new world)
+    if(plugin.getVirtualDisplayItemManager() != null) {
+      plugin.getVirtualDisplayItemManager().clearPlayer(e.getPlayer().getUniqueId());
+    }
+  }
+
+  @EventHandler(ignoreCancelled = true)
   public void onTeleport(final PlayerTeleportEvent e) {
 
     // shared body with onMove: the old form synthesized a whole PlayerMoveEvent per

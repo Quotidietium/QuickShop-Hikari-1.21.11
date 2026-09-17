@@ -540,7 +540,9 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
 
     if(this.displayItem != null) {
 
-      this.displayItem.remove(false);
+      // dispose (not just remove): a fresh display object is created right below, the
+      // old one must also leave the reload manager or it leaks one entry per item swap
+      this.displayItem.dispose(false);
     }
     this.displayItem = null;
     checkDisplay();
@@ -1941,6 +1943,19 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     // fire-and-forget event on an admin-frequency path; gated for uniformity
     if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
       new ShopInventoryChangedEvent(wrapper, manager).callEvent();
+    }
+  }
+
+  /**
+   * Tears down the display object for good (removal plus reload-manager unregister) and
+   * drops the field. For shop deletion and item replacement; chunk unload keeps the
+   * display for reuse via {@code handleUnloading}.
+   */
+  public void disposeDisplayItem() {
+
+    if(this.displayItem != null) {
+      this.displayItem.dispose(false);
+      this.displayItem = null;
     }
   }
 

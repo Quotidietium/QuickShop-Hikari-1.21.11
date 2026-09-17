@@ -181,12 +181,16 @@ public class PacketFactoryv1_21 implements PacketFactory<PacketWrapper<?>> {
         // the full ChunkReader pass (every section's paletted storage) on this netty
         // thread for every chunk packet sent to every player
         final ChunkPacketPeek.Coords coords = ChunkPacketPeek.peek(event.getByteBuf());
+        if(coords == null) {
+          return; // truncated/rewound buffer: no coordinates to dispatch on
+        }
 
         VirtualDisplayItemManager.instance().resendChunkDisplays(player, player.getWorld().getName(), coords.x(), coords.z());
       }
     };
 
-    PacketEventsHandler.instance().internal().getEventManager().registerListener(sendChunk, PacketListenerPriority.NORMAL);
+    // keep the returned handle: unregisterListener needs it (protocollib twin stores its adapter the same way)
+    this.chunkSendingPacketAdapter = PacketEventsHandler.instance().internal().getEventManager().registerListener(sendChunk, PacketListenerPriority.NORMAL);
   }
 
   /**
@@ -235,7 +239,7 @@ public class PacketFactoryv1_21 implements PacketFactory<PacketWrapper<?>> {
       }
     };
 
-    PacketEventsHandler.instance().internal().getEventManager().registerListener(chunkUnlock, PacketListenerPriority.NORMAL);
+    this.chunkUnloadingPacketAdapter = PacketEventsHandler.instance().internal().getEventManager().registerListener(chunkUnlock, PacketListenerPriority.NORMAL);
   }
 
   /**

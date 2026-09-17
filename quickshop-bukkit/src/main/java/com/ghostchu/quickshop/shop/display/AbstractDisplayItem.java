@@ -105,6 +105,23 @@ public abstract class AbstractDisplayItem implements Reloadable {
   }
 
   /**
+   * Final teardown for a display object that will never spawn again (shop deleted, or
+   * the shop's item replaced and a new display created). Distinct from
+   * {@link #remove(boolean)}: remove() is also the hide step of respawn/despawn cycles
+   * where the SAME object is reused, so it must stay registered. Every constructor
+   * registers this object with the reload manager — without unregistering here, each
+   * deleted shop or item swap pins a dead display in the manager forever (and every
+   * /qs reload keeps poking it).
+   *
+   * @param dontTouchWorld passed through to {@link #remove(boolean)}
+   */
+  public void dispose(final boolean dontTouchWorld) {
+
+    remove(dontTouchWorld);
+    PLUGIN.getReloadManager().unregister(this);
+  }
+
+  /**
    * Whether the active backend can ever produce guard item stacks (the marker stacks
    * real-item displays carry to prevent pickup). Mirrors the early exits of
    * {@link #checkIsGuardItemStack(ItemStack)}: disabled displays and the virtual-item

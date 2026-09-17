@@ -1535,6 +1535,11 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         plugin.logger().warn("Failed to clean tags of deleted shop " + shop.getShopId(), t);
       }
       refundShop(shop);
+      // the display object dies with the shop: without dispose its reload-manager
+      // registration survives and pins the dead display (one leak per deleted shop)
+      if(shop instanceof final ContainerShop containerShop) {
+        containerShop.disposeDisplayItem();
+      }
       unloadShop(shop);
       unregisterShop(shop, true);
       shopDeleteEvent = shopDeleteEvent.clone(Phase.POST);

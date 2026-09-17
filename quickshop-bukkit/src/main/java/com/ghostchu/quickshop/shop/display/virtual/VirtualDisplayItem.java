@@ -93,7 +93,11 @@ public class VirtualDisplayItem<T> extends AbstractDisplayItem implements Reload
       this.destroyPacket = null;
     }
 
-    load();
+    // register into the chunk index ONLY on spawn(): a constructor-time load() stacked a
+    // duplicate entry (spawn() loads again) so every chunk resend sent each display's
+    // packets twice, and displays that were deleted before ever spawning (spawn event
+    // cancelled, shop unloaded) never ran unload(), leaking their index entries forever.
+    // Consumers of the index all gate on isSpawned(), so the early entry bought nothing.
   }
 
   public ItemStack checkEnchants(final ItemStack itemStack) {
@@ -340,12 +344,18 @@ public class VirtualDisplayItem<T> extends AbstractDisplayItem implements Reload
 
   public void sendFakeItemToAll() {
 
+    final World shopWorld = shop.bukkitLocation().getWorld();
     final Iterator<UUID> iterator = packetSenders.iterator();
     while(iterator.hasNext()) {
 
       final Player nextPlayer = Bukkit.getPlayer(iterator.next());
       if(nextPlayer == null) {
 
+        iterator.remove();
+      } else if(!nextPlayer.getWorld().equals(shopWorld)) {
+        // dimension changes do not unload the old world's chunks client-side, so the
+        // UUID lingers here after a world switch — sending would spawn a ghost display
+        // at the same coordinates in the player's NEW world
         iterator.remove();
       } else {
 
