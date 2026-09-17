@@ -481,7 +481,12 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     //noinspection ResultOfMethodCallIgnored
     javaPlugin.getDataFolder().mkdirs();
 
-    this.config = new MainConfig(this);
+    // runs once in onLoad and again in onEnable: without the guard the second run creates
+    // a SECOND MainConfig instance and registers it with the reload manager, leaving the
+    // orphan reloading (and re-reading the file) on every /qs reload forever
+    if(this.config == null) {
+      this.config = new MainConfig(this);
+    }
     if(!this.config.load()) {
       logger.error("Failed to load config.yml, The binary file of QuickShop may be corrupted. Please re-download from our website.");
     }
@@ -1119,6 +1124,11 @@ public class QuickShop implements QuickShopAPI, Reloadable {
         this.displayProtectionListener.unregister();
         this.displayProtectionListener = null;
       }
+      // display-items turned off by a reload: despawn the virtual items that are already
+      // out — without this they linger until their chunks unload
+      if(!this.display && AbstractDisplayItem.getNowUsing() == DisplayType.VIRTUALITEM && virtualDisplayItemManager != null) {
+        virtualDisplayItemManager.unload();
+      }
     }
   }
 
@@ -1249,15 +1259,16 @@ public class QuickShop implements QuickShopAPI, Reloadable {
 
   private void registerOngoingFee() {
 
+    // always stop the previous watcher first: on a reload with the feature still enabled
+    // this used to replace the field while the old timer kept billing forever
+    if(ongoingFeeWatcher != null) {
+      ongoingFeeWatcher.stop();
+      ongoingFeeWatcher = null;
+    }
     if(getConfig().getBoolean("shop.ongoing-fee.enable")) {
       ongoingFeeWatcher = new OngoingFeeWatcher(this);
       ongoingFeeWatcher.start(1, getConfig().getInt("shop.ongoing-fee.ticks"));
       logger.info("Ongoing fee feature is enabled.");
-    } else {
-      if(ongoingFeeWatcher != null) {
-        ongoingFeeWatcher.stop();
-        ongoingFeeWatcher = null;
-      }
     }
   }
 
@@ -1338,12 +1349,13 @@ public class QuickShop implements QuickShopAPI, Reloadable {
       logger.info("Cleaning up display manager...");
       virtualDisplayItemManager.unload();
     }
-    if(logWatcher != null) {
-      logger.info("Stopping log watcher...");
-      logWatcher.close();
-    }
     logger.info("Shutting down scheduled timers...");
     folia.getScheduler().cancelAllTasks();
+    if(logWatcher != null) {
+      logger.info("Stopping log watcher...");
+      // after cancelAllTasks: no timer can fire run() against a closed writer anymore
+      logWatcher.close();
+    }
     logger.info("Shutting down 3rd-party integrations...");
     unload3rdParty();
     if(this.playerFinder instanceof final FastPlayerFinder finder) {
@@ -1408,7 +1420,9 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   public ReloadResult reloadModule() throws Exception {
 
     registerDisplayAutoDespawn();
-    //registerOngoingFee();
+    // ongoing-fee enable/ticks are config values — re-evaluate on reload (stops the old
+    // watcher first; registerOngoingFee is now reload-safe)
+    registerOngoingFee();
     registerShopLock();
     registerDisplayItem();
     return Reloadable.super.reloadModule();

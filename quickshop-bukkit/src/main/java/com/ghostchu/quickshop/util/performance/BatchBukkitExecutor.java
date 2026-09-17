@@ -93,17 +93,25 @@ public class BatchBukkitExecutor<T> {
     @Override
     public void run() {
 
-      if(!tasks.isEmpty()) {
-        final long startAt = System.currentTimeMillis();
-        do {
-          consumer.accept(tasks.poll());
-        } while(System.currentTimeMillis() - startAt < maxTickMsUsage && !tasks.isEmpty());
-        if(tasks.isEmpty()) {
-          stop();
+      try {
+        if(!tasks.isEmpty()) {
+          final long startAt = System.currentTimeMillis();
+          do {
+            consumer.accept(tasks.poll());
+          } while(System.currentTimeMillis() - startAt < maxTickMsUsage && !tasks.isEmpty());
+          if(tasks.isEmpty()) {
+            stop();
+          }
+          return;
         }
-        return;
+        stop();
+      } catch(final Throwable t) {
+        // a throwing consumer killed this 1-tick timer and left the caller's future
+        // hanging forever — surface the failure and cancel the task
+        QuickShop.getInstance().logger().warn("Batch task consumer failed; aborting remaining " + tasks.size() + " batched tasks", t);
+        callback.completeExceptionally(t);
+        stop();
       }
-      stop();
     }
 
     public void start() {

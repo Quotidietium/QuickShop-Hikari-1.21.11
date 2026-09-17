@@ -43,6 +43,13 @@ public class QuickShopBukkit extends JavaPlugin {
   @Override
   public void reloadConfig() {
 
+    // reload from disk BEFORE any consumer re-reads values: reloadConfigSubModule (and the
+    // reloadable chain's QuickShop.reloadModule, which re-registers display/lock/fee tasks
+    // from these cached fields) must both see the fresh file — otherwise changes need two
+    // consecutive /qs reload to take effect
+    if(this.quickShop != null && this.quickShop.mainConfig() != null) {
+      this.quickShop.mainConfig().load();
+    }
     this.quickShop.reloadConfigSubModule();
   }
 

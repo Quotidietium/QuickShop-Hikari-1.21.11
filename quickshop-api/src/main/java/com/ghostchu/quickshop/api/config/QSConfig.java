@@ -100,7 +100,9 @@ public class QSConfig implements Reloadable {
       return true;
     } catch(final IOException ignore) {
 
-      QuickShopAPI.getPluginInstance().getLogger().warning("Error while saving config \"" + nodes.get(0) + "\".");
+      // nodes is empty for most configs — nodes.get(0) would throw IndexOutOfBounds
+      // and mask the actual save failure
+      QuickShopAPI.getPluginInstance().getLogger().warning("Error while saving config \"" + fileName + "\".");
       return false;
     }
   }

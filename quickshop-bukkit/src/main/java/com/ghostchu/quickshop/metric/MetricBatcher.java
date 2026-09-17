@@ -58,7 +58,15 @@ public class MetricBatcher {
       return;
     }
     started = true;
-    QuickShop.folia().getScheduler().runTimerAsync(this::flushAsync, FLUSH_INTERVAL_TICKS, FLUSH_INTERVAL_TICKS);
+    // async repeating tasks are silently cancelled by an uncaught throwable — wrap the
+    // cycle so one escaping failure cannot stop periodic metric flushing until restart
+    QuickShop.folia().getScheduler().runTimerAsync(()->{
+      try {
+        flushAsync();
+      } catch(final Throwable t) {
+        plugin.logger().warn("Metric batcher flush timer failed this cycle; retrying next cycle", t);
+      }
+    }, FLUSH_INTERVAL_TICKS, FLUSH_INTERVAL_TICKS);
   }
 
   /**

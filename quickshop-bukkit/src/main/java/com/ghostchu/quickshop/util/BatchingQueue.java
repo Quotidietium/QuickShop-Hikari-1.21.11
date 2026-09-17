@@ -76,8 +76,9 @@ public class BatchingQueue<T> {
     final CompletableFuture<?> flushed;
     try {
       flushed = flusher.apply(drained);
-    } catch(final Exception syncError) {
-      // the flusher may also throw synchronously (e.g. statement build failures)
+    } catch(final Throwable syncError) {
+      // the flusher may also throw synchronously (e.g. statement build failures); Throwable
+      // because an Error escaping here kills the periodic flush timer as well
       reoffer(drained);
       return CompletableFuture.failedFuture(syncError);
     }
@@ -132,7 +133,16 @@ public class BatchingQueue<T> {
   /** Starts the periodic flush timer (ticks). */
   public void start(final long flushTicks) {
 
-    QuickShop.folia().getScheduler().runTimerAsync(this::flushAsync, flushTicks, flushTicks);
+    // async repeating tasks are silently cancelled by an uncaught throwable — wrap the
+    // cycle so one escaping failure (outside flushAsync's own handling) cannot stop
+    // periodic flushing until restart
+    QuickShop.folia().getScheduler().runTimerAsync(()->{
+      try {
+        flushAsync();
+      } catch(final Throwable t) {
+        plugin.logger().warn("Batching queue '" + name + "' flush timer failed this cycle; retrying next cycle", t);
+      }
+    }, flushTicks, flushTicks);
   }
 
   /** Shutdown drain: blocks until the pending batch lands or times out. */
