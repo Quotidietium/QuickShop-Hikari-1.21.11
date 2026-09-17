@@ -598,7 +598,9 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     // keeping the link through a transfer lets the new owner trade away the previous
     // owner's goods while collecting the revenue. Rebind to the physical container at
     // the shop block; if that block is not a container the old link stays (and we log).
-    final String bukkitProviderName = plugin.getInventoryWrapperRegistry().find(plugin.getInventoryWrapperManager());
+    final var wrapperRegistry = plugin.getInventoryWrapperRegistry();
+    final String bukkitProviderName = wrapperRegistry == null? null
+            : wrapperRegistry.find(plugin.getInventoryWrapperManager());
     if(bukkitProviderName != null && !bukkitProviderName.equals(inventoryWrapperProvider)) {
       try {
         if(bukkitLocation().getBlock().getState(false) instanceof final InventoryHolder holder) {
