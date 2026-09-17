@@ -419,3 +419,57 @@ permissions:
   quickshop.permission.bypass:
     description: Permission to use /quickshop permission without being a shop staff member.
     default: op
+  quickshop.inventory:
+    description: Permission to use /quickshop inventory.
+    default: op
+  quickshop.avoid:
+    description: Permission to use /quickshop avoid.
+    default: op
+  quickshop.avoid.list:
+    description: Permission to use /quickshop avoid list.
+    default: op
+  quickshop.favorite:
+    description: Permission to use /quickshop favorite.
+    default: op
+  quickshop.favorite.list:
+    description: Permission to use /quickshop favorite list.
+    default: op
+  quickshop.watch:
+    description: Permission to use /quickshop watch.
+    default: op
+  quickshop.watch.list:
+    description: Permission to use /quickshop watch list.
+    default: op
+  quickshop.other.setowner:
+    description: Permission to use /quickshop setowner on shops you do not own.
+    default: op
+  quickshop.tag:
+    description: Permission to use /quickshop tag.
+    default: op
+  quickshop.tag.add:
+    description: Permission to use /quickshop tag add.
+    default: op
+  quickshop.tag.delete:
+    description: Permission to use /quickshop tag delete.
+    default: op
+  quickshop.tag.list:
+    description: Permission to use /quickshop tag list.
+    default: op
+  quickshop.tag.purge:
+    description: Permission to use /quickshop tag purge.
+    default: op
+  quickshop.tag.shops:
+    description: Permission to use /quickshop tag shops.
+    default: op
+  quickshop.tag.tagged:
+    description: Permission to use /quickshop tag tagged.
+    default: op
+  quickshop.tag.tagged.teleport:
+    description: Permission to teleport to tagged shops from /quickshop tag tagged.
+    default: op
+  quickshop.tag.clear:
+    description: Permission to use /quickshop tag clear (clear one shop's tags).
+    default: op
+  quickshop.tag.clearall:
+    description: Permission to use /quickshop tag clearall (clear all tags on the server).
+    default: op
