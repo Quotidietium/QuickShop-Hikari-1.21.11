@@ -62,6 +62,16 @@ public class PyroFishingCheck implements ItemCheck {
     final int originalFish = fishData(stack);
     final int testerFish = fishData(compare);
 
+    // same fish number on different materials (or vs. a plain renamed item carrying the
+    // tag) must not match: the ShopItemMatchEvent result bypasses the material gate in
+    // the core matcher, so without this a tag-forged cheap rod could satisfy any
+    // expensive-fish shop
+    if(originalFish == -1 || testerFish == -1) {
+      return false;
+    }
+    if(stack == null || compare == null || stack.getType() != compare.getType()) {
+      return false;
+    }
     return originalFish == testerFish;
   }
 

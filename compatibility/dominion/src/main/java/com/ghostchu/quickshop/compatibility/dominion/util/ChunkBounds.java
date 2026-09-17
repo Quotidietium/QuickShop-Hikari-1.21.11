@@ -58,6 +58,9 @@ public class ChunkBounds {
 
   public Location max() {
 
-    return new Location(world, minX, world.getMaxHeight(), minZ);
+    // maxX/maxZ (not minX/minZ): this corner plus min() spans the whole 16x16 chunk;
+    // the old copy-paste collapsed the cuboid to a vertical line at the min corner,
+    // so intersectWith almost never hit and permission-loss deletions never matched
+    return new Location(world, maxX, world.getMaxHeight(), maxZ);
   }
 }

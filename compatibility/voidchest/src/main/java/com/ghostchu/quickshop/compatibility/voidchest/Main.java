@@ -13,9 +13,17 @@ import org.jetbrains.annotations.Nullable;
 
 public final class Main extends CompatibilityModule implements EventListener {
 
+  private boolean registered;
+
   @Override
   public void init() {
 
+    // QSConfigurationReloadEvent re-runs init() on every /qs reload: registering again
+    // would stack duplicate VoidChest listeners (each firing per event afterwards)
+    if(registered) {
+      return;
+    }
+    registered = true;
     VoidChestAPI.getInstance().eventManager().register(VoidSellChunkItemEvent.class, this);
     VoidChestAPI.getInstance().eventManager().register(ItemSpawnEvent.class, this);
   }

@@ -56,15 +56,23 @@ public final class Main extends CompatibilityModule {
       return;
     }
     event.user().getBukkitPlayer().ifPresent(player->{
-      if(!playerHas(residence.getPermissions(), player, CREATE_FLAG, false)) {
-        if(!playerHas(Residence.getInstance().getWorldFlags().getPerms(shopLoc.getWorld().getName()), player, CREATE_FLAG, false)) {
+      if(!playerHas(residence, residence.getPermissions(), player, CREATE_FLAG, false)) {
+        if(!playerHas(null, Residence.getInstance().getWorldFlags().getPerms(shopLoc.getWorld().getName()), player, CREATE_FLAG, false)) {
           event.setCancelled(true, getApi().getTextManager().of(event.user(), "addon.residence.creation-flag-denied").forLocale());
         }
       }
     });
   }
 
-  private boolean playerHas(final FlagPermissions permissions, final Player player, final String name, final boolean def) {
+  private boolean playerHas(final ClaimedResidence residence, final FlagPermissions permissions, final Player player, final String name, final boolean def) {
+
+    // custom (non-built-in) flags fall through to a manual map lookup below, which —
+    // unlike Residence's own playerHas — carries no owner override: without this check
+    // even the residence OWNER had to /res set quickshop-create true to build in their
+    // own claim (a default deny nobody expects)
+    if(residence != null && player.getUniqueId().equals(residence.getOwnerUUID())) {
+      return true;
+    }
 
     final Flags internalFlag = Flags.getFlag(name);
     if(internalFlag == null) {
@@ -89,8 +97,8 @@ public final class Main extends CompatibilityModule {
       return;
     }
     event.getPurchaser().getBukkitPlayer().ifPresent(player->{
-      if(!playerHas(residence.getPermissions(), player, TRADE_FLAG, defaultTrade)) {
-        if(!playerHas(Residence.getInstance().getWorldFlags().getPerms(shopLoc.getWorld().getName()), player, TRADE_FLAG, defaultTrade)) {
+      if(!playerHas(residence, residence.getPermissions(), player, TRADE_FLAG, defaultTrade)) {
+        if(!playerHas(null, Residence.getInstance().getWorldFlags().getPerms(shopLoc.getWorld().getName()), player, TRADE_FLAG, defaultTrade)) {
           event.setCancelled(true, getApi().getTextManager().of(player, "addon.residence.trade-flag-denied").forLocale());
         }
       }

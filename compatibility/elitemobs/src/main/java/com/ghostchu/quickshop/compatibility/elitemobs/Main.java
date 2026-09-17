@@ -58,7 +58,10 @@ public final class Main extends CompatibilityModule implements Listener {
       return;
     }
 
-    if(isSoulBoundItem(event.old())) {
+    // the guard targets what the shop is being CHANGED TO: checking old() blocked the
+    // change back FROM a soulbound item (locking the shop to it forever) while letting
+    // soulbound items be set in the first place
+    if(isSoulBoundItem(event.updated())) {
 
       event.setCancelled(true, getDisallowedMessage(event.shop().getOwner()));
     }

@@ -68,7 +68,7 @@ public class Main extends CompatibilityModule {
 
     try {
       this.api = DominionAPI.getInstance();
-    } catch (final Exception e) {
+    } catch(final Exception e) {
       getLogger().warning("Failed to hook DominionAPI, plugin disabled.");
       this.enabled = false;
       return;
@@ -80,8 +80,22 @@ public class Main extends CompatibilityModule {
     deleteWhenLandDeleted = getConfig().getBoolean("delete-shops-in-dominion-when-dominion-deleted");
   }
 
+  /**
+   * Guards every handler: without a live API hook each handler used to NPE straight into
+   * Bukkit's exception swallowing, which un-cancels nothing but silently skips our logic
+   * (fail-open). Better to admit the module is inert.
+   */
+  private boolean active() {
+
+    return enabled && api != null;
+  }
+
   @EventHandler(ignoreCancelled = true)
   public void onPreCreation(final ShopCreateEvent event) {
+
+    if(!active()) {
+      return;
+    }
 
     final Location loc = event.location();
     final UUID uuid = event.user().getUniqueId();
@@ -92,6 +106,11 @@ public class Main extends CompatibilityModule {
 
     final DominionDTO dominion = api.getDominion(loc);
     if(dominion == null) {
+      // whitelist-mode promises "no shop creation outside Dominion's area" (config
+      // comment) — the old early return silently ignored that half of the promise
+      if(whitelist) {
+        event.setCancelled(true, getApi().getTextManager().of(event.user(), "addon.dominion.creation-denied-wilderness").forLocale());
+      }
       return;
     }
 
@@ -114,7 +133,7 @@ public class Main extends CompatibilityModule {
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void onDominionMember(final MemberRemovedEvent event) {
 
-    if(!deleteWhenLosePermission) {
+    if(!active() || !deleteWhenLosePermission) {
       return;
     }
     deleteShopInDominion(event.getDominion(), event.getMember().getPlayerUUID());
@@ -123,7 +142,7 @@ public class Main extends CompatibilityModule {
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void onDominionMemberFlag(final MemberSetFlagEvent event) {
 
-    if(!deleteWhenLosePermission) {
+    if(!active() || !deleteWhenLosePermission) {
       return;
     }
 
@@ -136,7 +155,7 @@ public class Main extends CompatibilityModule {
   @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
   public void onLandsDeleted(final DominionDeleteEvent event) {
 
-    if(!deleteWhenLandDeleted) {
+    if(!active() || !deleteWhenLandDeleted) {
       return;
     }
     deleteShopInDominion(event.getDominion(), event.getDominion().getOwner());
@@ -144,6 +163,10 @@ public class Main extends CompatibilityModule {
 
   @EventHandler(ignoreCancelled = true)
   public void onTrading(final ShopPurchaseEvent event) {
+
+    if(!active()) {
+      return;
+    }
 
     final Location loc = event.getShop().bukkitLocation();
     if(loc == null) {
@@ -158,6 +181,10 @@ public class Main extends CompatibilityModule {
 
   @EventHandler(ignoreCancelled = true)
   public void permissionOverride(final ShopPermissionCheckEvent event) {
+
+    if(!active()) {
+      return;
+    }
 
     if(event.shop().isEmpty()) {
       return;
@@ -197,7 +224,14 @@ public class Main extends CompatibilityModule {
 
           final ShopChunk shopChunk = chunkedShopEntry.getKey();
 
-          final ChunkBounds bounds = new ChunkBounds(Bukkit.getWorld(shopChunk.getWorld()), shopChunk.getX(), shopChunk.getZ());
+          // unloaded worlds would NPE inside ChunkBounds (world.getMinHeight) and the
+          // shops there are invisible anyway — skip them
+          final World chunkWorld = Bukkit.getWorld(shopChunk.getWorld());
+          if(chunkWorld == null) {
+            continue;
+          }
+
+          final ChunkBounds bounds = new ChunkBounds(chunkWorld, shopChunk.getX(), shopChunk.getZ());
           if(dominion.getCuboid().intersectWith(new CuboidDTO(bounds.min(), bounds.max()))) {
 
             //Matching Owner and delete it

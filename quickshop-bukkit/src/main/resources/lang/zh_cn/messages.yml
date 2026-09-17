@@ -754,6 +754,7 @@ addon:
     buy-quest-required: <red>你必须完成任务 <aqua>{0}</aqua> 才能从商店购买物品
   dominion:
     creation-denied: <red>你没有权限在这个支配区创建商店。
+    creation-denied-wilderness: <red>商店必须位于自治领内才能创建。
     trade-denied: <red>商店必须位于自治领内才能与其进行交易。
   discount:
     commands:

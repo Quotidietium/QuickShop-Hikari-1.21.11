@@ -62,7 +62,10 @@ public class AdvancedItemsCheck implements ItemCheck {
     final String originalItem = itemData(stack);
     final String testerItem = itemData(compare);
 
-    return originalItem == testerItem;
+    // PDC-read strings are never interned: the old reference comparison was constant
+    // false, so this check rejected every pair (its "same id = same item" intent never
+    // once worked)
+    return java.util.Objects.equals(originalItem, testerItem);
   }
 
   public String itemData(final ItemStack stack) {
