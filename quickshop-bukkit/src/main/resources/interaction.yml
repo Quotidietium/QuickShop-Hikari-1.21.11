@@ -27,12 +27,19 @@ SNEAKING_RIGHT_CLICK_SHOPBLOCK: NONE # Reserve for open chest
 
 # Available behaviors:
 # - TRADE_UI: GUI-based trading menu
-# - TRADE_INTERACTION: Chat-based trading (legacy)
-# - TRADE_DIRECT: Instant buy/sell 1 stack
-# - TRADE_DIRECT_ALL: Instant buy/sell all items
+# - TRADE_INTERACTION: Chat-based trading (legacy); on a non-shop container/sign it
+#   falls through to shop CREATION when allowed
+# - TRADE_DIRECT: Instant buy/sell 1 stack (shop only; no action on non-shop blocks)
+# - TRADE_DIRECT_ALL: Instant buy/sell all items (shop only)
 # - CONTROL_PANEL_UI: GUI-based owner control panel
 # - CONTROL_PANEL: Chat-based owner control panel (legacy)
 # - NONE: No action
+#
+# Notes:
+# - Holding a GOLDEN_AXE always disables left-click trade behaviors: the golden axe is
+#   the shop removal tool and takes precedence over any mapping above.
+# - CONTAINER/SIGN mappings only fire when the clicked block is NOT a shop; shops
+#   themselves always resolve through the SHOPBLOCK mappings.
 
 # Direct trade mode (quick trading):
 #STANDING_LEFT_CLICK_SIGN: TRADE_INTERACTION

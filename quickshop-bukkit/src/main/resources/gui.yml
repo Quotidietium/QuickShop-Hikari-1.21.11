@@ -5,9 +5,8 @@
 #   material: The material type (e.g., PAPER, BARRIER, LIME_CONCRETE)
 #   name: Display name (supports MiniMessage format)
 #   lore: List of lore lines (supports MiniMessage format)
-#   custom-model-data: Custom model data for resource packs (integer, optional)
-#   slot: The slot position in the inventory (0-53)
-#   amount: Item amount (default: 1)
+#   slot: The slot position in the inventory (0 to rows*9-1 for the menu;
+#         out-of-range values are clamped and warned about at load)
 #
 # TEXT OPTIONS:
 #   1. Direct inline text: Write MiniMessage formatted text directly
@@ -23,15 +22,6 @@
 version: 6
 
 # ===================
-# GLOBAL STYLE SETTINGS
-# ===================
-style:
-  border-material: GRAY_STAINED_GLASS_PANE
-  accent-positive: LIME_CONCRETE
-  accent-negative: ORANGE_CONCRETE
-  accent-neutral: LIGHT_BLUE_CONCRETE
-
-# ===================
 # TRADE MENU
 # ===================
 trade:
@@ -42,7 +32,6 @@ trade:
   border:
     material: GRAY_STAINED_GLASS_PANE
     name: " "
-    custom-model-data: 0
     rows: [1, 4, 6]  # Top, middle separator, bottom
   
   # Shop item display (the item being traded) - centered in row 2
@@ -56,7 +45,6 @@ trade:
     name: "lang:gui.trade.info-stock.display"
     lore:
       - "lang:gui.trade.info-stock.lore"
-    custom-model-data: 0
     slot: 21
   
   info-price:
@@ -64,7 +52,6 @@ trade:
     name: "lang:gui.trade.info-price.display"
     lore:
       - "lang:gui.trade.info-price.lore"
-    custom-model-data: 0
     slot: 22
   
   info-seller:
@@ -72,14 +59,12 @@ trade:
     name: "lang:gui.trade.info-seller.display"
     lore:
       - "lang:gui.trade.info-seller.lore"
-    custom-model-data: 0
     slot: 23
   
   # Custom amount button - NAME_TAG for intuitive "enter amount"
   custom-amount:
     material: NAME_TAG
     name: "lang:gui.trade.custom-amount.display"
-    custom-model-data: 0
     slot: 43
   
   # Quantity buttons (row 5) - color-coded by buy/sell
@@ -87,7 +72,6 @@ trade:
   quantity-buttons:
     material-buy: LIME_CONCRETE
     material-sell: ORANGE_CONCRETE
-    custom-model-data: 0
     slots: [37, 38, 39, 40, 41, 42]
     quantities: [1, 2, 4, 8, 16, 64]
     lore:
@@ -97,7 +81,6 @@ trade:
   close:
     material: BARRIER
     name: "lang:gui.shared.close.display"
-    custom-model-data: 0
     slot: 49
 
 # ===================
@@ -110,23 +93,18 @@ keeper:
   border:
     material: GRAY_STAINED_GLASS_PANE
     name: " "
-    custom-model-data: 0
     rows: [2, 4]  # Separator and bottom
   
   # Shop item preview - top center
   shop-item:
-    lore:
-      - "lang:gui.keeper.freeze-toggle.lore"
     slot: 4
 
   display-toggle:
 
     active:
       material: GLOW_ITEM_FRAME
-      custom-model-data: 0
     inactive:
       material: ITEM_FRAME
-      custom-model-data: 0
     name: "lang:gui.keeper.display-toggle.display"
     lore:
       - "lang:gui.keeper.display-toggle.lore"
@@ -139,17 +117,14 @@ keeper:
     name: "lang:gui.keeper.change-price.display"
     lore:
       - "lang:gui.keeper.change-price.lore"
-    custom-model-data: 0
     slot: 19
 
   freeze-toggle:
 
     freeze:
       material: LIGHT_BLUE_CONCRETE
-      custom-model-data: 0
     unfreeze:
       material: RED_CONCRETE
-      custom-model-data: 0
     name: "lang:gui.keeper.freeze-toggle.display"
     lore:
       - "lang:gui.keeper.freeze-toggle.lore"
@@ -160,10 +135,8 @@ keeper:
   mode-toggle:
     selling:
       material: LIME_CONCRETE
-      custom-model-data: 0
     buying:
       material: ORANGE_CONCRETE
-      custom-model-data: 0
     name: "lang:gui.keeper.mode-toggle.display"
     lore:
       - "lang:gui.keeper.mode-toggle.lore"
@@ -182,7 +155,6 @@ keeper:
     name: "lang:gui.keeper.staff.display"
     lore:
       - "lang:gui.keeper.staff.lore"
-    custom-model-data: 0
     slot: 23
   
   # History button
@@ -191,7 +163,6 @@ keeper:
     name: "lang:gui.keeper.history.display"
     lore:
       - "lang:gui.keeper.history.lore"
-    custom-model-data: 0
     slot: 24
   
   # Remove shop button - TNT for dramatic effect
@@ -200,14 +171,12 @@ keeper:
     name: "lang:gui.keeper.remove.display"
     lore:
       - "lang:gui.keeper.remove.lore"
-    custom-model-data: 0
     slot: 25
   
   # Close/back button - OAK_DOOR for "exit"
   close:
     material: OAK_DOOR
     name: "lang:gui.shared.close.display"
-    custom-model-data: 0
     slot: 31
 
 # ===================
@@ -222,7 +191,6 @@ staff:
   border:
     material: GRAY_STAINED_GLASS_PANE
     name: " "
-    custom-model-data: 0
     rows: [1, 6]
   
   # Search button - opens chat input for player search
@@ -232,7 +200,6 @@ staff:
     name: "lang:gui.staff.search.display"
     lore:
       - "lang:gui.staff.search.lore"
-    custom-model-data: 0
     slot: 0
   
   # Add staff button - EMERALD (green = add)
@@ -241,33 +208,28 @@ staff:
     name: "lang:gui.staff.add-staff.display"
     lore:
       - "lang:gui.staff.add-staff.lore"
-    custom-model-data: 0
     slot: 4
   
   # Back button - OAK_DOOR for "go back"
   back:
     material: OAK_DOOR
     name: "lang:gui.shared.back.display"
-    custom-model-data: 0
     slot: 8
   
   # Pagination controls (bottom row)
   previous-page:
     material: ARROW
     name: "lang:gui.shared.previous-page.display"
-    custom-model-data: 0
     slot: 48
   
   next-page:
     material: ARROW
     name: "lang:gui.shared.next-page.display"
-    custom-model-data: 0
     slot: 50
   
   page-info:
     material: BOOK
     name: "lang:gui.shared.page-info.display"
-    custom-model-data: 0
     slot: 49
   
   # Staff list starts at row 2 (slot 9+)
@@ -283,7 +245,6 @@ history:
   border:
     material: GRAY_STAINED_GLASS_PANE
     name: " "
-    custom-model-data: 0
     rows: [1, 6]
 
   entry:
@@ -291,7 +252,6 @@ history:
     name: "lang:history.shop.log-icon-title"
     lore:
       - "lang:history.shop.log-icon-description-with-store-name"
-    custom-model-data: 0
   
   # Summary icon
   summary:
@@ -299,7 +259,6 @@ history:
     name: "lang:history.shop.summary-icon-title"
     lore:
       - "lang:history.shop.summary-icon-description"
-    custom-model-data: 0
     slot: 0
   
   # Shop info (single shop)
@@ -307,14 +266,12 @@ history:
     material: PLAYER_HEAD
     lore:
       - "lang:history.shop.header-icon-description"
-    custom-model-data: 0
     slot: 4
   
   # Multiple shops info
   multi-shop-info:
     material: CHEST
     name: "lang:history.shop.multi-shops-icon-title"
-    custom-model-data: 0
     slot: 4
   
   # Top customers
@@ -323,19 +280,16 @@ history:
     name: "lang:history.shop.top-n-valuable-customers-title"
     lore:
       - "lang:history.shop.top-n-valuable-customers-entry"
-    custom-model-data: 0
     slot: 8
   
   previous-page:
     material: ARROW
     name: "lang:gui.shared.previous-page.display"
-    custom-model-data: 0
     slot: 3
   
   next-page:
     material: ARROW
     name: "lang:gui.shared.next-page.display"
-    custom-model-data: 0
     slot: 5
   
   
@@ -353,13 +307,8 @@ browse:
   border:
     material: GRAY_STAINED_GLASS_PANE
     name: " "
-    custom-model-data: 0
     rows: [1, 6]
 
-  shop-item:
-    lore:
-      - "lang:gui.browse.shop-item.lore"
-  
   # Search button - opens chat input for item search
   # {0} = current search query or "None"
   search:
@@ -367,7 +316,6 @@ browse:
     name: "lang:gui.browse.search.display"
     lore:
       - "lang:gui.browse.search.lore"
-    custom-model-data: 0
     slot: 0
   
   # Sort button - cycles through sort options
@@ -377,7 +325,6 @@ browse:
     name: "lang:gui.browse.sort.display"
     lore:
       - "lang:gui.browse.sort.lore"
-    custom-model-data: 0
     slot: 2
 
   grouped-item:
@@ -390,7 +337,6 @@ browse:
     name: "lang:gui.browse.filter.display"
     lore:
       - "lang:gui.browse.filter.lore"
-    custom-model-data: 0
     slot: 4
   
   # Stock filter toggle - show only shops with available stock/space
@@ -400,64 +346,34 @@ browse:
     name: "lang:gui.browse.stock-filter.display"
     lore:
       - "lang:gui.browse.stock-filter.lore"
-    custom-model-data: 0
     slot: 6
   
   # Close button
   close:
     material: BARRIER
     name: "lang:gui.shared.close.display"
-    custom-model-data: 0
     slot: 8
   
   # Back button (for shop list page)
   back:
     material: OAK_DOOR
     name: "lang:gui.shared.back.display"
-    custom-model-data: 0
     slot: 8
   
   # Pagination controls (bottom row)
   previous-page:
     material: ARROW
     name: "lang:gui.shared.previous-page.display"
-    custom-model-data: 0
     slot: 48
   
   next-page:
     material: ARROW
     name: "lang:gui.shared.next-page.display"
-    custom-model-data: 0
     slot: 50
   
   page-info:
     material: BOOK
     name: "lang:gui.shared.page-info.display"
-    custom-model-data: 0
     slot: 49
   
   list-start-slot: 9
-
-# ===================
-# SHARED ICONS
-# ===================
-shared:
-  previous-page:
-    material: ARROW
-    name: "lang:gui.shared.previous-page.display"
-    custom-model-data: 0
-  
-  next-page:
-    material: ARROW
-    name: "lang:gui.shared.next-page.display"
-    custom-model-data: 0
-  
-  back:
-    material: OAK_DOOR
-    name: "lang:gui.shared.back.display"
-    custom-model-data: 0
-  
-  close:
-    material: BARRIER
-    name: "lang:gui.shared.close.display"
-    custom-model-data: 0

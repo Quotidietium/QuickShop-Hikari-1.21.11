@@ -291,6 +291,22 @@ public class QuickShopInteractionManager implements InteractionManager, Reloadab
     final FileConfiguration config = YamlConfiguration.loadConfiguration(configFile);*/
     behaviorMapping.clear();
 
+    // config keys that match no registered interaction are silently unread — a typo'd
+    // key leaves that gesture on its default behavior with no hint to the admin
+    final java.util.Set<String> knownKeys = new java.util.HashSet<>();
+    for(final String interaction : interactions.keySet()) {
+      knownKeys.add(interaction.toUpperCase(Locale.ROOT));
+    }
+    for(final Object keyObj : config.getYaml().getKeys()) {
+      final String key = String.valueOf(keyObj);
+      if(key.contains(".")) {
+        continue; // nested blocks (comments aside, interaction.yml is flat)
+      }
+      if(!"version".equalsIgnoreCase(key) && !knownKeys.contains(key.toUpperCase(Locale.ROOT))) {
+        plugin.logger().warn("interaction.yml key '" + key + "' matches no registered interaction; it is ignored. Known: " + knownKeys);
+      }
+    }
+
     for(final String interaction : interactions.keySet()) {
 
       final String behavior = config.getYaml().getString(interaction.toUpperCase(Locale.ROOT));
@@ -299,6 +315,10 @@ public class QuickShopInteractionManager implements InteractionManager, Reloadab
       }
 
       Log.debug("Behavior Mapper: " + interaction + " -> " + behavior);
+
+      if(!behavior.equalsIgnoreCase("NONE") && !hasBehavior(behavior)) {
+        plugin.logger().warn("interaction.yml maps '" + interaction + "' to unknown behavior '" + behavior + "'; the click will do nothing. Check the behavior spelling.");
+      }
 
       behaviorMapping.put(interaction.toLowerCase(Locale.ROOT), behavior.toLowerCase(Locale.ROOT));
 

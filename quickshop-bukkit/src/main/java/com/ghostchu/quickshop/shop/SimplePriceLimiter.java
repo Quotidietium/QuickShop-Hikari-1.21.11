@@ -59,10 +59,14 @@ public class SimplePriceLimiter implements Reloadable, PriceLimiter, SubPasteIte
     this.rules.clear();
     final File configFile = new File(plugin.getDataFolder(), "price-restriction.yml");
     if(!configFile.exists()) {
-      try {
-        Files.copy(plugin.getJavaPlugin().getResource("price-restriction.yml"), configFile.toPath());
+      try(final java.io.InputStream resource = plugin.getJavaPlugin().getResource("price-restriction.yml")) {
+        if(resource != null) {
+          Files.copy(resource, configFile.toPath());
+        } else {
+          plugin.logger().warn("Bundled price-restriction.yml is missing from the jar; restriction rules will be empty.");
+        }
       } catch(final IOException e) {
-        plugin.logger().warn("Failed to copy price-restriction.yml.yml to plugin folder!", e);
+        plugin.logger().warn("Failed to copy price-restriction.yml to plugin folder!", e);
       }
     }
 
@@ -71,7 +75,7 @@ public class SimplePriceLimiter implements Reloadable, PriceLimiter, SubPasteIte
       try {
         configuration.save(configFile);
       } catch(final IOException e) {
-        plugin.logger().warn("Failed to save migrated  price-restriction.yml.yml to plugin folder!", e);
+        plugin.logger().warn("Failed to save migrated price-restriction.yml to plugin folder!", e);
       }
     }
     this.undefinedMax = configuration.getDouble("undefined.max", 99999999999999999999999999999.99d);
@@ -134,10 +138,31 @@ public class SimplePriceLimiter implements Reloadable, PriceLimiter, SubPasteIte
     }
     final String bypassPermission = "quickshop.price.restriction.bypass." + ruleName;
     final List<Function<ItemStack, Boolean>> items = new ArrayList<>();
+    // getDouble() silently substitutes the default for non-numeric input — surface the
+    // misconfiguration at load instead of letting the rule quietly not apply
+    if(section.contains("min") && !(section.get("min") instanceof Number)) {
+      plugin.logger().warn("price-restriction.yml rule '" + ruleName + "' has a non-numeric min; falling back to 0 (no lower limit).");
+    }
+    if(section.contains("max") && !(section.get("max") instanceof Number)) {
+      plugin.logger().warn("price-restriction.yml rule '" + ruleName + "' has a non-numeric max; falling back to no upper limit.");
+    }
     final double min = section.getDouble("min", 0d);
     final double max = section.getDouble("max", Double.MAX_VALUE);
+    // sentinel semantics: max < 0 = no upper limit, min <= 0 = no lower limit;
+    // a positive floor above a non-sentinel ceiling rejects every price
+    if(min > 0 && max >= 0 && max < min) {
+      plugin.logger().warn("price-restriction.yml rule '" + ruleName + "' has min (" + min + ") above max (" + max + "); every price will be rejected.");
+    }
+    if(section.getStringList("items").isEmpty()) {
+      plugin.logger().warn("price-restriction.yml rule '" + ruleName + "' has an empty items list; the rule never matches anything.");
+    }
     final ItemExpressionRegistry itemExpressionRegistry = (ItemExpressionRegistry)plugin.getRegistry().getRegistry(BuiltInRegistry.ITEM_EXPRESSION);
     for(final String item : section.getStringList("items")) {
+      // plain names that match no material are silent dead entries (matchMaterial ->
+      // null -> never equal); expressions (wildcards/@lookups) are left to the registry
+      if(!item.contains("*") && !item.contains("?") && !item.startsWith("@") && org.bukkit.Material.matchMaterial(item) == null) {
+        plugin.logger().warn("price-restriction.yml rule '" + ruleName + "' references unknown item '" + item + "'; it will never match.");
+      }
       items.add(itemStack->itemExpressionRegistry.match(itemStack, item));
     }
     return new RuleSet(items, bypassPermission, min, max);

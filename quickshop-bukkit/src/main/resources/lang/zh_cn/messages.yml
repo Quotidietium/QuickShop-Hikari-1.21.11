@@ -959,13 +959,6 @@ gui:
       display: "<white>返回商店</white>"
   browse:
     title: "<dark_aqua>商店浏览</dark_aqua>"
-    shop-item:
-      lore:
-        - "<green>所有者: </green>{0}<yellow></yellow>"
-        - "<green>位置： </green>{1}<yellow></yellow>"
-        - "<green>类型： </green>{2}<yellow></yellow>"
-        - "<green>价格:</green><yellow>{3}</yellow>"
-        - "<green>库存： </green><yellow>{4}</yellow>"
     grouped-item:
       display: "<yellow>{0}</yellow>"
       lore-title:

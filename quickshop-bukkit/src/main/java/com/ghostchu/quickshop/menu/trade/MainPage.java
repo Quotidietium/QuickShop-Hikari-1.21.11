@@ -230,6 +230,12 @@ public class MainPage extends QuickShopPage {
 
         final List<Integer> configQuantities = quantityConfig != null? quantityConfig.getQuantities() : List.of(1, 2, 4, 8, 16, 64);
         final List<Integer> configSlots = quantityConfig != null? quantityConfig.getSlots() : List.of(37, 38, 39, 40, 41, 42);
+        // a mismatched pair used to be silently truncated — surface it once per render
+        // so the admin actually notices some quantity buttons never appear
+        if(configQuantities.size() != configSlots.size()) {
+          QuickShop.getInstance().logger().warn("gui.yml trade.quantity-button has " + configQuantities.size()
+                                                       + " quantities but " + configSlots.size() + " slots; only the overlapping prefix is rendered.");
+        }
 
         for(int i = 0; i < configQuantities.size() && i < configSlots.size(); i++) {
 

@@ -1,8 +1,8 @@
 version: 3
 whole-number-only: false  # This option not control by enable option, always enabled
 undefined: # This option not control by enable option, always enabled
-  min: 0.01 # Can be zero if you want player create a free shop
-  max: 999999999999999999999999999.99 # Actually this can be up to 1.7976931348623157E308
+  min: 0.01 # Can be zero if you want player create a free shop. min <= 0 means no lower limit
+  max: 99999999999999999999999999999.99 # DECIMAL(32,2) ceiling - the largest price the database column can store. max < 0 means no upper limit
 enable: false
 rules: # Rules set
   example: # Rules name, used for identifier and permission node (quickshop.price.restriction.bypass.<name>)
@@ -14,5 +14,6 @@ rules: # Rules set
       - STONE_AXE
       - STONE_SHOVEL
       - STONE_HOE
-    min: 1.0 # Min price (double)
-    max: 50.0 # Max price (double)
+    min: 1.0 # Min price (double); min <= 0 means no lower limit. For container items the
+             # effective min/max is scaled by the amount of restricted items inside
+    max: 50.0 # Max price (double); max < 0 means no upper limit
