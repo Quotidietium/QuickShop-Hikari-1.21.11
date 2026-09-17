@@ -79,44 +79,8 @@ public class MarketItemGroup {
   }
 
   /**
-   * Calculate price statistics for all shops in this group Should be called after all shops have
-   * been added
-   */
-  public void calculateStatistics() {
-    // Calculate selling shop statistics
-    if(!sellingShops.isEmpty()) {
-      final List<Double> sellingPrices = sellingShops.stream()
-              .map(Shop::getPrice)
-              .toList();
-
-      sellingMinPrice = CommonUtil.min(sellingPrices);
-      sellingMaxPrice = CommonUtil.max(sellingPrices);
-      sellingAvgPrice = CommonUtil.avg(sellingPrices);
-      sellingMedianPrice = CommonUtil.med(sellingPrices);
-      sellingTotalStock = sellingShops.stream()
-              .mapToInt(shop->Math.max(0, MarketUtils.getStockFromCache(shop)))
-              .sum();
-    }
-
-    // Calculate buying shop statistics
-    if(!buyingShops.isEmpty()) {
-      final List<Double> buyingPrices = buyingShops.stream()
-              .map(Shop::getPrice)
-              .toList();
-
-      buyingMinPrice = CommonUtil.min(buyingPrices);
-      buyingMaxPrice = CommonUtil.max(buyingPrices);
-      buyingAvgPrice = CommonUtil.avg(buyingPrices);
-      buyingMedianPrice = CommonUtil.med(buyingPrices);
-      buyingTotalSpace = buyingShops.stream()
-              .mapToInt(shop->Math.max(0, MarketUtils.getSpaceFromCache(shop)))
-              .sum();
-    }
-  }
-
-  /**
-   * Snapshot-aware variant of {@link #calculateStatistics()}: stock/space totals come
-   * from the preloaded cache map instead of one database query per shop.
+   * Snapshot-aware statistics calculation for all shops in this group; must be called
+   * after all shops have been added.
    *
    * @param snapshot shopId -&gt; cache, preloaded for the whole menu render
    */

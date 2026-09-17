@@ -17,6 +17,16 @@ public interface PAPISubHandler {
   @NotNull
   String getPrefix();
 
+  /**
+   * Handlers backed by database queries must return {@code true}: their values are served
+   * from a stale-while-revalidate memory cache and refreshed off the main thread, so a
+   * cache miss can never park a JDBC round-trip inside chat/tab placeholder resolution.
+   */
+  default boolean useSoftCache() {
+
+    return false;
+  }
+
   @Nullable
   String handle0(@NotNull OfflinePlayer player, @NotNull String paramsTrimmed);
 }

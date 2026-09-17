@@ -15,14 +15,28 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiFunction;
 
 public class PAPICache implements Reloadable {
 
+  /** Guard for the soft-cache map: placeholder keys are server-defined, this is anti-leak only. */
+  private static final int SOFT_CACHE_MAX_ENTRIES = 4096;
+
   private QuickShop plugin;
   private long expiredTime;
   private Cache<String, Optional<String>> performCaches;
+  private final ConcurrentHashMap<String, SoftEntry> softCaches = new ConcurrentHashMap<>();
+
+  private static final class SoftEntry {
+
+    private volatile String value;
+    private volatile long loadedAt;
+    private final AtomicBoolean refreshing = new AtomicBoolean();
+  }
 
   public PAPICache() {
 
@@ -38,6 +52,42 @@ public class PAPICache implements Reloadable {
             .expireAfterWrite(expiredTime, java.util.concurrent.TimeUnit.MILLISECONDS)
             .recordStats()
             .build();
+    this.softCaches.clear();
+  }
+
+  /**
+   * Stale-while-revalidate variant of {@link #getCached(UUID, String, BiFunction)} for
+   * handlers whose loader performs database queries: the call never runs the loader on the
+   * calling (usually main) thread. A fresh value returns immediately; a stale value returns
+   * immediately while a refresh runs on the common executor; a miss schedules the load and
+   * resolves as empty until it lands (PlaceholderAPI re-asks on every render, so the value
+   * appears seconds later without ever blocking a tick).
+   */
+  @NotNull
+  public Optional<String> getCachedSoft(@NotNull final UUID player, @NotNull final String args, @NotNull final BiFunction<UUID, String, String> loader) {
+
+    if(softCaches.size() > SOFT_CACHE_MAX_ENTRIES) {
+      softCaches.clear();
+    }
+    final SoftEntry entry = softCaches.computeIfAbsent(compileUniqueKey(player, args), k->new SoftEntry());
+    if(entry.value != null && System.currentTimeMillis() - entry.loadedAt < expiredTime) {
+      return Optional.ofNullable(entry.value);
+    }
+    if(entry.refreshing.compareAndSet(false, true)) {
+      CompletableFuture.runAsync(()->{
+        String loaded = null;
+        try {
+          loaded = loader.apply(player, args);
+        } catch(final Throwable t) {
+          plugin.logger().warn("Failed to refresh PAPI value for " + player + " " + args, t);
+        } finally {
+          entry.value = loaded;
+          entry.loadedAt = System.currentTimeMillis();
+          entry.refreshing.set(false);
+        }
+      }, com.ghostchu.quickshop.common.util.QuickExecutor.getCommonExecutor());
+    }
+    return Optional.ofNullable(entry.value);
   }
 
   @NotNull

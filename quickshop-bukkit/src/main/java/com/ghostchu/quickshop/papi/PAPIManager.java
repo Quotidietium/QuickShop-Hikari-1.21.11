@@ -69,17 +69,26 @@ public class PAPIManager implements SubPasteItem {
   public String handle(@NotNull final OfflinePlayer player, @NotNull final String params) {
 
     final UUID playerUniqueId = player.getUniqueId();
-    return cache.getCached(playerUniqueId, params, (uuid, parms)->{
-      for(final PAPISubHandler handler : handlers) {
-        Log.debug("Comparing with " + handler.getPrefix() + " and " + params);
-        if(params.startsWith(handler.getPrefix())) {
-          Log.debug("Match! Handling...");
-          return handler.handle(player, params);
-        }
+    PAPISubHandler hit = null;
+    for(final PAPISubHandler handler : handlers) {
+      Log.debug("Comparing with " + handler.getPrefix() + " and " + params);
+      if(params.startsWith(handler.getPrefix())) {
+        Log.debug("Match! Handling...");
+        hit = handler;
+        break;
       }
+    }
+    if(hit == null) {
       Log.debug("No PAPI handler hit");
       return null;
-    }).orElse(null);
+    }
+    final PAPISubHandler matched = hit;
+    // database-backed handlers must never resolve their JDBC load inside the caller's
+    // thread (chat/tab render = main thread): serve them stale-while-revalidate instead
+    if(matched.useSoftCache()) {
+      return cache.getCachedSoft(playerUniqueId, params, (uuid, parms)->matched.handle(player, parms)).orElse(null);
+    }
+    return cache.getCached(playerUniqueId, params, (uuid, parms)->matched.handle(player, parms)).orElse(null);
   }
 
   @Override

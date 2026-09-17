@@ -49,13 +49,19 @@ public class SubCommand_List implements CommandHandler<Player> {
           quickshop.text().of(sender, "not-a-number", parser.getArgs().get(1)).send();
           return;
         }
-        page = Util.parseIntegerSafely(parser.getArgs().get(1), 1);
+        page = clampPage(parser.getArgs().get(1));
       }
       lookupOther(sender, parser.getArgs().getFirst(), page);
     } else {
-      page = Util.parseIntegerSafely(parser.getArgs().getFirst(), 1);
+      page = clampPage(parser.getArgs().getFirst());
       lookupSelf(sender, page);
     }
+  }
+
+  private int clampPage(@NotNull final String raw) {
+
+    // page 0/negative printed a bogus header and page > max printed an empty table
+    return Math.max(1, Util.parseIntegerSafely(raw, 1));
   }
 
   @Override
@@ -87,12 +93,17 @@ public class SubCommand_List implements CommandHandler<Player> {
       quickshop.text().of(sender, "no-permission").send();
       return;
     }
-    final UUID targetUser = quickshop.getPlayerFinder().name2Uuid(userName);
-    if(targetUser == null) {
-      quickshop.text().of(sender, "unknown-player", userName).send();
-      return;
-    }
-    lookup(sender, targetUser, page);
+    // name2Uuid/uuid2Name join a resolver that may hit the database (or even the web) for
+    // unknown names — up to 15s on the main thread per command; commands run sync, so do
+    // the whole lookup off-thread (chat sends are safe from async, same as /qs staff)
+    Util.asyncThreadRun(()->{
+      final UUID targetUser = quickshop.getPlayerFinder().name2Uuid(userName);
+      if(targetUser == null) {
+        quickshop.text().of(sender, "unknown-player", userName).send();
+        return;
+      }
+      lookup(sender, targetUser, page);
+    });
   }
 
   private void lookup(@NotNull final Player sender, @NotNull final UUID lookupUser, final int page) {

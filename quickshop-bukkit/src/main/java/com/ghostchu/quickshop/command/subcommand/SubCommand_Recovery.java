@@ -54,10 +54,10 @@ public class SubCommand_Recovery implements CommandHandler<ConsoleCommandSender>
         // ids can never leak into subsequent saves
         ((SimpleDatabaseHelperV2)plugin.getDatabaseHelper()).invalidateCaches();
         Log.debug("Re-loading shop from database...");
-        Util.mainThreadRun(()->{
-          plugin.getShopLoader().loadShops();
-          plugin.text().of(sender, "imported-database", "recovery.zip").send();
-        });
+        // stay async: loadShops does a full-table JDBC fetch and joins every shop's
+        // deserialization future — on the main thread that freezes the whole server
+        plugin.getShopLoader().loadShops();
+        plugin.text().of(sender, "imported-database", "recovery.zip").send();
       } catch(final SQLException | IOException | ClassNotFoundException e) {
         plugin.text().of(sender, "importing-failed", e.getMessage()).send();
         plugin.logger().warn("Failed to import the database from backup file.", e);
@@ -66,10 +66,8 @@ public class SubCommand_Recovery implements CommandHandler<ConsoleCommandSender>
         // write-path caches first, since a partially-failed import may have replaced
         // tables the cached data row ids still point into
         ((SimpleDatabaseHelperV2)plugin.getDatabaseHelper()).invalidateCaches();
-        Util.mainThreadRun(()->{
-          Log.debug("Re-loading shops from the surviving database after failed import...");
-          plugin.getShopLoader().loadShops();
-        });
+        Log.debug("Re-loading shops from the surviving database after failed import...");
+        plugin.getShopLoader().loadShops();
       }
     });
   }

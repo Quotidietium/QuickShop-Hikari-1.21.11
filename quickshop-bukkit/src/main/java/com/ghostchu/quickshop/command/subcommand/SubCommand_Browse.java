@@ -75,6 +75,9 @@ public class SubCommand_Browse implements CommandHandler<Player> {
       }
 
       viewer.addData(SHOPS_DATA, shops);
+      // warm the inventory-count snapshot here (async) so the first main-thread render
+      // reads an already-filled map instead of waiting on the cold-load budget
+      com.ghostchu.quickshop.menu.browse.MarketUtils.loadInventoryCaches(shops);
       // the menu open builds the per-player icon map and reads the player's world —
       // it must not race main-thread click resolution on the page maps, and world
       // access is region-sensitive under Folia

@@ -36,6 +36,14 @@ public class PurchasesPAPI implements PAPISubHandler {
   }
 
   @Override
+  public boolean useSoftCache() {
+
+    // every lookup is a JDBC scan of the purchase log (limit -1, per-row name resolution
+    // for the player filter) — it must never run on the placeholder-resolving thread
+    return true;
+  }
+
+  @Override
   @Nullable
   public String handle0(@NotNull final OfflinePlayer player, @NotNull final String paramsTrimmed) {
 

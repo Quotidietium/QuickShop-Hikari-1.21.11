@@ -51,8 +51,15 @@ public class OngoingFeeWatcher implements Runnable {
   private void runTick() {
 
     Log.debug("Run task for ongoing fee...");
-    if(plugin.getEconomyManager().provider() == null) {
+    final var provider = plugin.getEconomyManager().provider();
+    if(provider == null) {
       Log.debug("Economy hadn't get ready.");
+      return;
+    }
+    if(!provider.valid()) {
+      // a broken/re-registering economy bridge must never reach the removal path:
+      // balance() reports 0 for every failure, and 0 < cost reads as "insolvent"
+      Log.debug("Economy provider is not valid, skip this cycle.");
       return;
     }
 
@@ -70,7 +77,7 @@ public class OngoingFeeWatcher implements Runnable {
         double cost = gobalCost;
         final World world = location.getWorld();
         //We must check balance manually to avoid shop missing hell when tax account broken
-        if(allowLoan || plugin.getEconomyManager().provider().balance(shopOwner, Objects.requireNonNull(world).getName()).doubleValue() >= cost) {
+        if(allowLoan || provider.balance(shopOwner, Objects.requireNonNull(world).getName()).doubleValue() >= cost) {
           QUser taxAccount = null;
           if(shop.getTaxAccount() != null) {
             taxAccount = shop.getTaxAccount();
@@ -104,7 +111,20 @@ public class OngoingFeeWatcher implements Runnable {
             }
           });
         } else {
-          this.removeShop(shop);
+          // balance() maps every provider failure to 0 — deleting a shop over a possibly
+          // transient error is irreversible, so re-verify on the main thread (thread-safe
+          // provider call) and only remove when insolvency is confirmed twice
+          final double costAtCheck = cost;
+          Util.mainThreadRun(()->{
+            final var p = plugin.getEconomyManager().provider();
+            if(p == null || !p.valid()) {
+              return; // provider unavailable: cannot confirm insolvency, keep the shop
+            }
+            if(p.balance(shopOwner, Objects.requireNonNull(world).getName()).doubleValue() >= costAtCheck) {
+              return; // the async read was a transient failure, keep the shop
+            }
+            this.removeShop(shop);
+          });
         }
       }
     }

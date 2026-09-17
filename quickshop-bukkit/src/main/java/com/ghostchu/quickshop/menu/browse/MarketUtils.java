@@ -35,6 +35,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * MarketUtils - Utility class for market/browse operations Handles grouping shops by item,
@@ -50,11 +51,39 @@ public final class MarketUtils {
   }
 
   /**
-   * Loads the inventory-count cache rows for all given shops in ONE batched database
-   * round-trip (with one pending-write flush first, preserving the exact-freshness
-   * guarantee of the per-shop path). Menu renders call this once up front and pass the
-   * snapshot through filter/sort/statistics — the per-shop path would cost one blocking
-   * query per shop (and, inside sort comparators, per comparison).
+   * How long a preloaded inventory-cache row stays fresh for menu renders. Reads inside
+   * the window are instant map lookups; the database is only re-queried (asynchronously,
+   * after a pending-write flush) once a row goes stale.
+   */
+  private static final long INVENTORY_SNAPSHOT_TTL_MS = 3_000L;
+  /**
+   * Bounded wait for the very first load of a shop's row (e.g. the first menu open after
+   * boot): renders may block this long once, never longer — a degraded database degrades
+   * to a partial snapshot instead of stalling the render thread.
+   */
+  private static final long INVENTORY_SNAPSHOT_COLD_WAIT_MS = 250L;
+
+  private static final java.util.concurrent.ConcurrentHashMap<Long, SnapshotEntry> INVENTORY_SNAPSHOTS = new java.util.concurrent.ConcurrentHashMap<>();
+  private static final java.util.concurrent.ConcurrentHashMap<Long, CompletableFuture<Void>> INVENTORY_INFLIGHT = new java.util.concurrent.ConcurrentHashMap<>();
+
+  private static final class SnapshotEntry {
+
+    private final @Nullable ShopInventoryCountCache cache;
+    private final long fetchedAt;
+
+    private SnapshotEntry(@Nullable final ShopInventoryCountCache cache, final long fetchedAt) {
+
+      this.cache = cache;
+      this.fetchedAt = fetchedAt;
+    }
+  }
+
+  /**
+   * Inventory-count snapshot for menu renders. Menu pages draw on the main thread, so the
+   * old flush+SELECT round-trip was a main-thread join on every open/flip/sort; rows are
+   * now served from a short-TTL memory snapshot, refreshed asynchronously (with the same
+   * pending-write flush first). A cold row (first render after boot) is awaited once for
+   * at most {@link #INVENTORY_SNAPSHOT_COLD_WAIT_MS} so the first numbers are real.
    *
    * @param shops the shops whose cache rows are needed
    *
@@ -67,17 +96,77 @@ public final class MarketUtils {
       return Map.of();
     }
     try {
-      final List<Long> shopIds = shops.stream().map(Shop::getShopId).distinct().toList();
-      final var batcher = QuickShop.getInstance().getDbWriteBatcher();
-      final var future = (batcher != null)
-              ? batcher.flushInventoryCacheAsync()
-                      .thenCompose(v->QuickShop.getInstance().getDatabaseHelper().queryInventoryCaches(shopIds))
-              : QuickShop.getInstance().getDatabaseHelper().queryInventoryCaches(shopIds);
-      return future.join();
+      final long now = System.currentTimeMillis();
+      final List<Long> ids = shops.stream().map(Shop::getShopId).distinct().toList();
+      final List<Long> stale = new ArrayList<>();
+      for(final Long id : ids) {
+        final SnapshotEntry entry = INVENTORY_SNAPSHOTS.get(id);
+        if((entry == null || now - entry.fetchedAt > INVENTORY_SNAPSHOT_TTL_MS)
+           && !INVENTORY_INFLIGHT.containsKey(id)) {
+          stale.add(id);
+        }
+      }
+      if(!stale.isEmpty()) {
+        startSnapshotLoad(stale);
+      }
+      final boolean coldMiss = ids.stream().anyMatch(id->INVENTORY_SNAPSHOTS.get(id) == null);
+      if(coldMiss) {
+        try {
+          CompletableFuture.allOf(ids.stream()
+                                        .map(INVENTORY_INFLIGHT::get)
+                                        .filter(java.util.Objects::nonNull)
+                                        .toArray(CompletableFuture[]::new))
+                  .get(INVENTORY_SNAPSHOT_COLD_WAIT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch(final Exception ignored) {
+          // timeout or failed load: a partial snapshot beats stalling the render thread
+        }
+      }
+      return collectSnapshot(ids);
     } catch(final Exception e) {
       // same fallback semantics as the per-shop readers: no data beats broken menus
       return Map.of();
     }
+  }
+
+  private static void startSnapshotLoad(@NotNull final List<Long> ids) {
+
+    final CompletableFuture<Void> mark = new CompletableFuture<>();
+    for(final Long id : ids) {
+      INVENTORY_INFLIGHT.putIfAbsent(id, mark);
+    }
+    final var plugin = QuickShop.getInstance();
+    final var batcher = plugin.getDbWriteBatcher();
+    final CompletableFuture<Map<Long, ShopInventoryCountCache>> load = (batcher != null)
+            ? batcher.flushInventoryCacheAsync()
+                    .thenCompose(v->plugin.getDatabaseHelper().queryInventoryCaches(ids))
+            : plugin.getDatabaseHelper().queryInventoryCaches(ids);
+    load.whenComplete((rows, err)->{
+      final long fetchedAt = System.currentTimeMillis();
+      for(final Long id : ids) {
+        if(err == null) {
+          INVENTORY_SNAPSHOTS.put(id, new SnapshotEntry(rows.get(id), fetchedAt));
+        } else {
+          // negative-cache briefly (retry ~1s instead of a full TTL) so a broken
+          // database doesn't turn every render into another query
+          INVENTORY_SNAPSHOTS.put(id, new SnapshotEntry(null,
+                                                        fetchedAt - INVENTORY_SNAPSHOT_TTL_MS + 1_000L));
+        }
+        INVENTORY_INFLIGHT.remove(id);
+      }
+    });
+  }
+
+  @NotNull
+  private static Map<Long, ShopInventoryCountCache> collectSnapshot(@NotNull final List<Long> ids) {
+
+    final Map<Long, ShopInventoryCountCache> result = new HashMap<>(ids.size());
+    for(final Long id : ids) {
+      final SnapshotEntry entry = INVENTORY_SNAPSHOTS.get(id);
+      if(entry != null && entry.cache != null) {
+        result.put(id, entry.cache);
+      }
+    }
+    return result;
   }
 
   /**
@@ -159,12 +248,9 @@ public final class MarketUtils {
 
       matchingGroup.addShop(shop);
     }
-
-    // Calculate statistics for all groups
-    for(final MarketItemGroup group : groups) {
-      group.calculateStatistics();
-    }
-
+    // grouping only: statistics need an inventory snapshot, computed by the snapshot-aware
+    // caller — the legacy per-shop statistics path did one blocking (and main-thread
+    // illegal) database query per shop
     return groups;
   }
 
@@ -207,35 +293,6 @@ public final class MarketUtils {
   }
 
   /**
-   * Filter shops to only show those with stock/space available. Uses database cache to avoid Folia
-   * cross-region block access issues.
-   *
-   * @param shops     List of shops to filter
-   * @param stockOnly Whether to filter to stock only
-   *
-   * @return Filtered list of shops
-   */
-  @NotNull
-  public static List<Shop> filterByStock(@NotNull final List<Shop> shops, final boolean stockOnly) {
-
-    if(!stockOnly) {
-      return new ArrayList<>(shops);
-    }
-    return shops.stream()
-            .filter(shop->{
-              if(shop.isUnlimited()) return true;
-              // For selling shops, check stock; for buying shops, check space
-              // Use database cache to avoid Folia cross-region block access
-              if(shop.isSelling()) {
-                return getStockFromCache(shop) > 0;
-              } else {
-                return getSpaceFromCache(shop) > 0;
-              }
-            })
-            .toList();
-  }
-
-  /**
    * Snapshot-aware variant of {@link #filterByStock(List, boolean)}: all reads come from
    * the preloaded map, no database access.
    */
@@ -264,7 +321,7 @@ public final class MarketUtils {
    * @param groups     List of groups to filter
    * @param filterMode The filter mode to apply
    *
-   * @return Filtered list of groups
+   * @return Filtered list of item groups
    */
   @NotNull
   public static List<MarketItemGroup> filterGroups(@NotNull final List<MarketItemGroup> groups,
@@ -279,38 +336,6 @@ public final class MarketUtils {
               .filter(MarketItemGroup::hasSellingShops)
               .toList();
     };
-  }
-
-  /**
-   * Filter item groups to only show those with stock/space available. Uses database cache to avoid
-   * Folia cross-region block access issues.
-   *
-   * @param groups    List of groups to filter
-   * @param stockOnly Whether to filter to stock only
-   *
-   * @return Filtered list of groups
-   */
-  @NotNull
-  public static List<MarketItemGroup> filterGroupsByStock(@NotNull final List<MarketItemGroup> groups,
-                                                          final boolean stockOnly) {
-
-    if(!stockOnly) {
-      return new ArrayList<>(groups);
-    }
-    return groups.stream()
-            .filter(group->{
-              // Check if any shop in the group has stock/space
-              // Use database cache to avoid Folia cross-region block access
-              return group.getShops().stream().anyMatch(shop->{
-                if(shop.isUnlimited()) return true;
-                if(shop.isSelling()) {
-                  return getStockFromCache(shop) > 0;
-                } else {
-                  return getSpaceFromCache(shop) > 0;
-                }
-              });
-            })
-            .toList();
   }
 
   /**
@@ -334,34 +359,6 @@ public final class MarketUtils {
               }
             }))
             .toList();
-  }
-
-  /**
-   * Sort shops based on sort mode. Uses database cache for stock sorting to avoid Folia
-   * cross-region block access issues.
-   *
-   * @param shops    List of shops to sort
-   * @param sortMode The sort mode to apply
-   *
-   * @return Sorted list of shops
-   */
-  @NotNull
-  public static List<Shop> sortShops(@NotNull final List<Shop> shops,
-                                     @NotNull final BrowseSortMode sortMode) {
-
-    final List<Shop> sorted = new ArrayList<>(shops);
-
-    switch(sortMode) {
-      case PRICE_ASC -> {
-
-        sorted.sort((a, b) -> a.comparePrice(b.price(), false));
-      }
-      case PRICE_DESC -> sorted.sort((a, b) -> a.comparePrice(b.price(), true));
-      case STOCK -> sortShopsByStockDesc(sorted, MarketUtils::getStockFromCache);
-      case NAME -> sortShopsByName(sorted);
-    }
-
-    return sorted;
   }
 
   /**
@@ -568,34 +565,8 @@ public final class MarketUtils {
   }
 
   /**
-   * Apply all filters, search, and sorting to shops
-   *
-   * @param shops       The original list of shops
-   * @param filterMode  The filter mode
-   * @param sortMode    The sort mode
-   * @param searchQuery The search query (can be null)
-   * @param stockOnly   Whether to only show shops with stock/space
-   *
-   * @return Processed list of shops
-   */
-  @NotNull
-  public static List<Shop> processShops(@NotNull final List<Shop> shops,
-                                        @NotNull final BrowseFilterMode filterMode,
-                                        @NotNull final BrowseSortMode sortMode,
-                                        @Nullable final String searchQuery,
-                                        final boolean stockOnly) {
-
-    List<Shop> result = new ArrayList<>(shops);
-    result = filterShops(result, filterMode);
-    result = filterByStock(result, stockOnly);
-    result = searchShops(result, searchQuery);
-    result = sortShops(result, sortMode);
-    return result;
-  }
-
-  /**
-   * Snapshot-aware variant of {@link #processShops(List, BrowseFilterMode, BrowseSortMode, String, boolean)}:
-   * every stock/space read comes from the preloaded map, zero database access.
+   * Apply all filters, search, and sorting to shops. Every stock/space read comes from
+   * the preloaded map, zero database access.
    */
   @NotNull
   public static List<Shop> processShops(@NotNull final List<Shop> shops,
@@ -613,38 +584,8 @@ public final class MarketUtils {
   }
 
   /**
-   * Apply all filters, search, and sorting to item groups
-   *
-   * @param shops       The original list of shops
-   * @param filterMode  The filter mode
-   * @param sortMode    The sort mode
-   * @param searchQuery The search query (can be null)
-   * @param stockOnly   Whether to only show groups with stock/space
-   *
-   * @return Processed list of item groups
-   */
-  @NotNull
-  public static List<MarketItemGroup> processGroups(@NotNull final List<Shop> shops,
-                                                    @NotNull final BrowseFilterMode filterMode,
-                                                    @NotNull final BrowseSortMode sortMode,
-                                                    @Nullable final String searchQuery,
-                                                    final boolean stockOnly) {
-    // First filter shops, then group them
-    List<Shop> filteredShops = filterShops(shops, filterMode);
-    filteredShops = filterByStock(filteredShops, stockOnly);
-    filteredShops = searchShops(filteredShops, searchQuery);
-
-    // Group the filtered shops
-    List<MarketItemGroup> groups = groupShopsByItem(filteredShops);
-
-    // Sort the groups
-    groups = sortGroups(groups, sortMode);
-
-    return groups;
-  }
-
-  /**
-   * Snapshot-aware variant of {@link #processGroups(List, BrowseFilterMode, BrowseSortMode, String, boolean)}.
+   * Apply all filters, search, and sorting to item groups; group statistics come from the
+   * preloaded inventory snapshot.
    */
   @NotNull
   public static List<MarketItemGroup> processGroups(@NotNull final List<Shop> shops,
@@ -661,55 +602,5 @@ public final class MarketUtils {
     groups = sortGroups(groups, sortMode);
 
     return groups;
-  }
-
-  /**
-   * Get stock count from database cache. This avoids Folia cross-region block access issues by
-   * using cached data instead of directly accessing the shop's inventory.
-   *
-   * @param shop The shop to get stock for
-   *
-   * @return Stock count, or -1 for unlimited shops, 0 for errors/uninitialized
-   */
-  public static int getStockFromCache(@NotNull final Shop shop) {
-
-    if(shop.isUnlimited()) {
-      return -1;
-    }
-    try {
-      final ShopInventoryCountCache cache = QuickShop.getInstance().getShopManager()
-              .queryShopInventoryCacheInDatabase(shop).join();
-      final int stock = cache.getStock();
-      // Return stock if available, otherwise return 0 for uninitialized cache
-      return stock >= 0? stock : 0;
-    } catch(final Exception e) {
-      // Fallback to 0 if cache query fails
-      return 0;
-    }
-  }
-
-  /**
-   * Get space count from database cache. This avoids Folia cross-region block access issues by
-   * using cached data instead of directly accessing the shop's inventory.
-   *
-   * @param shop The shop to get space for
-   *
-   * @return Space count, or -1 for unlimited shops, 0 for errors/uninitialized
-   */
-  public static int getSpaceFromCache(@NotNull final Shop shop) {
-
-    if(shop.isUnlimited()) {
-      return -1;
-    }
-    try {
-      final ShopInventoryCountCache cache = QuickShop.getInstance().getShopManager()
-              .queryShopInventoryCacheInDatabase(shop).join();
-      final int space = cache.getSpace();
-      // Return space if available, otherwise return 0 for uninitialized cache
-      return space >= 0? space : 0;
-    } catch(final Exception e) {
-      // Fallback to 0 if cache query fails
-      return 0;
-    }
   }
 }

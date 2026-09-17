@@ -22,9 +22,12 @@ import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.economy.EconomyProvider;
 import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.economy.provider.VaultProvider;
+import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.performance.PerfMonitor;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -91,19 +94,46 @@ public class EconomyLoader {
     if(CommonUtil.isUUID(taxAccount)) {
       tax = Bukkit.getOfflinePlayer(UUID.fromString(taxAccount));
     } else {
-      tax = Bukkit.getOfflinePlayer(taxAccount);
-    }
-    if(!Objects.requireNonNull(vault.economy()).hasAccount(tax)) {
-      plugin.logger().warn("QuickShop detected that no tax account exists and will try to create one. If you see any errors, please change the tax-account name in the config.yml to that of the Server owner.");
-      if(vault.economy().createPlayerAccount(tax)) {
-        plugin.logger().info("Tax account created.");
+      final Player online = Bukkit.getPlayerExact(taxAccount);
+      if(online != null) {
+        tax = online;
       } else {
-        plugin.logger().warn("Cannot create tax-account, please change the tax-account name in the config.yml to that of the server owner");
-      }
-      if(!vault.economy().hasAccount(tax)) {
-        plugin.logger().warn("Player for the Tax-account has never played on this server before and we couldn't create an account. This may cause server lag or economy errors, therefore changing the name is recommended. You may ignore this warning if it doesn't cause any issues.");
+        final OfflinePlayer cached = Bukkit.getOfflinePlayerIfCached(taxAccount);
+        if(cached != null) {
+          tax = cached;
+        } else {
+          // an unknown name would make Bukkit.getOfflinePlayer(String) hit the Mojang API
+          // synchronously on the main thread — resolve it off-thread and finish the
+          // account setup when the profile arrives
+          plugin.logger().info("Tax account \"" + taxAccount + "\" is not in the user cache, resolving it asynchronously...");
+          Util.asyncThreadRun(()->{
+            final OfflinePlayer resolved = Bukkit.getOfflinePlayer(taxAccount);
+            Util.mainThreadRun(()->ensureTaxAccount(vault, resolved));
+          });
+          return vault;
+        }
       }
     }
+    ensureTaxAccount(vault, tax);
     return vault;
+  }
+
+  private void ensureTaxAccount(@NotNull final VaultProvider vault, @NotNull final OfflinePlayer tax) {
+
+    try {
+      if(!Objects.requireNonNull(vault.economy()).hasAccount(tax)) {
+        plugin.logger().warn("QuickShop detected that no tax account exists and will try to create one. If you see any errors, please change the tax-account name in the config.yml to that of the Server owner.");
+        if(vault.economy().createPlayerAccount(tax)) {
+          plugin.logger().info("Tax account created.");
+        } else {
+          plugin.logger().warn("Cannot create tax-account, please change the tax-account name in the config.yml to that of the server owner");
+        }
+        if(!vault.economy().hasAccount(tax)) {
+          plugin.logger().warn("Player for the Tax-account has never played on this server before and we couldn't create an account. This may cause server lag or economy errors, therefore changing the name is recommended. You may ignore this warning if it doesn't cause any issues.");
+        }
+      }
+    } catch(final Exception e) {
+      plugin.logger().warn("Failed to verify/create the tax account.", e);
+    }
   }
 }
