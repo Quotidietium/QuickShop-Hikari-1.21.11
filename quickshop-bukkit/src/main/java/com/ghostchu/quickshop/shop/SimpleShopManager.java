@@ -799,24 +799,46 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
   @Override
   public void clear() {
 
+    this.clear(true);
+  }
+
+  /**
+   * Removes all shops from memory and the world (lookup indexes included). Does not delete them
+   * from the database.
+   *
+   * @param flushSaves whether dirty shops are flushed to the database first — pass false when
+   *                   the database contents are about to be replaced anyway (recovery import);
+   *                   flushing there would stall the main thread for up to 30 seconds for rows
+   *                   that get purged seconds later
+   */
+  public void clear(final boolean flushSaves) {
+
     Util.ensureThread(false);
     plugin.logger().info("Unloading loaded shops...");
     getLoadedShops().forEach(this::unloadShop);
-    plugin.logger().info("Saving shops, please allow up to 30 seconds for flush changes into database...");
-    final CompletableFuture<?> saveTask = CompletableFuture.allOf(plugin.getShopManager().getAllShops().stream().filter(Shop::isDirty).map(Shop::update).toArray(CompletableFuture[]::new));
-    try {
-      if(plugin.getConfig().getBoolean("database.unlimited-save-wait", false)) {
-        saveTask.get();
-      } else {
-        saveTask.get(30, TimeUnit.SECONDS);
+    if(flushSaves) {
+      plugin.logger().info("Saving shops, please allow up to 30 seconds for flush changes into database...");
+      final CompletableFuture<?> saveTask = CompletableFuture.allOf(plugin.getShopManager().getAllShops().stream().filter(Shop::isDirty).map(Shop::update).toArray(CompletableFuture[]::new));
+      try {
+        if(plugin.getConfig().getBoolean("database.unlimited-save-wait", false)) {
+          saveTask.get();
+        } else {
+          saveTask.get(30, TimeUnit.SECONDS);
+        }
+      } catch(final ExecutionException | TimeoutException e) {
+        plugin.logger().warn("Shops saving interrupted, some unsaved data may lost.", e);
+      } catch(final InterruptedException e) {
+        Thread.currentThread().interrupt();
       }
-    } catch(final ExecutionException | TimeoutException e) {
-      plugin.logger().warn("Shops saving interrupted, some unsaved data may lost.", e);
-    } catch(final InterruptedException e) {
-      Thread.currentThread().interrupt();
     }
     this.interactiveManager.reset();
     this.shops.clear();
+    // wipe every secondary index as well: recovery re-registers shops into the same manager
+    // instance afterwards, and stale owners/runtimeIds would leave ghost shops in
+    // getAllShops(player) and friends until restart
+    this.shopIdLookup.clear();
+    this.shopsByOwner.clear();
+    this.shopRuntimeIdLookup.clear();
     shopCache.invalidateAll(null);
   }
 

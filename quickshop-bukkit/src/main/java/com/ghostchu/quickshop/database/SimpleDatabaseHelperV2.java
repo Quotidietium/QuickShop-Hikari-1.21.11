@@ -69,7 +69,7 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
   @NotNull
   private final String prefix;
 
-  private final int LATEST_DATABASE_VERSION = 21;
+  public static final int LATEST_DATABASE_VERSION = 21;
 
   /**
    * Write-path caches. The data-record dedup SELECT costs a full multi-column table
@@ -1276,9 +1276,10 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
 
     final File backupFile = new File(new File(plugin.getDataFolder(), "backup"), System.currentTimeMillis() + "-I-told-you-backup-database-before-1.20.5-upgrade.zip");
     try {
-      new DatabaseIOUtil(this).exportTables(backupFile);
-    } catch(final SQLException | IOException e) {
-      plugin.logger().warn("Failed to backup database", e);
+      TableZipCsvBackup.exportTables(backupFile);
+    } catch(final Throwable t) {
+      // best-effort: a failed backup must never break the migration that follows it
+      plugin.logger().warn("Failed to backup database", t);
     }
   }
 

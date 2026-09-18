@@ -1,29 +1,34 @@
 package com.ghostchu.quickshop.database;
 
-import cc.carm.lib.easysql.api.SQLQuery;
 import com.ghostchu.quickshop.QuickShop;
-import com.ghostchu.quickshop.common.util.CommonUtil;
-import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.logger.Log;
 import lombok.Data;
-import org.jetbrains.annotations.NotNull;
-import org.relique.jdbc.csv.CsvDriver;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.file.Files;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.Arrays;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
 
+/*
+ * QuickShop-Hikari
+ * Copyright (C) 2025 Daniel "creatorfromhell" Vidmar
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+/**
+ * DatabaseIOUtil produces the plugin's automatic backups. The export itself lives in
+ * {@link TableZipCsvBackup} (single implementation, schema sidecars included, so every
+ * backup this class writes is importable by the recovery command).
+ */
 @Data
 public class DatabaseIOUtil {
 
@@ -34,6 +39,13 @@ public class DatabaseIOUtil {
     this.helper = helper;
   }
 
+  /**
+   * Creates a backup archive under backup/&lt;reason&gt;/&lt;timestamp&gt;.zip.
+   *
+   * @return true when the backup was created successfully or disabled by configuration
+   * (backup-policy.&lt;reason&gt;: false); false on any failure — callers that are about
+   * to destroy data MUST abort when this returns false.
+   */
   public boolean performBackup(final String reason) {
 
     try {
@@ -58,9 +70,9 @@ public class DatabaseIOUtil {
       }
       backupFile = new File(backupFile, System.currentTimeMillis() + ".zip");
       try {
-        exportTables(backupFile);
+        TableZipCsvBackup.exportTables(backupFile);
         return true;
-      } catch(final SQLException | IOException e) {
+      } catch(final Exception e) {
         QuickShop.getInstance().logger().warn("[DB Backup] Failed to create backup", e);
         return false;
       }
@@ -69,84 +81,4 @@ public class DatabaseIOUtil {
       return false;
     }
   }
-
-  public void exportTables(@NotNull final File zipFile) throws SQLException, IOException {
-    // zipFile.getParentFile().mkdirs();
-    zipFile.createNewFile();
-    try(final ZipOutputStream out = new ZipOutputStream(new FileOutputStream(zipFile))) {
-      for(final DataTables table : DataTables.values()) {
-        Log.debug("Exporting table " + table.name());
-        final File tableCsv = new File(Util.getCacheFolder(), table.getName() + ".csv");
-        tableCsv.deleteOnExit();
-        try(final SQLQuery query = table.createQuery().build().execute()) {
-          final ResultSet result = query.getResultSet();
-          writeToCSV(result, tableCsv);
-          Log.debug("Exported table " + table.name() + " to " + tableCsv.getAbsolutePath());
-        }
-        Log.debug("Adding table " + table.name() + " to zip file");
-        out.putNextEntry(new ZipEntry(table.getName() + ".csv"));
-        Files.copy(tableCsv.toPath(), out);
-        out.closeEntry();
-        Log.debug("Added table " + table.name() + " to zip file");
-      }
-    }
-  }
-
-  public void importTables(@NotNull final File zipFile) throws SQLException, ClassNotFoundException {
-    // Import from CSV
-    for(final DataTables table : DataTables.values()) {
-      Log.debug("Purging table " + table.getName());
-      table.purgeTable();
-      Log.debug("Importing table " + table.getName() + " from " + zipFile.getAbsolutePath());
-      importFromCSV(zipFile, table);
-      Log.debug("Imported table " + table.getName() + " from " + zipFile.getAbsolutePath());
-    }
-  }
-
-  public void importFromCSV(@NotNull final File zipFile, @NotNull final DataTables table) throws SQLException, ClassNotFoundException {
-
-    Log.debug("Loading CsvDriver...");
-    Class.forName("org.relique.jdbc.csv.CsvDriver");
-    try(final Connection conn = DriverManager.getConnection("jdbc:relique:csv:zip:" + zipFile);
-      final Statement stmt = conn.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE,
-                                                    ResultSet.CONCUR_READ_ONLY);
-      final ResultSet results = stmt.executeQuery("SELECT * FROM " + table.logicalName())) {
-
-      final ResultSetMetaData metaData = results.getMetaData();
-      final String[] columns = new String[metaData.getColumnCount()];
-      for(int i = 0; i < columns.length; i++) {
-        columns[i] = metaData.getColumnName(i + 1);
-      }
-      Log.debug("Parsed " + columns.length + " columns: " + CommonUtil.array2String(columns));
-      while(results.next()) {
-        final Object[] values = new String[columns.length];
-        for(int i = 0; i < values.length; i++) {
-          Log.debug("Copying column: " + columns[i]);
-
-
-          values[i] = results.getObject(columns[i]);
-        }
-        Log.debug("Inserting row: " + CommonUtil.array2String(Arrays.stream(values).map(Object::toString).toArray(String[]::new)));
-        table.createInsert()
-                .setColumnNames(columns)
-                .setParams(values)
-                .execute();
-      }
-    }
-  }
-
-  public void writeToCSV(@NotNull final ResultSet set, @NotNull final File csvFile) throws SQLException, IOException {
-
-    if(!csvFile.getParentFile().exists()) {
-      csvFile.getParentFile().mkdirs();
-    }
-    if(!csvFile.exists()) {
-      csvFile.createNewFile();
-    }
-    try(final PrintStream stream = new PrintStream(csvFile)) {
-      Log.debug("Writing to CSV file: " + csvFile.getAbsolutePath());
-      CsvDriver.writeToCsv(set, stream, true);
-    }
-  }
-
 }

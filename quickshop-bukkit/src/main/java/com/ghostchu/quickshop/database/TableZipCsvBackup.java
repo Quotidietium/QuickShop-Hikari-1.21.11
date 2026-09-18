@@ -1,26 +1,27 @@
 package com.ghostchu.quickshop.database;
 
+import cc.carm.lib.easysql.api.SQLManager;
 import cc.carm.lib.easysql.api.SQLQuery;
-import com.ghostchu.quickshop.common.util.CommonUtil;
-import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.logger.Log;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.relique.jdbc.csv.CsvDriver;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Date;
 import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -33,7 +34,13 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -65,18 +72,172 @@ import java.util.zip.ZipOutputStream;
 public final class TableZipCsvBackup {
 
   private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+  private static final String CSV_DRIVER = "org.relique.jdbc.csv.CsvDriver";
+  private static final int MAX_SCHEMA_SIDECAR_BYTES = 8 * 1024 * 1024;
+  private static final int INSERT_BATCH_SIZE = 500;
 
-  private static TableSchema readSchemaFromZip(@NotNull final File zipFile, @NotNull final String tableName)
-          throws IOException {
+  /**
+   * Pre-flight check that the zip is a complete, well-formed import archive. Reads no rows
+   * and performs no writes, so a rejected file can never leave the database touched.
+   */
+  public static void validateImport(@NotNull final File zipFile) throws SQLException, ClassNotFoundException, IOException {
 
-    final String entryName = tableName + ".schema.json";
+    Class.forName(CSV_DRIVER);
+    buildSchemas(zipFile);
+    try(final Connection ignored = DriverManager.getConnection("jdbc:relique:csv:zip:" + zipFile)) {
+      // probe: the zip must be readable as a CsvJdbc database before anything is wiped
+    }
+  }
+
+  /**
+   * Imports every table from the zip inside ONE transaction: all purges and all inserts
+   * commit together, and any failure rolls the database back to its pre-import state.
+   */
+  public static void importTables(@NotNull final File zipFile, @NotNull final SQLManager manager) throws SQLException, ClassNotFoundException, IOException {
+
+    Class.forName(CSV_DRIVER);
+    final Map<DataTables, TableSchema> schemas = buildSchemas(zipFile);
+
+    try(final Connection conn = manager.getConnection()) {
+      final boolean previousAutoCommit = conn.getAutoCommit();
+      conn.setAutoCommit(false);
+      try {
+        for(final DataTables table : DataTables.values()) {
+          Log.debug("Purging table " + table.getName());
+          try(final PreparedStatement purge = conn.prepareStatement("DELETE FROM `" + table.getName() + "`")) {
+            purge.executeUpdate();
+          }
+          Log.debug("Importing table " + table.getName() + " from " + zipFile.getAbsolutePath());
+          importTable(conn, zipFile, table, schemas.get(table));
+          Log.debug("Imported table " + table.getName() + " from " + zipFile.getAbsolutePath());
+        }
+        conn.commit();
+      } catch(final Exception e) {
+        try {
+          conn.rollback();
+        } catch(final SQLException rollbackError) {
+          rollbackError.addSuppressed(e);
+          throw rollbackError;
+        }
+        throw e;
+      } finally {
+        conn.setAutoCommit(previousAutoCommit);
+      }
+    }
+  }
+
+  /**
+   * Resolves the schema of every expected table (schema sidecar when present, live table
+   * metadata otherwise) and rejects archives that miss CSV entries or reference columns the
+   * live table does not have. Column identifiers from the archive are only ever interpolated
+   * into raw SQL after this allow-list check.
+   */
+  private static @NotNull Map<DataTables, TableSchema> buildSchemas(@NotNull final File zipFile) throws IOException, SQLException {
+
+    final Map<DataTables, TableSchema> schemas = new EnumMap<>(DataTables.class);
     try(final ZipFile zf = new ZipFile(zipFile)) {
-      final ZipEntry entry = zf.getEntry(entryName);
-      if(entry == null) return null;
+      for(final DataTables table : DataTables.values()) {
+        final ZipEntry csv = zf.getEntry(table.getName() + ".csv");
+        if(csv == null) {
+          throw new IOException("Import archive is missing the CSV entry for table " + table.getName()
+                                 + " (expected " + table.getName() + ".csv)");
+        }
+        schemas.put(table, readSchema(table, zf, schemaEntryOf(zf, table)));
+      }
+    }
+    return schemas;
+  }
 
-      try(final InputStream in = zf.getInputStream(entry);
-          final InputStreamReader reader = new InputStreamReader(in, StandardCharsets.UTF_8)) {
-        return GSON.fromJson(reader, TableSchema.class);
+  private static @Nullable ZipEntry schemaEntryOf(@NotNull final ZipFile zf, @NotNull final DataTables table) {
+
+    return zf.getEntry(table.getName() + ".schema.json");
+  }
+
+  private static @NotNull TableSchema readSchema(@NotNull final DataTables table, @NotNull final ZipFile zf, @Nullable final ZipEntry schemaEntry) throws IOException, SQLException {
+
+    if(schemaEntry == null) {
+      // legacy archives (including backups made before sidecars were introduced): fall
+      // back to the live table's schema so the tool's own backups stay importable
+      Log.debug("Missing schema sidecar for table " + table.getName() + ", falling back to live table metadata");
+      return liveSchema(table);
+    }
+
+    final byte[] bytes;
+    try(final InputStream in = zf.getInputStream(schemaEntry)) {
+      bytes = in.readNBytes(MAX_SCHEMA_SIDECAR_BYTES + 1);
+    }
+    if(bytes.length > MAX_SCHEMA_SIDECAR_BYTES) {
+      throw new IOException("Schema sidecar for table " + table.getName() + " exceeds "
+                            + MAX_SCHEMA_SIDECAR_BYTES + " bytes and looks corrupted");
+    }
+
+    final TableSchema schema;
+    try {
+      schema = GSON.fromJson(new String(bytes, StandardCharsets.UTF_8), TableSchema.class);
+    } catch(final RuntimeException e) {
+      throw new IOException("Malformed schema sidecar for table " + table.getName(), e);
+    }
+    if(schema == null || schema.columns == null || schema.columns.isEmpty()) {
+      throw new IOException("Schema sidecar for table " + table.getName() + " declares no columns");
+    }
+
+    final Set<String> liveColumns = liveColumnNames(table);
+    for(final ColumnSchema col : schema.columns) {
+      if(col.name == null || !liveColumns.contains(col.name)) {
+        throw new IOException("Schema sidecar for table " + table.getName() + " references column '"
+                              + col.name + "' which does not exist in the live table (incompatible archive?)");
+      }
+    }
+    return schema;
+  }
+
+  private static @NotNull TableSchema liveSchema(@NotNull final DataTables table) throws SQLException {
+
+    try(final SQLQuery query = table.createQuery().build().execute()) {
+      return TableSchema.from(table.getName(), query.getResultSet().getMetaData());
+    }
+  }
+
+  private static @NotNull Set<String> liveColumnNames(@NotNull final DataTables table) throws SQLException {
+
+    final Set<String> names = new HashSet<>();
+    try(final SQLQuery query = table.createQuery().build().execute()) {
+      final ResultSetMetaData md = query.getResultSet().getMetaData();
+      for(int i = 1; i <= md.getColumnCount(); i++) {
+        names.add(md.getColumnLabel(i));
+      }
+    }
+    return names;
+  }
+
+  private static void importTable(@NotNull final Connection conn, @NotNull final File zipFile, @NotNull final DataTables table, @NotNull final TableSchema schema) throws SQLException, IOException {
+
+    final String[] columnNames = schema.columnNames();
+    final String columns = Arrays.stream(columnNames).map(c->"`" + c + "`").collect(Collectors.joining(", "));
+    final String placeholders = String.join(", ", Collections.nCopies(columnNames.length, "?"));
+    final String insertSql = "INSERT INTO `" + table.getName() + "` (" + columns + ") VALUES (" + placeholders + ")";
+
+    // FORWARD_ONLY streams rows straight off the zip; scrollable sets make CsvJdbc buffer
+    // the whole table in memory
+    try(final Connection csvConn = DriverManager.getConnection("jdbc:relique:csv:zip:" + zipFile);
+        final Statement stmt = csvConn.createStatement(ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
+        final ResultSet results = stmt.executeQuery("SELECT * FROM " + table.getName());
+        final PreparedStatement insert = conn.prepareStatement(insertSql)) {
+
+      int pending = 0;
+      while(results.next()) {
+        for(int i = 0; i < columnNames.length; i++) {
+          final ColumnSchema col = schema.columns.get(i);
+          insert.setObject(i + 1, convertCsvString(results.getString(col.name), col));
+        }
+        insert.addBatch();
+        if(++pending >= INSERT_BATCH_SIZE) {
+          insert.executeBatch();
+          pending = 0;
+        }
+      }
+      if(pending > 0) {
+        insert.executeBatch();
       }
     }
   }
@@ -168,89 +329,36 @@ public final class TableZipCsvBackup {
       for(final DataTables table : DataTables.values()) {
         Log.debug("Exporting table " + table.name());
 
-        final File tableCsv = new File(Util.getCacheFolder(), table.getName() + ".csv");
-        tableCsv.getParentFile().mkdirs();
-        if(tableCsv.exists()) tableCsv.delete();
-        tableCsv.deleteOnExit();
+        // unique staging file: concurrent export/backup runs must not share and truncate
+        // each other's CSVs
+        final Path tableCsv = Files.createTempFile("qs-export-" + table.getName() + "-", ".csv");
+        try {
+          final TableSchema schema;
+          try(final SQLQuery query = table.createQuery().build().execute()) {
+            final ResultSet rs = query.getResultSet();
 
-        final TableSchema schema;
-        try(final SQLQuery query = table.createQuery().build().execute()) {
-          final ResultSet rs = query.getResultSet();
+            writeToCSV(rs, tableCsv.toFile());
 
-          writeToCSV(rs, tableCsv);
+            schema = TableSchema.from(table.getName(), rs.getMetaData());
 
-          schema = TableSchema.from(table.getName(), rs.getMetaData());
+            Log.debug("Exported table " + table.name() + " to " + tableCsv);
+          }
 
-          Log.debug("Exported table " + table.name() + " to " + tableCsv.getAbsolutePath());
+          Log.debug("Adding CSV for " + table.name() + " to zip file");
+          out.putNextEntry(new ZipEntry(table.getName() + ".csv"));
+          Files.copy(tableCsv, out);
+          out.closeEntry();
+
+          Log.debug("Adding schema for " + table.name() + " to zip file");
+          out.putNextEntry(new ZipEntry(table.getName() + ".schema.json"));
+          final byte[] schemaBytes = GSON.toJson(schema).getBytes(StandardCharsets.UTF_8);
+          out.write(schemaBytes);
+          out.closeEntry();
+
+          Log.debug("Added table " + table.name() + " to zip file");
+        } finally {
+          Files.deleteIfExists(tableCsv);
         }
-
-        Log.debug("Adding CSV for " + table.name() + " to zip file");
-        out.putNextEntry(new ZipEntry(table.getName() + ".csv"));
-        Files.copy(tableCsv.toPath(), out);
-        out.closeEntry();
-
-        Log.debug("Adding schema for " + table.name() + " to zip file");
-        out.putNextEntry(new ZipEntry(table.getName() + ".schema.json"));
-        final byte[] schemaBytes = GSON.toJson(schema).getBytes(StandardCharsets.UTF_8);
-        out.write(schemaBytes);
-        out.closeEntry();
-
-        Log.debug("Added table " + table.name() + " to zip file");
-      }
-    }
-  }
-
-  public static void importTables(@NotNull final File zipFile) throws SQLException, ClassNotFoundException, IOException {
-
-    for(final DataTables table : DataTables.values()) {
-      Log.debug("Purging table " + table.getName());
-      table.purgeTable();
-
-      Log.debug("Importing table " + table.getName() + " from " + zipFile.getAbsolutePath());
-      importFromCSV(zipFile, table);
-      Log.debug("Imported table " + table.getName() + " from " + zipFile.getAbsolutePath());
-    }
-  }
-
-  public static void importFromCSV(@NotNull final File zipFile, @NotNull final DataTables table)
-          throws SQLException, ClassNotFoundException, IOException {
-
-    final TableSchema schema = readSchemaFromZip(zipFile, table.getName());
-    if(schema == null) {
-      throw new IllegalStateException("Missing schema sidecar for table " + table.getName()
-                                      + " (expected " + table.getName() + ".schema.json in zip)");
-    }
-
-    Log.debug("Loading CsvDriver...");
-    Class.forName("org.relique.jdbc.csv.CsvDriver");
-
-    final String csvTableName = table.getName();
-
-    try(final Connection conn = DriverManager.getConnection("jdbc:relique:csv:zip:" + zipFile);
-        final Statement stmt = conn.createStatement(ResultSet.TYPE_SCROLL_SENSITIVE, ResultSet.CONCUR_READ_ONLY);
-        final ResultSet results = stmt.executeQuery("SELECT * FROM " + csvTableName)) {
-
-      final String[] columnNames = schema.columnNames();
-      Log.debug("Schema columns (" + columnNames.length + "): " + CommonUtil.array2String(columnNames));
-
-      while(results.next()) {
-        final Object[] values = new Object[columnNames.length];
-
-        for(int i = 0; i < columnNames.length; i++) {
-          final ColumnSchema col = schema.columns.get(i);
-
-          final String raw = results.getString(col.name);
-          values[i] = convertCsvString(raw, col);
-        }
-
-        Log.debug("Inserting row: " + CommonUtil.array2String(
-                Arrays.stream(values).map(v->v == null? "null" : String.valueOf(v)).toArray(String[]::new)
-                                                             ));
-
-        table.createInsert()
-                .setColumnNames(columnNames)
-                .setParams(values)
-                .execute();
       }
     }
   }

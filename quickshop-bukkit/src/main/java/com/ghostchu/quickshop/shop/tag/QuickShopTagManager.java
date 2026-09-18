@@ -102,6 +102,18 @@ public class QuickShopTagManager implements TagManager {
     });
   }
 
+  /**
+   * Drops the in-memory tag state and reloads it from the database. Unlike
+   * {@link #loadAllFromDB()} (which merges into the existing maps), this replaces the state —
+   * required after a recovery import has purged and rewritten the tag tables.
+   */
+  public void reloadFromDB() {
+
+    tags.clear();
+    playerIndexes.clear();
+    loadAllFromDB();
+  }
+
   @Override
   public TaggingResult addTag(final long shopId, final UUID player, final String tag, final boolean db) {
 

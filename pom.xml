@@ -190,6 +190,7 @@
                                         <include>org.eclipse.aether:*:*</include>
                                         <include>dev.dejvokep:boosted-yaml</include>
                                         <include>org.slf4j:slf4j-jdk14:*</include>
+                                        <include>net.sourceforge.csvjdbc:*</include>
                                         <include>cc.carm.lib:*</include>
                                     </includes>
                                     <excludes>
