@@ -29,6 +29,21 @@ public final class QUserImpl implements QUser {
   private final PlayerFinder finder;
   @JsonUtil.Hidden
   private final ExecutorService executorService;
+
+  /**
+   * A hot disable/enable cycle (PlugMan, /reload) shuts down the static QuickExecutor
+   * pools and rebuilds fresh ones, but this class's static DESERIALIZED_CACHE survives
+   * the reload with entries still holding the dead executor — every profile lookup on a
+   * cached user would then fail with RejectedExecutionException for up to the cache's
+   * 5-minute TTL. Resolve a live executor at use time instead.
+   */
+  private ExecutorService liveProfileIoExecutor() {
+
+    if(this.executorService == null || this.executorService.isShutdown()) {
+      return QuickExecutor.getPrimaryProfileIoExecutor();
+    }
+    return this.executorService;
+  }
   private String username;
   private UUID uniqueId;
   private boolean realPlayer;
@@ -195,7 +210,7 @@ public final class QUserImpl implements QUser {
 
     this.realPlayer = true;
     this.username = string;
-    this.uniqueId = this.finder.name2Uuid(username, true, executorService);
+    this.uniqueId = this.finder.name2Uuid(username, true, liveProfileIoExecutor());
     if(this.uniqueId == null) {
       throw new IllegalArgumentException("Cannot find uuid from username:" + username);
     }
@@ -213,7 +228,7 @@ public final class QUserImpl implements QUser {
 
     this.realPlayer = true;
     this.uniqueId = UUID.fromString(string);
-    this.finder.uuid2NameFuture(this.uniqueId, true, executorService)
+    this.finder.uuid2NameFuture(this.uniqueId, true, liveProfileIoExecutor())
             .thenAccept(result->{
               this.username = result;
               endCheck();

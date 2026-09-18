@@ -65,6 +65,12 @@ public final class MarketUtils {
 
   private static final java.util.concurrent.ConcurrentHashMap<Long, SnapshotEntry> INVENTORY_SNAPSHOTS = new java.util.concurrent.ConcurrentHashMap<>();
   private static final java.util.concurrent.ConcurrentHashMap<Long, CompletableFuture<Void>> INVENTORY_INFLIGHT = new java.util.concurrent.ConcurrentHashMap<>();
+  /**
+   * Stale-entry eviction horizon: shop ids are auto-increment and never reused, so
+   * without an eviction every browsed shop (including deleted ones) kept an entry
+   * forever — unbounded on servers that churn through shops for months.
+   */
+  private static final long INVENTORY_SNAPSHOT_EVICT_AFTER_MS = 10 * INVENTORY_SNAPSHOT_TTL_MS;
 
   private static final class SnapshotEntry {
 
@@ -152,6 +158,13 @@ public final class MarketUtils {
                                                         fetchedAt - INVENTORY_SNAPSHOT_TTL_MS + 1_000L));
         }
         INVENTORY_INFLIGHT.remove(id);
+      }
+      // amortized eviction piggybacked on each completed load batch: entries past the
+      // eviction horizon are stale well beyond the freshness window and can only have
+      // survived this long if their shop stopped being browsed (or was deleted)
+      final long evictOlderThan = fetchedAt - INVENTORY_SNAPSHOT_EVICT_AFTER_MS;
+      if(!INVENTORY_SNAPSHOTS.isEmpty()) {
+        INVENTORY_SNAPSHOTS.values().removeIf(entry->entry.fetchedAt < evictOlderThan);
       }
     });
   }

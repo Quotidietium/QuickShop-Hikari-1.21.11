@@ -243,6 +243,9 @@ database:
   skip-version-check: false
   # Connection pool properties (HikariCP).
   # Advanced: tune for large servers if you know what you're doing.
+  # Pool-level keys (connectionTimeout, idleTimeout, maxLifetime, maximumPoolSize,
+  # minimumIdle, keepaliveTime, leakDetectionThreshold) configure HikariCP itself;
+  # every other key is passed to the JDBC driver as a connection property.
   properties:
     connectionTimeout: 60000
     idleTimeout: 10000
