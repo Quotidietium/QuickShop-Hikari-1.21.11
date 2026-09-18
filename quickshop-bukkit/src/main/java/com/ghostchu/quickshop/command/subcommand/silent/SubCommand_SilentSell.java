@@ -21,12 +21,8 @@ public class SubCommand_SilentSell extends SubCommand_SilentBase {
   @Override
   protected void doSilentCommand(final Player sender, @NotNull final Shop shop, @NotNull final CommandParser parser) {
 
-    if(!plugin.perm().hasPermission(sender, "quickshop.create.sell")) {
-      plugin.text().of("no-permission").send();
-      return;
-    }
     if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.SET_SHOPTYPE)
-       && !plugin.perm().hasPermission(sender, "quickshop.create.admin")) {
+       && !plugin.perm().hasPermission(sender, "quickshop.other.sell")) {
       plugin.text().of(sender, "not-managed-shop").send();
       return;
     }

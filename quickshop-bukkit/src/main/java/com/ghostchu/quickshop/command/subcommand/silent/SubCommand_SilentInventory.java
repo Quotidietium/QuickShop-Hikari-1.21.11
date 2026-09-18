@@ -35,15 +35,14 @@ public class SubCommand_SilentInventory extends SubCommand_SilentBase {
     }
 
     if(plugin.getConfig().getBoolean("shop.lock") && !shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)) {
-      if(plugin.perm().hasPermission(sender, "quickshop.other.open")) {
-        if(LockListener.lockCoolDown.getIfPresent(sender.getUniqueId()) == null) {
-          plugin.text().of(sender, "bypassing-lock").send();
-          LockListener.lockCoolDown.put(sender.getUniqueId(), LockListener.EMPTY_OBJECT);
-        }
+      if(!plugin.perm().hasPermission(sender, "quickshop.other.open")) {
+        plugin.text().of(sender, "that-is-locked").send();
         return;
       }
-      plugin.text().of(sender, "that-is-locked").send();
-      return;
+      if(LockListener.lockCoolDown.getIfPresent(sender.getUniqueId()) == null) {
+        plugin.text().of(sender, "bypassing-lock").send();
+        LockListener.lockCoolDown.put(sender.getUniqueId(), LockListener.EMPTY_OBJECT);
+      }
     }
 
     sender.openInventory(inventory.getHolder().getInventory());

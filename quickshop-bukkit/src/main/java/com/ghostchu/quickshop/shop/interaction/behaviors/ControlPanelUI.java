@@ -23,6 +23,7 @@ import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.api.shop.interaction.InteractionBehavior;
 import com.ghostchu.quickshop.api.shop.interaction.InteractionClick;
 import com.ghostchu.quickshop.api.shop.interaction.InteractionType;
+import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermissionGroup;
 import com.ghostchu.quickshop.menu.ShopKeeperMenu;
 import com.ghostchu.quickshop.util.Util;
@@ -35,6 +36,8 @@ import org.bukkit.event.Event;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.UUID;
 
 /**
  * ControlPanelUI
@@ -72,8 +75,12 @@ public class ControlPanelUI implements InteractionBehavior {
     final MenuViewer viewer = new MenuViewer(event.getPlayer().getUniqueId());
     viewer.addData(ShopKeeperMenu.SHOP_DATA_ID, shop.getShopId());
 
-    final String group = shop.getPlayerGroup(event.getPlayer().getUniqueId());
-    if(group.equalsIgnoreCase(BuiltInShopPermissionGroup.STAFF.getNamespacedNode())
+    final UUID viewerId = event.getPlayer().getUniqueId();
+    final String group = shop.getPlayerGroup(viewerId);
+    // owner + management-level grants see the control panel; the raw group strings alone
+    // missed the owner (group "owner") and any custom management grant
+    if(shop.playerAuthorize(viewerId, BuiltInShopPermission.MANAGEMENT_PERMISSION)
+       || group.equalsIgnoreCase(BuiltInShopPermissionGroup.STAFF.getNamespacedNode())
        || group.equalsIgnoreCase(BuiltInShopPermissionGroup.ADMINISTRATOR.getNamespacedNode())) {
 
       MenuManager.instance().addViewer(viewer);

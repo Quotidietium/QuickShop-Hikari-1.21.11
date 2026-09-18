@@ -23,7 +23,7 @@ public class SubCommand_SilentBuy extends SubCommand_SilentBase {
   protected void doSilentCommand(final Player sender, @NotNull final Shop shop, @NotNull final CommandParser parser) {
 
     if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.SET_SHOPTYPE)
-       && !plugin.perm().hasPermission(sender, "quickshop.create.admin")) {
+       && !plugin.perm().hasPermission(sender, "quickshop.other.buy")) {
       plugin.text().of(sender, "no-permission").send();
       return;
     }

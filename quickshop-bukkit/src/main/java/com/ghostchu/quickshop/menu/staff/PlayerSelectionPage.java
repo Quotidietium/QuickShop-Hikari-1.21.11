@@ -19,6 +19,7 @@ package com.ghostchu.quickshop.menu.staff;
 
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermissionGroup;
 import com.ghostchu.quickshop.config.GuiConfig;
 import com.ghostchu.quickshop.menu.shared.ClearSearchAction;
@@ -241,6 +242,13 @@ public class PlayerSelectionPage {
                                                              .profile(profile))
                                              .withActions(actions)
                                              .withActions(new RunnableAction((click)->{
+                                               // Re-check at click time: menu visibility is not
+                                               // an authorization record.
+                                               if(!shop.get().playerAuthorize(id, BuiltInShopPermission.MANAGEMENT_PERMISSION)
+                                                  && !QuickShop.getInstance().perm().hasPermission(Bukkit.getPlayer(id), "quickshop.other.staff")) {
+                                                 QuickShop.getInstance().text().of(id, "no-permission").send();
+                                                 return;
+                                               }
                                                shop.get().setPlayerGroup(uuid, BuiltInShopPermissionGroup.STAFF);
                                                QuickShop.getInstance().text().of(id, "shop-staff-added", name).send();
                                              }), new SwitchPageAction(returnMenu, returnPage))

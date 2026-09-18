@@ -18,6 +18,8 @@ package com.ghostchu.quickshop.menu.keeper;
  */
 
 import com.ghostchu.quickshop.QuickShop;
+import com.ghostchu.quickshop.api.event.Phase;
+import com.ghostchu.quickshop.api.event.settings.type.ShopDisplayEvent;
 import com.ghostchu.quickshop.api.inventory.InventoryWrapper;
 import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
@@ -57,6 +59,7 @@ import static com.ghostchu.quickshop.menu.ShopHistoryMenu.HISTORY_RECORDS;
 import static com.ghostchu.quickshop.menu.ShopHistoryMenu.HISTORY_SUMMARY;
 import static com.ghostchu.quickshop.menu.ShopHistoryMenu.SHOPS_DATA;
 import static com.ghostchu.quickshop.menu.ShopKeeperMenu.KEEPER_MAIN;
+import static com.ghostchu.quickshop.menu.ShopKeeperMenu.SHOP_DATA_ID;
 import static com.ghostchu.quickshop.shop.SimpleShopManager.ACTIVE_STATE;
 import static com.ghostchu.quickshop.shop.SimpleShopManager.BUYING_TYPE;
 import static com.ghostchu.quickshop.shop.SimpleShopManager.FROZEN_STATE;
@@ -155,15 +158,26 @@ public class MainPage extends QuickShopPage {
           final String modeState = (!shop.get().isDisableDisplay())? "ACTIVE" : "INACTIVE";
 
           final StateIcon changeIcon = new StateIcon(activeStack, null, "SHOP_DISPLAY", modeState, (currentState)->{
-            if(currentState.toUpperCase(Locale.ROOT).equals("ACTIVE")) {
-              Util.regionThread(shop.get().bukkitLocation(), ()->shop.get().setDisableDisplay(true));
-              return "INACTIVE";
-            } else if(currentState.toUpperCase(Locale.ROOT).equals("INACTIVE")) {
-              Util.regionThread(shop.get().bukkitLocation(), ()->shop.get().setDisableDisplay(false));
-              return "ACTIVE";
+            // Re-check at click time: menu visibility is not an authorization
+            // record, and the shop may have been deleted since this page rendered.
+            if(shop.get().isDeleted()
+               || (!shop.get().playerAuthorize(id, BuiltInShopPermission.TOGGLE_DISPLAY)
+                   && !QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.toggledisplay"))) {
+              return currentState;
             }
-            Util.regionThread(shop.get().bukkitLocation(), ()->shop.get().setDisableDisplay(false));
-            return "ACTIVE";
+            final boolean next = !currentState.toUpperCase(Locale.ROOT).equals("ACTIVE");
+            ShopDisplayEvent event = new ShopDisplayEvent(Phase.PRE, shop.get(), shop.get().isDisableDisplay(), next);
+            event.callEvent();
+
+            event = event.clone(Phase.MAIN);
+            if(event.callCancellableEvent()) {
+              return currentState;
+            }
+            final boolean updated = event.updated();
+            Util.regionThread(shop.get().bukkitLocation(), ()->shop.get().setDisableDisplay(updated));
+            event = event.clone(Phase.POST);
+            event.callEvent();
+            return updated? "INACTIVE" : "ACTIVE";
           });
           changeIcon.setSlot(displayToggleSlot);
           changeIcon.addState("ACTIVE", activeStack);
@@ -184,9 +198,24 @@ public class MainPage extends QuickShopPage {
                                            if(!message.isEmpty()) {
                                              try {
                                                final BigDecimal price = new BigDecimal(message);
+                                               // Re-check at click time: menu visibility is not
+                                               // an authorization record, and the shop may have
+                                               // been deleted since this page rendered.
+                                               if(shop.get().isDeleted()
+                                                  || (!shop.get().playerAuthorize(id, BuiltInShopPermission.SET_PRICE)
+                                                      && !QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.price"))) {
+                                                 return true;
+                                               }
                                                // Update price and reopen menu in the same region thread to ensure price is updated before GUI shows
                                                Util.regionThread(shop.get().bukkitLocation(), ()->{
                                                  ShopUtil.setPrice(QuickShop.getInstance(), QUserImpl.createFullFilled(player), price.doubleValue(), shop.get());
+                                                 // the chat input flow closed the inventory, which
+                                                 // dropped the viewer - rebuild it or the reopened
+                                                 // menu renders empty
+                                                 final MenuViewer priceViewer = new MenuViewer(id);
+                                                 priceViewer.addData(SHOP_DATA_ID, shop.get().getShopId());
+                                                 MenuManager.instance().removeViewer(id);
+                                                 MenuManager.instance().addViewer(priceViewer);
                                                  // Reopen menu after price is set
                                                  final MenuPlayer menuPlayer = QuickShop.getInstance().createMenuPlayer(player);
                                                  menuPlayer.inventory().openMenu(menuPlayer, "qs:keeper", KEEPER_MAIN);
@@ -226,6 +255,13 @@ public class MainPage extends QuickShopPage {
           final String modeState = shop.get().shopState().identifier().toUpperCase(Locale.ROOT);
 
           final StateIcon changeIcon = new StateIcon(freezeStack, null, "SHOP_STATE", modeState, (currentState)->{
+            // Re-check at click time: menu visibility is not an authorization
+            // record, and the shop may have been deleted since this page rendered.
+            if(shop.get().isDeleted()
+               || (!shop.get().playerAuthorize(id, BuiltInShopPermission.SET_SHOP_STATE)
+                   && !QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.freeze"))) {
+              return currentState;
+            }
             if(currentState.toUpperCase(Locale.ROOT).equals("ACTIVE")) {
               Util.regionThread(shop.get().bukkitLocation(), ()->shop.get().shopState(FROZEN_STATE));
               return "FROZEN";
@@ -252,8 +288,7 @@ public class MainPage extends QuickShopPage {
         if(shop.get().playerAuthorize(id, BuiltInShopPermission.SET_SHOPTYPE)
            && QuickShop.getInstance().perm().hasPermission(player, "quickshop.create.buy")
            && QuickShop.getInstance().perm().hasPermission(player, "quickshop.create.sell")
-           || QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.freeze")
-              && QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.sell")
+           || QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.sell")
               && QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.buy")) {
 
           final String sellingText = QuickShop.getInstance().text().of("shop-type.selling").plain();
@@ -270,6 +305,14 @@ public class MainPage extends QuickShopPage {
           final String modeState = shop.get().shopType().identifier().toUpperCase(Locale.ROOT);
 
           final StateIcon changeIcon = new StateIcon(buyingStack, null, "SHOP_TYPE", modeState, (currentState)->{
+            // Re-check at click time: menu visibility is not an authorization
+            // record, and the shop may have been deleted since this page rendered.
+            if(shop.get().isDeleted()
+               || (!shop.get().playerAuthorize(id, BuiltInShopPermission.SET_SHOPTYPE)
+                   && !(QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.sell")
+                        && QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.buy")))) {
+              return currentState;
+            }
             if(currentState.toUpperCase(Locale.ROOT).equals("SELLING")) {
               Util.regionThread(shop.get().bukkitLocation(), ()->shop.get().shopType(BUYING_TYPE));
               return "BUYING";
@@ -306,11 +349,17 @@ public class MainPage extends QuickShopPage {
                                          .withSlot(invSlot)
                                          .withActions(new RunnableAction((click)->{
 
-                                           if(QuickShop.getInstance().getConfig().getBoolean("shop.lock")
-                                              && !shop.get().playerAuthorize(player.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)
-                                              && QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.open")) {
-                                             QuickShop.getInstance().text().of(player, "that-is-locked").send();
+                                           if(shop.get().isDeleted()) {
                                              return;
+                                           }
+                                           if(QuickShop.getInstance().getConfig().getBoolean("shop.lock")
+                                              && !shop.get().playerAuthorize(player.getUniqueId(), BuiltInShopPermission.ACCESS_INVENTORY)) {
+                                             if(!QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.open")) {
+                                               QuickShop.getInstance().text().of(player, "that-is-locked").send();
+                                               return;
+                                             }
+                                             // bypass path: announce once, then open like /qs inventory
+                                             QuickShop.getInstance().text().of(player, "bypassing-lock").send();
                                            }
 
                                            viewer.get().close(QuickShop.getInstance().createMenuPlayer(player));
@@ -411,6 +460,11 @@ public class MainPage extends QuickShopPage {
                                                historyViewer.addData(HISTORY_SUMMARY, summary);
 
                                                Util.mainThreadRun(()->{
+                                                 // the player may have quit during the DB round trips
+                                                 if(!player.isOnline()) {
+                                                   MenuManager.instance().removeViewer(id);
+                                                   return;
+                                                 }
                                                  MenuManager.instance().open("qs:history", 1, menuPlayer);
                                                });
 
@@ -436,6 +490,14 @@ public class MainPage extends QuickShopPage {
                                          .withActions(new GuiChatAction((message)->{
                                            if(!message.isEmpty()) {
                                              if(message.equalsIgnoreCase("confirm")) {
+                                               // Re-check at click time: menu visibility is not
+                                               // an authorization record, and the shop may have
+                                               // been deleted since this page rendered.
+                                               if(shop.get().isDeleted()
+                                                  || (!shop.get().playerAuthorize(id, BuiltInShopPermission.DELETE)
+                                                      && !QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.destroy"))) {
+                                                 return true;
+                                               }
                                                Util.regionThread(shop.get().bukkitLocation(), ()->QuickShop.getInstance().getShopManager().deleteShop(shop.get()));
                                                QuickShop.getInstance().logEvent(new ShopRemoveLog(QUserImpl.createFullFilled(player), "/quickshop remove command", shop.get().saveToInfoStorage()));
                                                return true;

@@ -6,6 +6,7 @@ import com.ghostchu.quickshop.api.command.CommandHandler;
 import com.ghostchu.quickshop.api.command.CommandParser;
 import com.ghostchu.quickshop.api.event.CalendarEvent;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
@@ -37,7 +38,7 @@ public class SubCommand_Limit implements CommandHandler<Player> {
       quickshop.text().of(sender, "not-looking-at-shop").send();
       return;
     }
-    if (!sender.getUniqueId().equals(shop.getOwner().getUniqueId())){
+    if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.OWNERSHIP_TRANSFER)) {
       quickshop.text().of(sender, "not-managed-shop").send();
       return;
     }
