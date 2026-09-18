@@ -50,7 +50,12 @@ public class SubCommand_Sign implements CommandHandler<Player> {
     }
     for(final Sign sign : shop.getSigns()) {
       plugin.getShopManager().makeShopSign(shop.bukkitLocation().getBlock(), sign.getBlock(), material);
-      shop.claimShopSign(sign);
+      // claim the FRESH block state: makeShopSign replaced the block type, so writing
+      // the PDC claim onto the pre-replacement snapshot made update() a silent no-op
+      // and the claim could be lost to a restart before the follow-up render
+      if(sign.getBlock().getState() instanceof final Sign freshSign) {
+        shop.claimShopSign(freshSign);
+      }
     }
     shop.setSignText(plugin.text().findRelativeLanguages(sender));
   }

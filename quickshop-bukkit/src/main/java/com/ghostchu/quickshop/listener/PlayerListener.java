@@ -198,7 +198,13 @@ public class PlayerListener extends AbstractQSListener {
     if(e.getHand() != EquipmentSlot.HAND) {
       return;
     }
-    if(e.getAction() != Action.RIGHT_CLICK_BLOCK || e.getItem() == null || !Util.isDyes(e.getItem().getType())) {
+    // dyes recolor the sign; glow ink sacs make it glow and honeycomb waxes it —
+    // all three are right-click sign alterations non-owners must not perform
+    if(e.getAction() != Action.RIGHT_CLICK_BLOCK || e.getItem() == null) {
+      return;
+    }
+    final Material heldType = e.getItem().getType();
+    if(!Util.isDyes(heldType) && heldType != Material.GLOW_INK_SAC && heldType != Material.HONEYCOMB) {
       return;
     }
     final Block block = e.getClickedBlock();

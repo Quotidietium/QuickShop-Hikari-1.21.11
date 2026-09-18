@@ -143,9 +143,10 @@ public class SimpleShopLayoutProvider implements IShopLayoutProvider, Reloadable
             }
             // mirrors Shop#inventoryAvailable()'s branch order for built-in types:
             // unlimited shops are always available, otherwise the type's quantity
-            // decides (neither built-in type reaches the frozen fall-through, since
-            // isSelling() == !isBuying() covers both)
-            renderedLines.add(renderHeader(shop, locale, shop.isUnlimited() || remaining > 0));
+            // decides. A frozen shop is NOT available regardless of stock — the
+            // trading line already says "Out of Service" and a green header above it
+            // invited players into a guaranteed rejection
+            renderedLines.add(renderHeader(shop, locale, shop.shopState().isTradingAllowed() && (shop.isUnlimited() || remaining > 0)));
           } else {
             renderedLines.add(renderHeader(shop, locale));
           }
@@ -165,6 +166,12 @@ public class SimpleShopLayoutProvider implements IShopLayoutProvider, Reloadable
           break;
         case "price":
           renderedLines.add(renderPrice(shop, locale));
+          break;
+        default:
+          // unknown/typo'd layout token: emit an empty line so line positions stay
+          // aligned — without it the rendered list came up short and setLines left
+          // the trailing sign lines frozen at their previous (e.g. stale price) text
+          renderedLines.add(Component.empty());
           break;
       }
     }

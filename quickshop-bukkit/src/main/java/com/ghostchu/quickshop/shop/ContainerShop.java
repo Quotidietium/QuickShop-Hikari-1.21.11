@@ -2114,11 +2114,14 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   public void setSignText(@NotNull final ProxiedLocale locale) {
 
     //Util.ensureThread(false);
-    if(!Util.isLoaded(this.location)) {
-      return;
-    }
-
+    // the loaded check must run ON the region thread inside the callback: callers
+    // include the async SignUpdateWatcher thread, where World.isChunkLoaded is an
+    // unsupported cross-thread chunk query whose stale result silently dropped sign
+    // updates for chunks mid load/unload
     QuickShop.folia().getScheduler().runAtLocation(this.location, (consumer)->{
+      if(!Util.isLoaded(this.location)) {
+        return;
+      }
       this.setSignText(getSignText(locale));
     });
   }

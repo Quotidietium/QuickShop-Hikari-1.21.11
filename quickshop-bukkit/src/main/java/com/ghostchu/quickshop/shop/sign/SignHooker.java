@@ -31,7 +31,7 @@ public class SignHooker extends AbstractQSListener {
 
     final Map<Location, Shop> shops = plugin.getShopManager().getShops(player.getWorld().getName(), chunk.getX(), chunk.getZ());
     if (shops != null) {
-      shops.forEach((loc, shop)->updatePerPlayerShopSign(player, loc, shop));
+      shops.forEach((loc, shop)->QuickShop.folia().getScheduler().runAtLocationLater(shop.bukkitLocation(), ()->updatePerPlayerShopSign(player, loc, shop), 1));
     }
   }
 

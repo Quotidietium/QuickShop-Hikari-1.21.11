@@ -237,7 +237,9 @@ public class PaperPlatform implements Platform {
   @Override
   public void sendSignTextChange(@NotNull final Player player, @NotNull final Sign sign, final boolean glowing, @NotNull final List<Component> components) {
 
-    player.sendSignChange(sign.getLocation(), components);
+    // the glowing flag must ride along: without it every per-player sign packet
+    // overrode a glow-enabled sign's client-side rendering with the non-glowing default
+    player.sendSignChange(sign.getLocation(), components, glowing);
   }
 
   @Override
@@ -257,8 +259,11 @@ public class PaperPlatform implements Platform {
   @Override
   public void setLines(@NotNull final Sign sign, @NotNull final List<Component> component) {
 
-    for(int i = 0; i < Math.min(component.size(), 4); i++) {
-      sign.line(i, component.get(i));
+    // pad to the full 4 lines: a short render (custom layout with an unknown token)
+    // must blank the trailing lines instead of leaving them frozen at stale text —
+    // that used to keep an outdated price visible on the sign
+    for(int i = 0; i < 4; i++) {
+      sign.line(i, i < component.size()? component.get(i) : Component.empty());
     }
     sign.update(true, false);
   }

@@ -50,7 +50,10 @@ public class BlockListener extends AbstractProtectionListener {
 
   private void init() {
 
-    this.updateSignWhenInventoryMoving = super.getPlugin().getConfig().getBoolean("shop.update-sign-when-inventory-moving", true);
+    // default false to match the shipped config: the shipped default keeps every
+    // hopper move server-wide off the sign-refresh path; missing-key (legacy) configs
+    // used to silently run the expensive default instead
+    this.updateSignWhenInventoryMoving = super.getPlugin().getConfig().getBoolean("shop.update-sign-when-inventory-moving", false);
     this.disableSuperTool = super.getPlugin().getConfig().getBoolean("shop.disable-super-tool");
     this.allowOwnerBreakShopSign = super.getPlugin().getConfig().getBoolean("shop.allow-owner-break-shop-sign");
   }

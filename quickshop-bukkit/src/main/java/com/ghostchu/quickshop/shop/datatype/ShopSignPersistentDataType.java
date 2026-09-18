@@ -5,6 +5,7 @@ import com.ghostchu.quickshop.shop.ShopSignStorage;
 import org.bukkit.persistence.PersistentDataAdapterContext;
 import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 public class ShopSignPersistentDataType
         implements PersistentDataType<String, ShopSignStorage> {
@@ -32,10 +33,18 @@ public class ShopSignPersistentDataType
   }
 
   @Override
-  public @NotNull ShopSignStorage fromPrimitive(
+  public @Nullable ShopSignStorage fromPrimitive(
           @NotNull final String primitive, @NotNull final PersistentDataAdapterContext context) {
 
-    return JsonUtil.getGson().fromJson(primitive, ShopSignStorage.class);
+    // third-party writes/crashes can leave corrupt JSON in the sign's PDC; letting the
+    // exception escape turned every later shop deletion into a half-completed state
+    // (marked deleted but never unregistered/refunded, because getSigns() blew up mid
+    // cleanup). A null read degrades to "not a claimed shop sign"
+    try {
+      return JsonUtil.getGson().fromJson(primitive, ShopSignStorage.class);
+    } catch(final RuntimeException e) {
+      return null;
+    }
   }
 
 }
