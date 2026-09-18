@@ -41,9 +41,6 @@ public class SubCommand_SilentHistory extends SubCommand_SilentBase {
       return;
     }
 
-    final MenuViewer viewer = new MenuViewer(sender.getUniqueId());
-    MenuManager.instance().addViewer(viewer);
-
     final MenuPlayer menuPlayer = QuickShop.getInstance().createMenuPlayer(sender);
 
     final List<Shop> shops = new ArrayList<>();
@@ -51,20 +48,28 @@ public class SubCommand_SilentHistory extends SubCommand_SilentBase {
     Util.asyncThreadRun(()->{
       final ShopHistory shopHistory = new ShopHistory(QuickShop.getInstance(), shops);
 
+      // viewer is created here, right before its data lands: addViewer on an existing
+      // uuid only merges scalars into the OLD viewer (kept in the map), so a viewer
+      // added before the DB round trips writes its data into an orphan and the menu
+      // shows the previous query's history — see SubCommand_History for the full story
+      MenuManager.instance().removeViewer(sender.getUniqueId());
+      final MenuViewer viewer = new MenuViewer(sender.getUniqueId());
+      MenuManager.instance().addViewer(viewer);
       try {
         final List<ShopHistory.ShopHistoryRecord> queryResult = shopHistory.query();
         final ShopHistory.ShopSummary summary = shopHistory.generateSummary().join();
         Log.debug(summary.toString());
 
-        if(queryResult == null) {
-          return;
-        }
-
         final Map<Long, DataRecord> dataRecords = new ConcurrentHashMap<>();
         final List<CompletableFuture<Void>> futures = new ArrayList<>();
+        // one lookup per distinct data id: many records share the same shop item snapshot
+        final java.util.Set<Long> seenDataIds = new java.util.HashSet<>();
 
         for(final ShopHistory.ShopHistoryRecord record : queryResult) {
           final long id = record.dataId();
+          if(!seenDataIds.add(id)) {
+            continue;
+          }
 
           futures.add(QuickShop.getInstance()
                               .getDatabaseHelper()

@@ -327,6 +327,10 @@ public class PlayerListener extends AbstractQSListener {
   public void onPlayerQuit(final PlayerQuitEvent e) {
     // Remove them from the menu
     plugin.getShopManager().getInteractiveManager().remove(e.getPlayer().getUniqueId());
+    // menu viewers survive ESC-close by design (the library keeps them for reopen state),
+    // and a history viewer holds up to MAX_RECORDS records plus every item snapshot —
+    // drop it here or that data leaks per player until restart
+    MenuManager.instance().removeViewer(e.getPlayer().getUniqueId());
     // a player holding the inShop marker (opened shop chest, never closed a view) must not
     // pin the UUID in the unbounded queue after leaving
     QuickShop.inShop.remove(e.getPlayer().getUniqueId());

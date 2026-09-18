@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -73,8 +74,9 @@ public class SubCommand_History implements CommandHandler<Player> {
             plugin.text().of(sender, "no-permission").send();
             return;
           }
-          shops.addAll(plugin.getShopManager().getAllShops()
-                               .stream().filter(s->s.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.VIEW_PURCHASE_LOGS)).toList());
+          // filter below, inside the async body: playerAuthorize clones the permission
+          // map per shop, and walking every shop on the server on the main thread makes
+          // /qs history accessible a lag spike on busy servers
         }
         case "global" -> {
           if(!plugin.perm().hasPermission(sender, "quickshop.history.global")) {
@@ -90,22 +92,30 @@ public class SubCommand_History implements CommandHandler<Player> {
       }
     }
 
-    final MenuViewer viewer = new MenuViewer(sender.getUniqueId());
-    MenuManager.instance().addViewer(viewer);
+    final boolean accessible = parser.getArgs().size() == 1
+                               && "accessible".equalsIgnoreCase(parser.getArgs().getFirst());
+    final UUID senderId = sender.getUniqueId();
 
     final MenuPlayer menuPlayer = QuickShop.getInstance().createMenuPlayer(sender);
 
     Util.asyncThreadRun(()->{
+      if(accessible) {
+        shops.addAll(plugin.getShopManager().getAllShops()
+                         .stream().filter(s->s.playerAuthorize(senderId, BuiltInShopPermission.VIEW_PURCHASE_LOGS)).toList());
+      }
       final ShopHistory shopHistory = new ShopHistory(QuickShop.getInstance(), shops);
 
+      // the viewer is created here, right before its data lands: MenuManager.addViewer on an
+      // existing uuid only merges scalars into the OLD viewer, so a viewer added up front
+      // (before two DB round trips) either writes into an orphan or races another menu —
+      // both show stale/empty history. removeViewer first, matching browse/keeper.
+      MenuManager.instance().removeViewer(senderId);
+      final MenuViewer viewer = new MenuViewer(senderId);
+      MenuManager.instance().addViewer(viewer);
       try {
         final List<ShopHistory.ShopHistoryRecord> queryResult = shopHistory.query();
         final ShopHistory.ShopSummary summary = shopHistory.generateSummary().join();
         Log.debug(summary.toString());
-
-        if(queryResult == null) {
-          return;
-        }
 
         final Map<Long, DataRecord> dataRecords = new ConcurrentHashMap<>();
         final List<CompletableFuture<Void>> futures = new ArrayList<>();

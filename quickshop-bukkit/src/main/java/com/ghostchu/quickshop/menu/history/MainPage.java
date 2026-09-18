@@ -263,8 +263,10 @@ public class MainPage {
         }
 
         int i = 0;
+        // resolution memo per buyer: flipping to page N used to re-resolve every skipped
+        // record's username (a profile-IO dispatch per record) before the skip check ran
+        final Map<UUID, String> userNameMemo = new java.util.HashMap<>();
         for(final ShopHistory.ShopHistoryRecord record : queryResult) {
-          final String userName = QUserImpl.createSync(QuickShop.getInstance().getPlayerFinder(), record.buyer()).getDisplay();
           final DataRecord dataRecord = dataRecords.get(record.dataId());
 
           if(i < start) {
@@ -276,6 +278,9 @@ public class MainPage {
           if(i >= (start + items)) break;
 
           if(dataRecord == null) continue;
+
+          final String userName = userNameMemo.computeIfAbsent(record.buyer(),
+                                                               uuid->QUserImpl.createSync(QuickShop.getInstance().getPlayerFinder(), uuid).getDisplay());
 
           ItemStack historyItem = QuickShop.getInstance().platform().decodeStack(dataRecord.getEncoded());
           if(historyItem == null) {

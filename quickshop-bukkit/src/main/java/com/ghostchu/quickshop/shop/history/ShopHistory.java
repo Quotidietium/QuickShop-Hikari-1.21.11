@@ -187,7 +187,7 @@ public class ShopHistory {
         }
         return 0.0d;
       } catch(final SQLException exception) {
-        plugin.logger().warn("Failed to summary unique purchasers", exception);
+        plugin.logger().warn("Failed to summary purchases balance", exception);
         return 0d;
       }
     }, QuickExecutor.getShopHistoryQueryExecutor());
@@ -210,7 +210,7 @@ public class ShopHistory {
         }
         return 0.0d;
       } catch(final SQLException exception) {
-        plugin.logger().warn("Failed to summary unique purchasers", exception);
+        plugin.logger().warn("Failed to summary purchases balance", exception);
         return 0d;
       }
     }, QuickExecutor.getShopHistoryQueryExecutor());
@@ -238,7 +238,7 @@ public class ShopHistory {
         }
         return 0L;
       } catch(final SQLException exception) {
-        plugin.logger().warn("Failed to summary unique purchasers", exception);
+        plugin.logger().warn("Failed to summary purchases count", exception);
         return 0L;
       }
     }, QuickExecutor.getShopHistoryQueryExecutor());
@@ -261,7 +261,7 @@ public class ShopHistory {
         }
         return 0L;
       } catch(final SQLException exception) {
-        plugin.logger().warn("Failed to summary unique purchasers", exception);
+        plugin.logger().warn("Failed to summary purchases count", exception);
         return 0L;
       }
     }, QuickExecutor.getShopHistoryQueryExecutor());
@@ -269,6 +269,13 @@ public class ShopHistory {
 
   public CompletableFuture<ShopSummary> generateSummary() {
 
+    if(shopsMapping.isEmpty()) {
+      // every summary query would build "IN ()" — a SQL syntax error logged twelve times
+      // for a player who simply owns no (persisted) shops
+      return CompletableFuture.completedFuture(new ShopSummary(0, 0, 0, 0, 0,
+                                                                0d, 0d, 0d, 0d, 0d,
+                                                                0L, new LinkedHashMap<>()));
+    }
     final long recentPurchases24h = summaryPurchasesCount(Instant.now().minus(24, ChronoUnit.HOURS), Instant.now()).join();
     final long recentPurchases3d = summaryPurchasesCount(Instant.now().minus(3, ChronoUnit.DAYS), Instant.now()).join();
     final long recentPurchases7d = summaryPurchasesCount(Instant.now().minus(7, ChronoUnit.DAYS), Instant.now()).join();
@@ -302,6 +309,11 @@ public class ShopHistory {
 
   public List<ShopHistoryRecord> query() throws SQLException {
 
+    if(shopsMapping.isEmpty()) {
+      // an empty IN () is a SQL syntax error — a player with no shops (or none persisted
+      // yet) must get an empty view, not an internal-error message
+      return new ArrayList<>();
+    }
     Util.ensureThread(true);
     final List<ShopHistoryRecord> historyRecords = new ArrayList<>();
     // hard cap: the global history view can target every shop on the server, and an
@@ -320,16 +332,21 @@ public class ShopHistory {
           if(!isValidSummaryRecordType(set.getString("type"))) {
             continue;
           }
-
-          final Timestamp date = set.getTimestamp("time");
-          final long shopId = set.getLong("shop");
-          final long dataId = set.getLong("data");
-          final UUID buyer = UUID.fromString(set.getString("buyer"));
-          final ShopOperationEnum shopType = ShopOperationEnum.valueOf(set.getString("type"));
-          final int amount = set.getInt("amount");
-          final double money = set.getDouble("money");
-          final double tax = set.getDouble("tax");
-          historyRecords.add(new ShopHistoryRecord(date, shopId, dataId, buyer, shopType, amount, money, tax));
+          // one corrupt row (hand-edited type casing, malformed buyer uuid) must not
+          // abort the whole history view with an unhandled IllegalArgumentException
+          try {
+            final Timestamp date = set.getTimestamp("time");
+            final long shopId = set.getLong("shop");
+            final long dataId = set.getLong("data");
+            final UUID buyer = UUID.fromString(set.getString("buyer"));
+            final ShopOperationEnum shopType = ShopOperationEnum.valueOf(set.getString("type").toUpperCase(java.util.Locale.ROOT));
+            final int amount = set.getInt("amount");
+            final double money = set.getDouble("money");
+            final double tax = set.getDouble("tax");
+            historyRecords.add(new ShopHistoryRecord(date, shopId, dataId, buyer, shopType, amount, money, tax));
+          } catch(final IllegalArgumentException corruptRow) {
+            plugin.logger().warn("Skipped a corrupt shop history row: {}", corruptRow.getMessage());
+          }
         }
       }
       if(historyRecords.size() >= limit) {

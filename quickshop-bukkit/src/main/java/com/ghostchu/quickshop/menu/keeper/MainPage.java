@@ -52,6 +52,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.ghostchu.quickshop.menu.ShopHistoryMenu.HISTORY_DATA_RECORDS;
 import static com.ghostchu.quickshop.menu.ShopHistoryMenu.HISTORY_RECORDS;
 import static com.ghostchu.quickshop.menu.ShopHistoryMenu.HISTORY_SUMMARY;
 import static com.ghostchu.quickshop.menu.ShopHistoryMenu.SHOPS_DATA;
@@ -374,9 +375,30 @@ public class MainPage extends QuickShopPage {
                                                final ShopHistory.ShopSummary summary = shopHistory.generateSummary().join();
                                                Log.debug(summary.toString());
 
-                                               if(queryResult == null) {
-                                                 return;
+                                               // the history page skips any record whose item snapshot is
+                                               // missing — without this map the button opens an empty list
+                                               final java.util.Map<Long, com.ghostchu.quickshop.api.database.bean.DataRecord> dataRecords = new java.util.concurrent.ConcurrentHashMap<>();
+                                               final List<java.util.concurrent.CompletableFuture<Void>> dataFutures = new ArrayList<>();
+                                               final java.util.Set<Long> seenDataIds = new java.util.HashSet<>();
+                                               for(final ShopHistory.ShopHistoryRecord record : queryResult) {
+                                                 final long dataId = record.dataId();
+                                                 if(!seenDataIds.add(dataId)) {
+                                                   continue;
+                                                 }
+                                                 dataFutures.add(QuickShop.getInstance()
+                                                                 .getDatabaseHelper()
+                                                                 .getDataRecord(dataId)
+                                                                 .thenAccept(data->{
+                                                                   if(data != null) {
+                                                                     dataRecords.put(dataId, data);
+                                                                   }
+                                                                 })
+                                                                 .exceptionally(ex->{
+                                                                   QuickShop.getInstance().logger().warn("Failed to load DataRecord for id {}", dataId, ex);
+                                                                   return null;
+                                                                 }));
                                                }
+                                               java.util.concurrent.CompletableFuture.allOf(dataFutures.toArray(new java.util.concurrent.CompletableFuture[0])).join();
 
                                                final MenuViewer historyViewer = new MenuViewer(id);
                                                // a stale viewer would keep its old data map
@@ -385,6 +407,7 @@ public class MainPage extends QuickShopPage {
                                                MenuManager.instance().addViewer(historyViewer);
                                                historyViewer.addData(SHOPS_DATA, shops);
                                                historyViewer.addData(HISTORY_RECORDS, queryResult);
+                                               historyViewer.addData(HISTORY_DATA_RECORDS, dataRecords);
                                                historyViewer.addData(HISTORY_SUMMARY, summary);
 
                                                Util.mainThreadRun(()->{
