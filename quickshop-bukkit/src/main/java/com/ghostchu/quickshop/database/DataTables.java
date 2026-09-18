@@ -83,6 +83,9 @@ public enum DataTables {
     table.addColumn("receiver", "VARCHAR(128) NOT NULL");
     table.addColumn("time", "DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP");
     table.addColumn("content", "MEDIUMTEXT NOT NULL");
+    // delivery looks up by receiver on every login; the weekly clean deletes by time
+    table.setIndex(IndexType.INDEX, "idx_message_receiver", "receiver");
+    table.setIndex(IndexType.INDEX, "idx_message_time", "time");
   }),
 
   METADATA("metadata", (table)->{
@@ -134,6 +137,8 @@ public enum DataTables {
 
     // TRANSACTION ERROR MESSAGES (NULL means successfully transacted)
     table.addColumn("error", "MEDIUMTEXT");
+    // the log purge deletes by time
+    table.setIndex(IndexType.INDEX, "idx_log_transaction_time", "time");
   }),
 
   TAGS("tags", (table)->{
@@ -164,7 +169,9 @@ public enum DataTables {
     table.addColumn("before", "INT UNSIGNED NOT NULL"); // BEFORE DATA
     table.addColumn("after", "INT UNSIGNED NOT NULL"); // AFTER DATA
 
-    // table.setIndex(IndexType.INDEX, "idx_qs_changed_shop", "shop");
+    // purgeIsolated walks "shop not in shops-table" and the log purge deletes by time
+    table.setIndex(IndexType.INDEX, "idx_log_changes_shop", "shop");
+    table.setIndex(IndexType.INDEX, "idx_log_changes_time", "time");
   }),
 
   LOG_OTHERS("log_others", (table)->{
@@ -175,6 +182,8 @@ public enum DataTables {
     table.addColumn("type", "VARCHAR(255) NOT NULL");
     // LOG DATA (generally is JSON)
     table.addColumn("data", "MEDIUMTEXT NOT NULL");
+    // the log purge deletes by time
+    table.setIndex(IndexType.INDEX, "idx_log_others_time", "time");
   });
 
   private final @NotNull String name;

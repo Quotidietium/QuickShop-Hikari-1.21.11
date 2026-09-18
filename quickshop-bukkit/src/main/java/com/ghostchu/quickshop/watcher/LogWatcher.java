@@ -32,44 +32,30 @@ public class LogWatcher implements AutoCloseable, Runnable {
   /** One queue for both eager strings and lazy suppliers, so global ordering is kept. */
   private final Queue<java.util.function.Supplier<String>> logs = new ConcurrentLinkedQueue<>();
 
+  private final QuickShop plugin;
+  private final File log;
+  private final double maxSizeMb;
+
   private WrappedTask task = null;
 
   private PrintWriter printWriter = null;
 
   public LogWatcher(final QuickShop plugin, final File log) {
 
+    this.plugin = plugin;
+    this.log = log;
+    this.maxSizeMb = plugin.getConfig().getDouble("logging.file-size", 10.0d);
+
     try {
-      boolean deleteFailed = false;
       if(!log.exists()) {
         //noinspection ResultOfMethodCallIgnored
         log.getParentFile().mkdirs();
         //noinspection ResultOfMethodCallIgnored
         log.createNewFile();
-      } else {
-        if((log.length() / 1024f / 1024f) > plugin.getConfig().getDouble("logging.file-size")) {
-          final Path logPath = plugin.getDataFolder().toPath().resolve("logs");
-          Files.createDirectories(logPath);
-          //Find a available name
-          Path targetPath;
-          int i = 1;
-          do {
-            targetPath = logPath.resolve(ZonedDateTime.now().format(LOG_FILE_FORMATTER) + "-" + i + ".log.gz");
-            i++;
-          } while(Files.exists(targetPath));
-          Files.createFile(targetPath);
-          final GzipParameters gzipParameters = new GzipParameters();
-          gzipParameters.setFilename(log.getName());
-          try(final GzipCompressorOutputStream archiveOutputStream = new GzipCompressorOutputStream(new BufferedOutputStream(new FileOutputStream(targetPath.toFile())), gzipParameters)) {
-            Files.copy(log.toPath(), archiveOutputStream);
-            archiveOutputStream.finish();
-            if(log.delete()) {
-              //noinspection ResultOfMethodCallIgnored
-              log.createNewFile();
-            } else {
-              deleteFailed = true;
-            }
-          }
-        }
+      }
+      boolean deleteFailed = false;
+      if(isOverSize()) {
+        deleteFailed = rotateArchive();
       }
       final FileWriter logFileWriter;
       if(deleteFailed) {
@@ -155,6 +141,65 @@ public class LogWatcher implements AutoCloseable, Runnable {
       iterator.remove();
     }
     printWriter.flush();
+    // rotation is also checked while running: the constructor-only check let qs.log grow
+    // without bound on servers that run for months between restarts
+    if(isOverSize()) {
+      rotateAndReopen();
+    }
+  }
+
+  private boolean isOverSize() {
+
+    return (log.length() / 1024f / 1024f) > maxSizeMb;
+  }
+
+  /**
+   * Archives the current log file into a dated gzip and recreates it. Returns whether the
+   * original file could not be deleted (caller falls back to truncation).
+   */
+  private boolean rotateArchive() {
+
+    try {
+      final Path logPath = plugin.getDataFolder().toPath().resolve("logs");
+      Files.createDirectories(logPath);
+      //Find a available name
+      Path targetPath;
+      int i = 1;
+      do {
+        targetPath = logPath.resolve(ZonedDateTime.now().format(LOG_FILE_FORMATTER) + "-" + i + ".log.gz");
+        i++;
+      } while(Files.exists(targetPath));
+      Files.createFile(targetPath);
+      final GzipParameters gzipParameters = new GzipParameters();
+      gzipParameters.setFilename(log.getName());
+      try(final GzipCompressorOutputStream archiveOutputStream = new GzipCompressorOutputStream(new BufferedOutputStream(new FileOutputStream(targetPath.toFile())), gzipParameters)) {
+        Files.copy(log.toPath(), archiveOutputStream);
+        archiveOutputStream.finish();
+        if(log.delete()) {
+          //noinspection ResultOfMethodCallIgnored
+          log.createNewFile();
+          return false;
+        }
+        return true;
+      }
+    } catch(final IOException e) {
+      plugin.logger().error("Could not rotate the log file!", e);
+      return true;
+    }
+  }
+
+  private void rotateAndReopen() {
+
+    printWriter.flush();
+    printWriter.close();
+    final boolean deleteFailed = rotateArchive();
+    try {
+      printWriter = new PrintWriter(new FileWriter(log, !deleteFailed));
+    } catch(final IOException e) {
+      // from here on log()/logLazy() drop entries: a dead writer beats an unbounded queue
+      printWriter = null;
+      plugin.logger().error("Could not reopen the log file after rotation!", e);
+    }
   }
 
 }

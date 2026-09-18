@@ -62,7 +62,7 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
   @NotNull
   private final String prefix;
 
-  private final int LATEST_DATABASE_VERSION = 20;
+  private final int LATEST_DATABASE_VERSION = 21;
 
   /**
    * Write-path caches. The data-record dedup SELECT costs a full multi-column table
@@ -1296,18 +1296,38 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
 
   private void performLogPurchasesIndex() {
 
+    // per-index isolation: on a partially-migrated database the first ALTER fails with
+    // "duplicate key name" and the old single catch skipped the remaining two forever
+    createIndexQuietly(DataTables.LOG_PURCHASE.getName(), "idx_log_purchase_shop", "shop");
+    createIndexQuietly(DataTables.LOG_PURCHASE.getName(), "idx_log_purchase_time", "time");
+    createIndexQuietly(DataTables.LOG_PURCHASE.getName(), "idx_log_purchase_buyer", "buyer");
+  }
+
+  /**
+   * Indexes for the tables the purger and the message delivery walk: without them every
+   * time-based DELETE (log purge, startup/weekly clean) and every player-login message
+   * lookup degrades into a full table scan as the tables grow.
+   */
+  private void performMaintenanceIndexes() {
+
+    createIndexQuietly(DataTables.MESSAGES.getName(), "idx_message_receiver", "receiver");
+    createIndexQuietly(DataTables.MESSAGES.getName(), "idx_message_time", "time");
+    createIndexQuietly(DataTables.LOG_OTHERS.getName(), "idx_log_others_time", "time");
+    createIndexQuietly(DataTables.LOG_CHANGES.getName(), "idx_log_changes_shop", "shop");
+    createIndexQuietly(DataTables.LOG_CHANGES.getName(), "idx_log_changes_time", "time");
+    createIndexQuietly(DataTables.LOG_TRANSACTION.getName(), "idx_log_transaction_time", "time");
+  }
+
+  private void createIndexQuietly(final String table, final String indexName, final String column) {
+
     try {
-      getManager().alterTable(DataTables.LOG_PURCHASE.getName())
-              .addIndex(IndexType.INDEX, "idx_log_purchase_shop", "shop")
-              .execute();
-      getManager().alterTable(DataTables.LOG_PURCHASE.getName())
-              .addIndex(IndexType.INDEX, "idx_log_purchase_time", "time")
-              .execute();
-      getManager().alterTable(DataTables.LOG_PURCHASE.getName())
-              .addIndex(IndexType.INDEX, "idx_log_purchase_buyer", "buyer")
+      getManager().alterTable(table)
+              .addIndex(IndexType.INDEX, indexName, column)
               .execute();
     } catch(final SQLException e) {
-      plugin.logger().warn("Cannot setup the table index", e);
+      // "duplicate key name" just means the index is already there (fresh tables get it
+      // from the CREATE TABLE definition); anything else is worth a line in the log
+      Log.debug("Index " + indexName + " on " + table + " not created: " + e.getMessage());
     }
   }
 
@@ -1400,6 +1420,12 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
         logger.info("Data upgrading: Creating a new column... shop_state for the new shop states system.");
         parent.addStateColumn();
         currentDatabaseVersion = 20;
+      }
+
+      if(currentDatabaseVersion == 20) {
+        logger.info("Data upgrading: Creating indexes for log/message tables...");
+        parent.performMaintenanceIndexes();
+        currentDatabaseVersion = 21;
       }
 
       parent.setDatabaseVersion(currentDatabaseVersion).join();

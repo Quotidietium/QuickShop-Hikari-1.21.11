@@ -177,7 +177,15 @@ public class SubCommand_Database implements CommandHandler<CommandSender> {
       });
       // Then we need also purge the isolated data after purge the logs.
       plugin.text().of(sender, "database.trim-start").send();
-      databaseHelper.purgeIsolated().whenComplete((data, err)->plugin.text().of(sender, "database.trim-complete", data).send());
+      databaseHelper.purgeIsolated().whenComplete((data, err)->{
+        if(err != null) {
+          // the old handler ignored err and reported success with a null count
+          plugin.logger().warn("Failed to trim isolated data after log purge.", err);
+          plugin.text().of(sender, "database.purge-done-with-error", -1).send();
+        } else {
+          plugin.text().of(sender, "database.trim-complete", data).send();
+        }
+      });
     } catch(final NumberFormatException e) {
       plugin.text().of(sender, "not-a-number", subParams.getFirst()).send();
     }

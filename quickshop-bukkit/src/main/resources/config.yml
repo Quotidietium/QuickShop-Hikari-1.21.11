@@ -183,6 +183,10 @@ logging:
   # 0 = file
   # 1 = database
   location: 1
+  # Automatically purge DATABASE log tables (log_purchase/log_changes/log_others/log_transaction)
+  # rows older than this many days, checked weekly. 0 disables auto purge — without it the
+  # tables grow without bound on busy servers (manual: /quickshop database purgelogs <days> confirm)
+  auto-purge-days: 0
 
 # Tab completion source:
 # false = Only online players (faster)

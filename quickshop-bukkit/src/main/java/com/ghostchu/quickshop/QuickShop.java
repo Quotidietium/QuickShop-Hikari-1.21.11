@@ -43,6 +43,7 @@ import com.ghostchu.quickshop.economy.QSEconomyManager;
 import com.ghostchu.quickshop.hook.FWorldEditHook;
 import com.ghostchu.quickshop.hook.WorldEditHook;
 import com.ghostchu.quickshop.listener.BlockListener;
+import com.ghostchu.quickshop.listener.CalendarListener;
 import com.ghostchu.quickshop.listener.ChatListener;
 import com.ghostchu.quickshop.listener.ChunkListener;
 import com.ghostchu.quickshop.listener.CustomInventoryListener;
@@ -729,7 +730,7 @@ public class QuickShop implements QuickShopAPI, Reloadable {
               .thenAccept(result->{
               })
               .exceptionally(throwable->{
-                Log.debug("Failed to log event: " + throwable.getMessage());
+                reportLogWriteFailure(throwable);
                 return null;
               });
     }
@@ -755,7 +756,7 @@ public class QuickShop implements QuickShopAPI, Reloadable {
         try {
           getDatabaseHelper().insertHistoryRecord(eventObjectSupplier.get())
                   .exceptionally(throwable->{
-                    Log.debug("Failed to log event: " + throwable.getMessage());
+                    reportLogWriteFailure(throwable);
                     return null;
                   });
         } catch(final Throwable throwable) {
@@ -765,6 +766,22 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     }
 
   }
+
+  /**
+   * Database-mode log writes used to vanish with a dev-only debug line — during a database
+   * outage every event row was lost silently. Throttled so a busy server's failure rate
+   * doesn't turn into console spam (one line per minute while the outage persists).
+   */
+  private void reportLogWriteFailure(final Throwable throwable) {
+
+    final long now = System.currentTimeMillis();
+    final long last = lastLogWriteFailureReport.get();
+    if(now - last >= 60_000L && lastLogWriteFailureReport.compareAndSet(last, now)) {
+      logger().warn("Failed to write log events to the database (further failures throttled to one line/minute); events are being lost until the database recovers.", throwable);
+    }
+  }
+
+  private final java.util.concurrent.atomic.AtomicLong lastLogWriteFailureReport = new java.util.concurrent.atomic.AtomicLong();
 
   @Override
   public void registerLocalizedTranslationKeyMapping(@NotNull final String translationKey, @NotNull final String key) {
@@ -1071,6 +1088,7 @@ public class QuickShop implements QuickShopAPI, Reloadable {
     new PlayerLockClickListener(this).register();
     new MetricListener(this).register();
     new InternalListener(this).register();
+    new CalendarListener(this).register();
     // the "we have a listener to listen the ServiceRegisterEvent" promise next to the
     // delayed economy load — VaultProvider covers Vault's service events itself, this
     // covers non-Vault bridges that enable after our 1-tick delayed load
