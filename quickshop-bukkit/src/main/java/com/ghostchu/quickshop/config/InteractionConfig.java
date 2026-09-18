@@ -19,6 +19,7 @@ package com.ghostchu.quickshop.config;
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+import com.ghostchu.quickshop.api.QuickShopAPI;
 import com.ghostchu.quickshop.api.config.QSConfig;
 import dev.dejvokep.boostedyaml.YamlDocument;
 import dev.dejvokep.boostedyaml.dvs.versioning.BasicVersioning;
@@ -35,19 +36,33 @@ import java.util.Collections;
  */
 public class InteractionConfig extends QSConfig {
 
-  private static InteractionConfig instance;
-
   public InteractionConfig() {
 
     super("interaction.yml", "interaction.yml", Collections.emptyList(),
           LoaderSettings.builder().setAutoUpdate(true).build(),
           UpdaterSettings.builder().setAutoSave(true).setVersioning(new BasicVersioning("version")).build());
-
-    instance = this;
   }
 
-  public static YamlDocument yaml() {
+  /**
+   * Loads interaction.yml, falling back to the bundled defaults when the user file is
+   * unreadable (mirrors GuiConfig's contract): pressing on with a null yaml used to
+   * NPE inside the interaction manager with an error pointing nowhere near the cause.
+   *
+   * @throws IllegalStateException when even the bundled defaults cannot be read
+   */
+  public void loadWithFallback() {
 
-    return instance.getYaml();
+    if(load() && getYaml() != null) {
+      return;
+    }
+    QuickShopAPI.getPluginInstance().getLogger().severe("Failed to parse interaction.yml - falling back to the bundled defaults. Fix the file and run /quickshop reload.");
+    try(final java.io.InputStream defaultsStream = getResource(defaults)) {
+      if(defaultsStream == null) {
+        throw new IllegalStateException("Bundled interaction.yml resource is missing from the jar; cannot load interaction mappings.");
+      }
+      setYaml(YamlDocument.create(defaultsStream, settings));
+    } catch(final java.io.IOException ex) {
+      throw new IllegalStateException("Cannot load interaction.yml nor its bundled defaults", ex);
+    }
   }
 }

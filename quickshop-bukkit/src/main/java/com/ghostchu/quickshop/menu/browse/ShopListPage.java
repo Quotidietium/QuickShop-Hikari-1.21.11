@@ -151,15 +151,15 @@ public class ShopListPage {
     if(!allShops.isEmpty()) {
       final Shop firstShop = allShops.getFirst();
       final org.bukkit.Material firstMaterial = firstShop.getMaterial();
-      final String filterIndicator = getFilterIndicator(filterMode);
+      final Component filterIndicator = getFilterIndicator(id, filterMode);
       final AbstractItemStack<ItemStack> infoStack = new BukkitItemStack()
               .of(firstMaterial.key().asString(), 1)
               .display(QuickShop.getInstance().platform().miniMessage().deserialize(
                       "<yellow>" + CommonUtil.prettifyText(firstMaterial.name()) + "</yellow>"))
               .lore(List.of(
-                      QuickShop.getInstance().platform().miniMessage().deserialize("<gray>Showing: " + filterIndicator + "</gray>"),
-                      QuickShop.getInstance().platform().miniMessage().deserialize("<gray>Shops: <white>" + sortedShops.size() + "</white></gray>"),
-                      QuickShop.getInstance().platform().miniMessage().deserialize("<gray>Average price: <gold>" + formatPrice(avgPrice) + "</gold></gray>")
+                      QuickShop.getInstance().text().of(id, "gui.browse.item-info.showing", filterIndicator).forLocale(),
+                      QuickShop.getInstance().text().of(id, "gui.browse.item-info.shops", sortedShops.size()).forLocale(),
+                      QuickShop.getInstance().text().of(id, "gui.browse.item-info.average-price", formatPrice(avgPrice)).forLocale()
                            ));
 
       playerPage.addIcon(id, new IconBuilder(infoStack).withSlot(itemInfoSlot).build());
@@ -199,7 +199,7 @@ public class ShopListPage {
     final GuiConfig.IconConfig stockConfig = menuConfig != null? menuConfig.getIcon("stock-filter") : null;
     final String stockMaterial = stockConfig != null? stockConfig.getMaterial() : "CHEST";
     final int stockSlot = stockConfig != null? stockConfig.getSlot() : 6;
-    final String stockStatus = stockOnly? "ON" : "OFF";
+    final String stockStatus = QuickShop.getInstance().text().of(id, stockOnly? "gui.browse.stock-filter.enabled" : "gui.browse.stock-filter.disabled").legacy();
 
     playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(stockMaterial, 1)
                                              .display(getConfigDisplay(id, stockConfig, "<gold>In Stock Only: {0}</gold>", stockStatus))
@@ -266,7 +266,7 @@ public class ShopListPage {
       if(i >= (start + items)) break;
 
       // Build shop lore with price indicator and click instruction
-      final List<Component> lore = buildShopLore(shop, avgPrice, canTeleport, inventorySnapshot);
+      final List<Component> lore = buildShopLore(id, shop, avgPrice, canTeleport, inventorySnapshot);
 
       // Get display name for the item
       final org.bukkit.Material material = shop.getMaterial();
@@ -319,91 +319,105 @@ public class ShopListPage {
    * Build the lore for an individual shop. Note: Stock/space come from the render's
    * preloaded inventory-cache snapshot (one batched query per page render).
    */
-  private List<Component> buildShopLore(final Shop shop, final double avgPrice, final boolean canTeleport,
+  private List<Component> buildShopLore(final UUID id, final Shop shop, final double avgPrice, final boolean canTeleport,
                                         final Map<Long, ShopInventoryCountCache> inventorySnapshot) {
 
     final List<Component> lore = new ArrayList<>();
-    final var mm = QuickShop.getInstance().platform().miniMessage();
+    final var text = QuickShop.getInstance().text();
 
     // Owner
     //TODO: use admin-shop when it's an admin shop
-    lore.add(mm.deserialize("<gray>Owner: <white>" + shop.getOwner().getDisplay() + "</white></gray>"));
+    lore.add(text.of(id, "gui.browse.shop.owner", shop.getOwner().getDisplay()).forLocale());
 
     // Shop type
-    final String typeColor = shop.isSelling()? "<green>" : "<#FFA500>";
-    final String typeText = shop.isSelling()? "Selling" : "Buying";
-    lore.add(mm.deserialize("<gray>Type: " + typeColor + typeText + "</gray>"));
+    lore.add(text.of(id, shop.isSelling()? "gui.browse.shop.type-selling" : "gui.browse.shop.type-buying").forLocale());
 
-    // Price with indicator
-    final String priceIndicator = getPriceIndicator(shop.getPrice(), avgPrice, shop.isSelling());
-    final String priceColor = getPriceColor(priceIndicator);
-    lore.add(mm.deserialize("<gray>Price: " + priceColor + formatPrice(shop.getPrice()) + " " + priceIndicator + "</gray>"));
+    // Price with indicator (verdict picks the fully-colored line template)
+    lore.add(text.of(id, priceVerdict(shop.getPrice(), avgPrice, shop.isSelling()).lineKey(),
+                     formatPrice(shop.getPrice())).forLocale());
 
     // Stock/Space - from the render's preloaded snapshot
     // The shop may be in a different region than the player viewing the menu
     if(shop.isSelling()) {
       final int stock = MarketUtils.stockOf(shop, inventorySnapshot);
-      final String stockText = stock < 0? "Unlimited" : String.valueOf(stock);
-      lore.add(mm.deserialize("<gray>Stock: <aqua>" + stockText + "</aqua></gray>"));
+      final String stockText = stock < 0? text.of(id, "gui.browse.shop.unlimited").legacy() : String.valueOf(stock);
+      lore.add(text.of(id, "gui.browse.shop.stock", stockText).forLocale());
     } else {
       final int space = MarketUtils.spaceOf(shop, inventorySnapshot);
-      final String spaceText = space < 0? "Unlimited" : String.valueOf(space);
-      lore.add(mm.deserialize("<gray>Space: <aqua>" + spaceText + "</aqua></gray>"));
+      final String spaceText = space < 0? text.of(id, "gui.browse.shop.unlimited").legacy() : String.valueOf(space);
+      lore.add(text.of(id, "gui.browse.shop.space", spaceText).forLocale());
     }
 
     // Location
     final String world = shop.bukkitLocation().getWorld() != null?
-                         shop.bukkitLocation().getWorld().getName() : "Unknown";
+                         shop.bukkitLocation().getWorld().getName() : text.of(id, "gui.browse.shop.world-unknown").legacy();
     final String coords = shop.bukkitLocation().getBlockX() + ", " +
                           shop.bukkitLocation().getBlockY() + ", " +
                           shop.bukkitLocation().getBlockZ();
-    lore.add(mm.deserialize("<gray>Location: <white>" + world + "</white></gray>"));
-    lore.add(mm.deserialize("<dark_gray>" + coords + "</dark_gray>"));
+    lore.add(text.of(id, "gui.browse.shop.location", world).forLocale());
+    lore.add(text.of(id, "gui.browse.shop.coords", coords).forLocale());
 
     // Click instruction (only if player has teleport permission)
     if(canTeleport) {
       lore.add(Component.empty());
-      lore.add(mm.deserialize("<yellow>Click to teleport</yellow>"));
+      lore.add(text.of(id, "gui.browse.shop.teleport").forLocale());
     }
 
     return lore;
   }
 
   /**
-   * Get a price indicator based on comparison to average
+   * Price comparison verdicts. Each verdict maps to a language-keyed lore line that
+   * carries its own color (the old code derived the color by calling
+   * String.contains on the English indicator text, which translation would break).
    */
-  private String getPriceIndicator(final double price, final double avgPrice, final boolean isSelling) {
+  private enum PriceVerdict {
+    GREAT_DEAL("gui.browse.price-line.great-deal"),
+    GREAT_PRICE("gui.browse.price-line.great-price"),
+    BELOW_AVG("gui.browse.price-line.below-avg"),
+    LOW_OFFER("gui.browse.price-line.low-offer"),
+    ABOVE_AVG("gui.browse.price-line.above-avg"),
+    EXPENSIVE("gui.browse.price-line.expensive"),
+    AVERAGE("gui.browse.price-line.average"),
+    NONE("gui.browse.price-line.plain");
 
-    if(avgPrice == 0) return "";
+    private final String lineKey;
+
+    PriceVerdict(final String lineKey) {
+
+      this.lineKey = lineKey;
+    }
+
+    String lineKey() {
+
+      return lineKey;
+    }
+  }
+
+  /**
+   * Classify a price against the page average (same thresholds the English-only
+   * indicators used).
+   */
+  private PriceVerdict priceVerdict(final double price, final double avgPrice, final boolean isSelling) {
+
+    if(avgPrice == 0) return PriceVerdict.NONE;
 
     final double ratio = price / avgPrice;
 
     if(isSelling) {
       // For selling shops: lower is better for buyers
-      if(ratio < 0.85) return "▼▼ Great Deal!";
-      if(ratio < 0.95) return "▼ Below Avg";
-      if(ratio > 1.15) return "▲▲ Expensive";
-      if(ratio > 1.05) return "▲ Above Avg";
+      if(ratio < 0.85) return PriceVerdict.GREAT_DEAL;
+      if(ratio < 0.95) return PriceVerdict.BELOW_AVG;
+      if(ratio > 1.15) return PriceVerdict.EXPENSIVE;
+      if(ratio > 1.05) return PriceVerdict.ABOVE_AVG;
     } else {
       // For buying shops: higher is better for sellers
-      if(ratio > 1.15) return "▲▲ Great Price!";
-      if(ratio > 1.05) return "▲ Above Avg";
-      if(ratio < 0.85) return "▼▼ Low Offer";
-      if(ratio < 0.95) return "▼ Below Avg";
+      if(ratio > 1.15) return PriceVerdict.GREAT_PRICE;
+      if(ratio > 1.05) return PriceVerdict.ABOVE_AVG;
+      if(ratio < 0.85) return PriceVerdict.LOW_OFFER;
+      if(ratio < 0.95) return PriceVerdict.BELOW_AVG;
     }
-    return "● Average";
-  }
-
-  /**
-   * Get color based on price indicator
-   */
-  private String getPriceColor(final String indicator) {
-
-    if(indicator.contains("Great")) return "<green>";
-    if(indicator.contains("Below") || indicator.contains("Low")) return "<yellow>";
-    if(indicator.contains("Above")) return "<gold>";
-    if(indicator.contains("Expensive")) return "<red>";
-    return "<white>";
+    return PriceVerdict.AVERAGE;
   }
 
   /**
@@ -432,22 +446,27 @@ public class ShopListPage {
   }
 
   /**
-   * Get colored indicator for current filter mode
+   * Get colored indicator for current filter mode (Component arg: the text pipeline
+   * inserts Component args verbatim, keeping the tags from the language value)
    */
-  private String getFilterIndicator(final BrowseFilterMode mode) {
+  private Component getFilterIndicator(final UUID id, final BrowseFilterMode mode) {
 
     return switch(mode) {
-      case ALL -> "<white>All Shops</white>";
-      case BUYING -> "<#FFA500>Buying Shops</#FFA500>";
-      case SELLING -> "<green>Selling Shops</green>";
+      case ALL -> QuickShop.getInstance().text().of(id, "gui.browse.filter-indicator.all").forLocale();
+      case BUYING -> QuickShop.getInstance().text().of(id, "gui.browse.filter-indicator.buying").forLocale();
+      case SELLING -> QuickShop.getInstance().text().of(id, "gui.browse.filter-indicator.selling").forLocale();
     };
   }
 
   /**
-   * Format a price value
+   * Format a price value (same provider-null fallback as GroupedItemPage: the menu can
+   * outlive a broken economy reload)
    */
   private String formatPrice(final double price) {
 
+    if(QuickShop.getInstance().getEconomyManager().provider() == null) {
+      return String.valueOf(price);
+    }
     return QuickShop.getInstance().getEconomyManager().provider()
             .format(BigDecimal.valueOf(price), (String)null);
   }

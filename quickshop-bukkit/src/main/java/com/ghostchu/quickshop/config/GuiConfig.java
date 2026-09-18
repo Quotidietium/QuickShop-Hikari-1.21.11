@@ -45,7 +45,6 @@ import java.util.Map;
 public class GuiConfig extends QSConfig {
 
   private final QuickShop plugin;
-  private static GuiConfig instance;
   private final Map<String, MenuConfig> menuConfigs = new HashMap<>();
 
   public GuiConfig(@NotNull final QuickShop plugin) {
@@ -55,7 +54,6 @@ public class GuiConfig extends QSConfig {
           UpdaterSettings.builder().setAutoSave(true)
                   .setVersioning(new BasicVersioning("version")).build());
 
-    instance = this;
     this.plugin = plugin;
 
     loadConfig();
@@ -107,11 +105,6 @@ public class GuiConfig extends QSConfig {
   public MenuConfig getMenuConfig(final String menuName) {
 
     return menuConfigs.get(menuName);
-  }
-
-  public static YamlDocument yaml() {
-
-    return instance.getYaml();
   }
 
   @Override

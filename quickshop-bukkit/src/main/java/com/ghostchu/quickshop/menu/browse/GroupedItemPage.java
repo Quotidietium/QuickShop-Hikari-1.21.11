@@ -149,7 +149,7 @@ public class GroupedItemPage {
     // Search button (slot 0) - Left-click to search, Right-click to clear
     final String searchMaterial = (searchConfig != null)? searchConfig.getMaterial() : "ANVIL";
     final int searchSlot = (searchConfig != null)? searchConfig.getSlot() : 0;
-    final String currentSearchDisplay = searchQuery.isEmpty()? "None" : searchQuery;
+    final String currentSearchDisplay = searchQuery.isEmpty()? QuickShop.getInstance().text().of(id, "gui.browse.search.none").legacy() : searchQuery;
 
     playerPage.addIcon(id, new IconBuilder(QuickShop.getInstance().stack().of(searchMaterial, 1)
                                              .display(getConfigDisplay(id, searchConfig, "<yellow>Search: {0}</yellow>", currentSearchDisplay))

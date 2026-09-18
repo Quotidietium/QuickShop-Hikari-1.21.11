@@ -35,8 +35,6 @@ import java.util.Collections;
  */
 public class MainConfig extends QSConfig {
 
-  private static MainConfig instance;
-
   public MainConfig(final QuickShop plugin) {
 
     super("config.yml", "config.yml", Collections.emptyList(),
@@ -66,12 +64,7 @@ public class MainConfig extends QSConfig {
                   .addIgnoredRoute("1043", "shop-tax.progressive.brackets", '.')
                   .build());
 
-    instance = this;
     plugin.getReloadManager().register(this);
   }
 
-  public static YamlDocument yaml() {
-
-    return instance.getYaml();
-  }
 }

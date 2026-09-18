@@ -888,8 +888,7 @@ transfer-rejected-fromside: <red>Player <aqua>{0}</aqua> rejected your Shop Tran
 transfer-rejected-toside: <red>You rejected <aqua>{0}</aqua>'s Shop Transfer-request.
 transfer-no-pending-operation: <red>You don't have any pending Transfer-requests.
 transfer-no-self: <red>You can't transfer your shops to yourself.
-transfer-skipped-not-owner: <red>Skipped shop {0}: the requester no longer
-  owns it.
+transfer-skipped-not-owner: "<red>Skipped shop {0}: the requester no longer owns it.</red>"
 benefit-overflow: <red>The sum of all benefits cannot be greater than or equal to
   100%.
 benefit-exists: <red>Target player already in benefits list on this shop.
@@ -1202,6 +1201,37 @@ gui:
       display: "<gold>In Stock Only: {0}</gold>"
       lore:
         - "<gray>Click to toggle</gray>"
+      enabled: "ON"
+      disabled: "OFF"
+    search-none: "None"
+    item-info:
+      showing: "<gray>Showing: {0}</gray>"
+      shops: "<gray>Shops: <white>{0}</white></gray>"
+      average-price: "<gray>Average price: <gold>{0}</gold></gray>"
+    filter-indicator:
+      all: "<white>All Shops</white>"
+      buying: "<#FFA500>Buying Shops</#FFA500>"
+      selling: "<green>Selling Shops</green>"
+    shop:
+      owner: "<gray>Owner: <white>{0}</white></gray>"
+      type-selling: "<gray>Type: <green>Selling</green></gray>"
+      type-buying: "<gray>Type: <#FFA500>Buying</#FFA500></gray>"
+      stock: "<gray>Stock: <aqua>{0}</aqua></gray>"
+      space: "<gray>Space: <aqua>{0}</aqua></gray>"
+      unlimited: "Unlimited"
+      location: "<gray>Location: <white>{0}</white></gray>"
+      world-unknown: "Unknown"
+      coords: "<dark_gray>{0}</dark_gray>"
+      teleport: "<yellow>Click to teleport</yellow>"
+    price-line:
+      great-deal: "<gray>Price: <green>{0} ▼▼ Great Deal!</green></gray>"
+      great-price: "<gray>Price: <green>{0} ▲▲ Great Price!</green></gray>"
+      below-avg: "<gray>Price: <yellow>{0} ▼ Below Avg</yellow></gray>"
+      low-offer: "<gray>Price: <yellow>{0} ▼▼ Low Offer</yellow></gray>"
+      above-avg: "<gray>Price: <gold>{0} ▲ Above Avg</gold></gray>"
+      expensive: "<gray>Price: <red>{0} ▲▲ Expensive</red></gray>"
+      average: "<gray>Price: <white>{0} ● Average</white></gray>"
+      plain: "<gray>Price: <white>{0}</white></gray>"
     back:
       display: "<white>Back to Market</white>"
   shared:

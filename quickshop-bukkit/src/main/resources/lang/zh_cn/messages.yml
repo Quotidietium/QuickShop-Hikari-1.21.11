@@ -1002,6 +1002,37 @@ gui:
       display: "<gold>仅显示有货: {0}</gold>"
       lore:
         - "<gray>点击切换</gray>"
+      enabled: "开"
+      disabled: "关"
+    search-none: "无"
+    item-info:
+      showing: "<gray>当前显示：{0}</gray>"
+      shops: "<gray>商店数：<white>{0}</white></gray>"
+      average-price: "<gray>平均价格：<gold>{0}</gold></gray>"
+    filter-indicator:
+      all: "<white>所有商店</white>"
+      buying: "<#FFA500>收购商店</#FFA500>"
+      selling: "<green>出售商店</green>"
+    shop:
+      owner: "<gray>店主：<white>{0}</white></gray>"
+      type-selling: "<gray>类型：<green>出售中</green></gray>"
+      type-buying: "<gray>类型：<#FFA500>收购中</#FFA500></gray>"
+      stock: "<gray>库存：<aqua>{0}</aqua></gray>"
+      space: "<gray>空间：<aqua>{0}</aqua></gray>"
+      unlimited: "无限"
+      location: "<gray>位置：<white>{0}</white></gray>"
+      world-unknown: "未知"
+      coords: "<dark_gray>{0}</dark_gray>"
+      teleport: "<yellow>点击传送</yellow>"
+    price-line:
+      great-deal: "<gray>价格：<green>{0} ▼▼ 超值！</green></gray>"
+      great-price: "<gray>价格：<green>{0} ▲▲ 高价收购！</green></gray>"
+      below-avg: "<gray>价格：<yellow>{0} ▼ 低于均价</yellow></gray>"
+      low-offer: "<gray>价格：<yellow>{0} ▼▼ 低价收购</yellow></gray>"
+      above-avg: "<gray>价格：<gold>{0} ▲ 高于均价</gold></gray>"
+      expensive: "<gray>价格：<red>{0} ▲▲ 偏贵</red></gray>"
+      average: "<gray>价格：<white>{0} ● 平均</white></gray>"
+      plain: "<gray>价格：<white>{0}</white></gray>"
     back:
       display: "<white>返回市场</white>"
   shared:

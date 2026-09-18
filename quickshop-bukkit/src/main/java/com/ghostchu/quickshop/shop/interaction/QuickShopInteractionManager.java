@@ -275,20 +275,10 @@ public class QuickShopInteractionManager implements InteractionManager, Reloadab
 
     Log.debug("Interaction Config Loading.");
     final InteractionConfig config = new InteractionConfig();
-    if(!config.load()) {
+    // falls back to the bundled defaults when the user file is broken; the old path
+    // only warned and then NPE'd on the null yaml at the getKeys call below
+    config.loadWithFallback();
 
-      plugin.logger().warn("Failed to copy interaction.yml to plugin folder!");
-    }
-
-    /*final File configFile = new File(plugin.getDataFolder(), "interaction.yml");
-    if(!configFile.exists()) {
-      try {
-        Files.copy(plugin.getJavaPlugin().getResource("interaction.yml"), configFile.toPath());
-      } catch(final IOException e) {
-        plugin.logger().warn("Failed to copy interaction.yml to plugin folder!", e);
-      }
-    }
-    final FileConfiguration config = YamlConfiguration.loadConfiguration(configFile);*/
     behaviorMapping.clear();
 
     // config keys that match no registered interaction are silently unread — a typo'd
