@@ -84,6 +84,22 @@ public final class MenuBench {
       // baseline jar: snapshot pipeline not present yet
     }
     final MethodHandle candidate = snapshotPipeline;
+    // the legacy no-snapshot variant was removed from the production source later;
+    // resolve it reflectively so this bench still compiles (and still measures the
+    // baseline jar, where it is the only pipeline)
+    MethodHandle legacyPipeline = null;
+    if(candidate == null) {
+      try {
+        final Method legacy = MarketUtils.class.getMethod("processShops",
+                                                          List.class, BrowseFilterMode.class,
+                                                          BrowseSortMode.class, String.class,
+                                                          boolean.class);
+        legacyPipeline = java.lang.invoke.MethodHandles.publicLookup().unreflect(legacy);
+      } catch(final NoSuchMethodException absentInCandidate) {
+        // neither pipeline resolvable: impossible on any known jar
+      }
+    }
+    final MethodHandle legacy = legacyPipeline;
 
     harness.bench("menu/browseStockPipeline", ctx -> {
       ctx.index++;
@@ -98,11 +114,16 @@ public final class MenuBench {
           throw new IllegalStateException("snapshot pipeline failed", t);
         }
       } else {
-        // the historic path: filterShops -> per-shop cache join -> sort with a
-        // comparator that re-queries per comparison
-        final Object result = MarketUtils.processShops(shops, BrowseFilterMode.ALL,
-                                                       BrowseSortMode.STOCK, null, true);
-        com.ghostchu.quickshop.benchmark.BenchHarness.consume(result);
+        // the historic path (baseline jar only): filterShops -> per-shop cache join ->
+        // sort with a comparator that re-queries per comparison
+        try {
+          final List<?> result = (List<?>)legacy.invokeExact((List<Shop>)shops, BrowseFilterMode.ALL,
+                                                             BrowseSortMode.STOCK, (String)null,
+                                                             true);
+          com.ghostchu.quickshop.benchmark.BenchHarness.consume(result);
+        } catch(final Throwable t) {
+          throw new IllegalStateException("legacy pipeline failed", t);
+        }
       }
     });
 
@@ -162,7 +183,7 @@ public final class MenuBench {
     harness.bench("menu/groupAndNameSort", ctx -> {
       ctx.index++;
       consume(MarketUtils.groupShopsByItem(groupShops));
-      consume(MarketUtils.sortShops(groupShops, BrowseSortMode.NAME));
+      consume(MarketUtils.sortShops(groupShops, BrowseSortMode.NAME, java.util.Map.of()));
     });
 
     // default browse-open pipeline (processGroups: filter ALL -> no stock filter -> no
@@ -191,10 +212,15 @@ public final class MenuBench {
               "Bukkit", "2;1000;64;" + i + ";world", null,
               new HashMap<>(), benefit));
     }
+    // the R56 snapshot rework moved group statistics from stubbed DB cache queries to
+    // the preloaded map; these un-persisted bench shops all carry shopId -1, so one
+    // entry keeps the per-group statistics reads real instead of all-zero misses
+    final Map<Long, ShopInventoryCountCache> groupSnapshot = java.util.Map.of(
+            -1L, new SimpleShopInventoryCountCache(100, 100, true));
     harness.bench("menu/browseGroupPipeline", ctx -> {
       ctx.index++;
       consume(MarketUtils.processGroups(browseShops, BrowseFilterMode.ALL,
-                                        BrowseSortMode.NAME, null, false));
+                                        BrowseSortMode.NAME, null, false, groupSnapshot));
     });
   }
 
