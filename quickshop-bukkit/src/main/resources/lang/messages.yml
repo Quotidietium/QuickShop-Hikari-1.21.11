@@ -44,6 +44,7 @@ tabcomplete:
 taxaccount-unset: <green>This shop's tax account is now following the global server
   setting.
 blacklisted-item: <red>This item cannot be sold as it is on the blacklist
+shop-item-too-large: <red>This item is too complex to be traded in a shop (serialized data over the size limit)
 command-type-mismatch: <red>This command can only be executed by <aqua>{0}</aqua>.
 server-crash-warning: '<red>WARNING: Using the /quickshop reload command to replace/delete
   the QuickShop Jar file may crash the server while it is running.'

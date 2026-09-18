@@ -34,6 +34,7 @@ tabcomplete:
   tag: '[tag]'
 taxaccount-unset: <green>该商店的税务账户现在变为服务器的全局设置。
 blacklisted-item: <red>这件物品已经被拉黑，你不能出售它
+shop-item-too-large: <red>这件物品过于复杂，无法作为商店交易物品（序列化数据超过大小上限）
 command-type-mismatch: <red>此命令只能由 <aqua>{0} 执行。
 server-crash-warning: '<red>如果服务器运行时替换/删除QuickShop插件 Jar 文件，执行 /quickshop reload后服务器可能会崩溃。'
 you-cant-afford-to-change-price: <red>你需要 {0} 才能修改商店的价格。

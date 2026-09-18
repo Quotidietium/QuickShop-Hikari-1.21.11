@@ -957,12 +957,16 @@ public class QuickShop implements QuickShopAPI, Reloadable {
 
   private void loadItemMatcher() {
 
-    final ItemMatcher defItemMatcher = switch(getConfig().getInt("matcher.work-type")) {
+    final int workType = getConfig().getInt("matcher.work-type");
+    final ItemMatcher defItemMatcher = switch(workType) {
       case 3 -> new ModernCustomMatcher(this);
-      case 1 -> new BukkitItemMatcherImpl(this);
+      // 2 was the legacy "strict equals" value; isSimilar already covers everything
+      // equals adds on 1.20.5+, so long-standing configs upgrading from old versions
+      // map to the Bukkit matcher instead of hard-crashing plugin startup
+      case 1, 2 -> new BukkitItemMatcherImpl(this);
       case 0 -> new QuickShopItemMatcherImpl(this);
       default ->
-              throw new IllegalStateException("Unexpected value: " + getConfig().getInt("matcher.work-type"));
+              throw new IllegalStateException("Unexpected value: " + workType);
     };
     this.itemMatcher = ServiceInjector.getInjectedService(ItemMatcher.class, defItemMatcher);
   }

@@ -859,10 +859,23 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       plugin.text().of(p, "blacklisted-item").send();
       return;
     }
+    // refuse prototypes whose serialized form would blow the shops table TEXT columns
+    // (oversized written books etc.) — better a clear rejection now than a shop that
+    // fails every save or truncates into a load-failure loop later
+    if(Util.isItemTooLargeForShop(shop.getItem())) {
+      plugin.text().of(p, "shop-item-too-large").send();
+      return;
+    }
     // Check if server/player allowed to create stacking shop
     if(plugin.isAllowStack() && !plugin.perm().hasPermission(p, "quickshop.create.stacks")) {
       Log.debug("Player " + p.getName() + " no permission to create stacks shop, forcing creating single item shop");
-      shop.getItem().setAmount(1);
+      // getItem() hands out a clone — mutating it was a no-op on the actual prototype and
+      // the permission enforcement silently never applied. setItem() re-snapshots BOTH the
+      // prototype and originalItem (which reloadModule() restores the amount from), so a
+      // later /qs reload can't resurrect the stack size the player was never allowed
+      final ItemStack single = shop.getItem();
+      single.setAmount(1);
+      shop.setItem(single);
     }
 
     // Checking the shop can be created

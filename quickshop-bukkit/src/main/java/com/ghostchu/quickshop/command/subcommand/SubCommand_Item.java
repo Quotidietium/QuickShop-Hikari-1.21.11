@@ -44,6 +44,10 @@ public class SubCommand_Item implements CommandHandler<Player> {
         plugin.text().of(sender, "blacklisted-item").send();
         return;
       }
+      if(Util.isItemTooLargeForShop(itemStack)) {
+        plugin.text().of(sender, "shop-item-too-large").send();
+        return;
+      }
       if(!plugin.isAllowStack() && !plugin.perm().hasPermission(sender, "quickshop.create.stacks")) {
         itemStack.setAmount(1);
       }

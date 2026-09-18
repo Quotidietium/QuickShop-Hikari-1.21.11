@@ -1392,6 +1392,33 @@ public class Util {
   }
 
   /**
+   * Base64-length cap for the shop prototype, enforced at the two player-facing entry
+   * points (shop creation and /qs item). The shops table stores the prototype in TEXT
+   * columns (65535 bytes on MySQL); vanilla-legal oversized stacks — multi-page written
+   * books, deep item-component nesting — exceed it and either fail every save in strict
+   * mode or silently truncate into a load-failure loop that can end in shop deletion.
+   * 32768 chars ≈ 24KB binary: generous headroom for real items, well under the column.
+   */
+  public static final int MAX_SHOP_ITEM_ENCODED_LENGTH = 32768;
+
+  /**
+   * Returns true if the stack's serialized form is too large to be stored as a shop
+   * prototype. An item that cannot even be serialized is treated as oversized.
+   *
+   * @param item the candidate shop item
+   *
+   * @return true when the shop must refuse this item
+   */
+  public static boolean isItemTooLargeForShop(@NotNull final ItemStack item) {
+
+    try {
+      return QuickShop.getInstance().platform().encodeStack(item).length() > MAX_SHOP_ITEM_ENCODED_LENGTH;
+    } catch(final Exception e) {
+      return true;
+    }
+  }
+
+  /**
    * Returns true if the given location is loaded or not.
    *
    * @param loc The location

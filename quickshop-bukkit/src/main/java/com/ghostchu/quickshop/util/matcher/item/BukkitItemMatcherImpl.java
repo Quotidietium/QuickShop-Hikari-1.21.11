@@ -55,16 +55,14 @@ public class BukkitItemMatcherImpl implements ItemMatcher {
    * @return The result of tests
    */
   @Override
-  public boolean matches(@Nullable ItemStack original, @Nullable ItemStack tester) {
+  public boolean matches(@Nullable final ItemStack original, @Nullable final ItemStack tester) {
 
     if(original == null && tester == null) {
 
       return true;
     }
 
-    final boolean originalNull = original == null;
-    final boolean testerNull = tester == null;
-    if(originalNull || testerNull) {
+    if(original == null || tester == null) {
 
       return false;
     }
@@ -74,18 +72,26 @@ public class BukkitItemMatcherImpl implements ItemMatcher {
       return true;
     }
 
-    final ShopItemMatchEvent shopItemMatchEvent = new ShopItemMatchEvent(original.clone(), tester.clone()); //clone so the originals don't get messed up by implementations.
-    shopItemMatchEvent.callEvent();
+    // constructing the event clones both stacks; skip it entirely when nobody listens
+    // (every QuickShop event shares one HandlerList, see AbstractQSEvent) — this method
+    // runs per non-matching slot of every trade's inventory scans
+    if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
+      final ShopItemMatchEvent shopItemMatchEvent = new ShopItemMatchEvent(original.clone(), tester.clone()); //clone so the originals don't get messed up by implementations.
+      shopItemMatchEvent.callEvent();
 
-    if(shopItemMatchEvent.matches()) {
+      if(shopItemMatchEvent.matches()) {
 
-      return true;
+        return true;
+      }
     }
 
-    original = original.clone();
-    original.setAmount(1);
-    tester = tester.clone();
-    tester.setAmount(1);
+    // the legacy shopId tag is an alias read straight from custom_data; it must never
+    // widen a cross-material mismatch into a match (isSimilar already requires equal
+    // types, so an alias hit on differing materials can only be a forged/colliding tag)
+    if(original.getType() != tester.getType()) {
+
+      return false;
+    }
 
     final String shopIdOrigin = plugin.platform().getItemShopId(original);
     if(shopIdOrigin != null) {
@@ -96,6 +102,8 @@ public class BukkitItemMatcherImpl implements ItemMatcher {
         return true;
       }
     }
-    return tester.isSimilar(original);
+    // no normalization clones and no trailing isSimilar: isSimilar ignores amounts, so
+    // a setAmount(1) re-check can never succeed where the head check already failed
+    return false;
   }
 }

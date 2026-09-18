@@ -282,7 +282,15 @@ public class MainPage {
           final String userName = userNameMemo.computeIfAbsent(record.buyer(),
                                                                uuid->QUserImpl.createSync(QuickShop.getInstance().getPlayerFinder(), uuid).getDisplay());
 
-          ItemStack historyItem = QuickShop.getInstance().platform().decodeStack(dataRecord.getEncoded());
+          // a truncated/corrupt encoded row throws out of decodeStack (bad Base64,
+          // unknown data components) — mirror ShopLoader's degradation so one bad row
+          // cannot kill the whole history page on every open
+          ItemStack historyItem;
+          try {
+            historyItem = QuickShop.getInstance().platform().decodeStack(dataRecord.getEncoded());
+          } catch(final Exception ignored) {
+            historyItem = null;
+          }
           if(historyItem == null) {
 
             //try the old serialization for old shops.

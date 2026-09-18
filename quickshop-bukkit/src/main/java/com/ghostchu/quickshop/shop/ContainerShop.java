@@ -1519,10 +1519,14 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       return false;
     }
     final com.ghostchu.quickshop.api.shop.ItemMatcher matcher = plugin.getItemMatcher();
+    // both builtins treat both arguments as read-only and normalize amounts internally
+    // (BukkitItemMatcherImpl clones only when a match-event listener actually exists),
+    // so the per-slot defensive clones are pure allocation waste for them
     if(matcher instanceof final com.ghostchu.quickshop.util.matcher.item.QuickShopItemMatcherImpl builtin) {
-      // the builtin matcher treats both arguments as read-only and normalizes amounts
-      // internally, so the per-slot defensive clones are pure allocation waste
       return builtin.matches(this.item, item);
+    }
+    if(matcher instanceof final com.ghostchu.quickshop.util.matcher.item.BukkitItemMatcherImpl bukkit) {
+      return bukkit.matches(this.item, item);
     }
     // third-party matchers carry no non-mutation contract: keep defensive copies
     final ItemStack givenItem = item.clone();

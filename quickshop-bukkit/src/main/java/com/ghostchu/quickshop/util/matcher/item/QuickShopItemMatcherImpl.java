@@ -9,10 +9,11 @@ import com.ghostchu.simplereloadlib.ReloadResult;
 import com.ghostchu.simplereloadlib.ReloadStatus;
 import com.ghostchu.simplereloadlib.Reloadable;
 import dev.dejvokep.boostedyaml.block.implementation.Section;
-import org.bukkit.OfflinePlayer;
+import com.google.common.collect.Multimap;
 import org.bukkit.Material;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.block.ShulkerBox;
+import org.bukkit.block.banner.Pattern;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BannerMeta;
@@ -31,6 +32,7 @@ import org.bukkit.inventory.meta.SkullMeta;
 import org.bukkit.inventory.meta.SuspiciousStewMeta;
 import org.bukkit.inventory.meta.TropicalFishBucketMeta;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.profile.PlayerProfile;
 import org.bukkit.potion.PotionData;
 import org.bukkit.potion.PotionEffect;
 import org.jetbrains.annotations.NotNull;
@@ -38,11 +40,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
 
@@ -194,9 +194,12 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
     final String shopIdOrigin = lookupShopId(requireStack);
     if(shopIdOrigin != null) {
       Log.debug("ShopId compare -> Origin: " + shopIdOrigin + "  Given: " + plugin.platform().getItemShopId(givenStack));
-      final String shopIdTester = plugin.platform().getItemShopId(givenStack);
-      if(shopIdOrigin.equals(shopIdTester)) {
-        return true;
+      // the legacy shopId alias must never widen a cross-material mismatch into a match
+      if(requireStack.getType().equals(givenStack.getType())) {
+        final String shopIdTester = plugin.platform().getItemShopId(givenStack);
+        if(shopIdOrigin.equals(shopIdTester)) {
+          return true;
+        }
       }
     }
 
@@ -376,6 +379,11 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
           }
 
           if(plugin.getGameVersion().isNewPotionAPI()) {
+            // base-type identity first: effect multisets alone matched Long Swiftness
+            // against plain Swiftness (same effects, different duration)
+            if(!Objects.equals(potion1.getBasePotionType(), potion2.getBasePotionType())) {
+              return false;
+            }
             final List<PotionEffect> effects1 = new ArrayList<>();
             final List<PotionEffect> effects2 = new ArrayList<>();
             if(potion1.getBasePotionType() != null) {
@@ -415,12 +423,15 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
           return false;
         }
         if(meta1.hasAttributeModifiers() && meta2.hasAttributeModifiers()) {
-          final Set<Attribute> set1 = Objects.requireNonNull(meta1.getAttributeModifiers()).keySet();
-          final Set<Attribute> set2 = Objects.requireNonNull(meta2.getAttributeModifiers()).keySet();
-          for(final Attribute att : set1) {
-            if(!set2.contains(att)) {
-              return false;
-            } else if(!meta1.getAttributeModifiers().get(att).equals(meta2.getAttributeModifiers().get(att))) {
+          final Multimap<Attribute, org.bukkit.attribute.AttributeModifier> mods1 = Objects.requireNonNull(meta1.getAttributeModifiers());
+          final Multimap<Attribute, org.bukkit.attribute.AttributeModifier> mods2 = Objects.requireNonNull(meta2.getAttributeModifiers());
+          // bidirectional key-set compare: the given stack must not carry modifiers the
+          // prototype lacks (a +7 sword sold as a plain one used to pass the one-way scan)
+          if(!mods1.keySet().equals(mods2.keySet())) {
+            return false;
+          }
+          for(final Attribute att : mods1.keySet()) {
+            if(!mods1.get(att).equals(mods2.get(att))) {
               return false;
             }
           }
@@ -468,7 +479,19 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
           if(bannerMeta1.numberOfPatterns() != bannerMeta2.numberOfPatterns()) {
             return false;
           }
-          return new HashSet<>(bannerMeta1.getPatterns()).containsAll(bannerMeta2.getPatterns());
+          // ordered exact compare: the old HashSet+containsAll collapsed different
+          // pattern multisets ([P1,P1] vs [P1,P2]) and ignored pattern order, both of
+          // which change the rendered banner
+          final List<Pattern> patterns1 = bannerMeta1.getPatterns();
+          final List<Pattern> patterns2 = bannerMeta2.getPatterns();
+          for(int i = 0; i < patterns1.size(); i++) {
+            final Pattern pattern1 = patterns1.get(i);
+            final Pattern pattern2 = patterns2.get(i);
+            if(pattern1.getPattern() != pattern2.getPattern() || pattern1.getColor() != pattern2.getColor()) {
+              return false;
+            }
+          }
+          return true;
         }
         return true;
       }));
@@ -477,11 +500,15 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
           return false;
         }
         if(meta1 instanceof final SkullMeta skullMeta1) {
-          //getOwningPlayer will let server query playerProfile in server thread
-          //Causing huge lag, so using String instead
-          final OfflinePlayer player1 = skullMeta1.getOwningPlayer();
-          final OfflinePlayer player2 = ((SkullMeta)meta2).getOwningPlayer();
-          return Objects.equals(player1, player2);
+          // getOwningPlayer can force a blocking player-profile resolution on the calling
+          // thread; compare the stored profile identities instead (no server-thread IO)
+          final SkullMeta skullMeta2 = (SkullMeta)meta2;
+          final PlayerProfile profile1 = skullMeta1.getOwnerProfile();
+          final PlayerProfile profile2 = skullMeta2.getOwnerProfile();
+          if(profile1 == null || profile2 == null) {
+            return profile1 == profile2;
+          }
+          return Objects.equals(profile1.getUniqueId(), profile2.getUniqueId()) && Objects.equals(profile1.getName(), profile2.getName());
         }
         return true;
       });
