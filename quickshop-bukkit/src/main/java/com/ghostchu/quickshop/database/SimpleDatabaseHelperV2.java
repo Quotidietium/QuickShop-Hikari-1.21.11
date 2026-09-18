@@ -53,6 +53,13 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class SimpleDatabaseHelperV2 implements DatabaseHelper {
 
+  /**
+   * Identifier allowlist for the few SQL text paths that interpolate names instead of
+   * binding parameters (identifiers cannot be prepared). Covers the configured table
+   * prefix and public API table arguments alike.
+   */
+  public static final java.util.regex.Pattern SAFE_IDENTIFIER = java.util.regex.Pattern.compile("^[A-Za-z0-9_]{0,32}$");
+
   @NotNull
   private final SQLManager manager;
 
@@ -946,9 +953,17 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
             });
   }
 
+  /**
+   * Public API taking a caller-supplied table name: the value is interpolated into the
+   * SQL text by EasySQL (identifiers cannot be bound as parameters), so it is pinned to
+   * plain identifier characters before it ever reaches a statement.
+   */
   @Override
   public @NotNull SQLQuery selectTable(@NotNull final String table) throws SQLException {
 
+    if(!SAFE_IDENTIFIER.matcher(table).matches()) {
+      throw new IllegalArgumentException("Illegal table identifier: " + table);
+    }
     return manager.createQuery()
             .inTable(prefix + table)
             .build()
@@ -1226,36 +1241,9 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
     });
   }
 
-  /**
-   * Returns true if the given table has the given column
-   *
-   * @param table  The table
-   * @param column The column
-   *
-   * @return True if the given table has the given column
-   *
-   * @throws SQLException If the database isn't connected
-   */
-  public boolean hasColumn(@NotNull final String table, @NotNull final String column) throws SQLException {
-
-    if(!hasTable(table)) {
-      return false;
-    }
-    final String query = "SELECT * FROM " + table + " LIMIT 1";
-    boolean match = false;
-    try(final Connection connection = manager.getConnection(); final PreparedStatement ps = connection.prepareStatement(query); final ResultSet rs = ps.executeQuery()) {
-      final ResultSetMetaData metaData = rs.getMetaData();
-      for(int i = 1; i <= metaData.getColumnCount(); i++) {
-        if(metaData.getColumnLabel(i).equals(column)) {
-          match = true;
-          break;
-        }
-      }
-    } catch(final SQLException e) {
-      return match;
-    }
-    return match; // Uh, wtf.
-  }
+  // hasColumn(String, String) removed (R60): dead code whose free-form table name was
+  // concatenated straight into a SELECT — an identifier-injection booby trap waiting
+  // for a future caller.
 
 
   /**
@@ -1430,23 +1418,8 @@ public class SimpleDatabaseHelperV2 implements DatabaseHelper {
 
       parent.setDatabaseVersion(currentDatabaseVersion).join();
     }
-
-    private boolean silentTableMoving(@NotNull final String originTableName, @NotNull final String newTableName) {
-
-      try {
-        if(parent.hasTable(originTableName)) {
-          if(parent.plugin.getDatabaseDriverType() == QuickShop.DatabaseDriverType.MYSQL) {
-            manager.executeSQL("CREATE TABLE " + newTableName + " SELECT * FROM " + originTableName);
-          } else {
-            manager.executeSQL("CREATE TABLE " + newTableName + " AS SELECT * FROM " + originTableName);
-          }
-          manager.executeSQL("DROP TABLE " + originTableName);
-        }
-      } catch(final SQLException e) {
-        return false;
-      }
-      return true;
-    }
+    // silentTableMoving(String, String) removed (R60): dead code issuing CREATE TABLE /
+    // DROP TABLE with unquoted, unvalidated concatenated table names.
   }
 
   private record ShopInfo(long shopID, String world, int x, int y, int z) implements InfoRecord {

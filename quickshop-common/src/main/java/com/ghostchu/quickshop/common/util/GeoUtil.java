@@ -79,7 +79,10 @@ public class GeoUtil {
         return null;
       }));
     }
-    testEntry.forEach(CompletableFuture::join);
+    // this runs on the server's main thread during plugin load; a plain join inherits
+    // each probe's full 5s connect + 5s read budget (≈10s worst stall per startup).
+    // A timed-out probe is simply DNF — the common-repo fallbacks still apply
+    testEntry.forEach(f->f.completeOnTimeout(null, 3, TimeUnit.SECONDS).join());
     final List<Map.Entry<MavenCentralMirror, Long>> list = new ArrayList<>(mirrorPingMap.entrySet());
     list.sort(Map.Entry.comparingByValue());
     logger.info("Maven repository mirror test result:");

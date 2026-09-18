@@ -343,6 +343,7 @@ public class ConfigCollectorItem implements SubPasteItem {
             .replaceAll("database:.*", "database: ******")
             .replaceAll("seed:.*", "seed: ******")
             .replaceAll("seed-.*:.*", "seed-protected: ******")
+            .replaceAll("server-ip=.*", "server-ip=******")
             .replaceAll("rcon\\.password=.*", "rcon.password=******")
             .replaceAll("token:.*", "token: ******")
             .replaceAll("key:.*", "key: ******")

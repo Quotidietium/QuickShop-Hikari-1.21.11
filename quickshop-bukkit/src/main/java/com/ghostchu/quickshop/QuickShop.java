@@ -1228,6 +1228,12 @@ public class QuickShop implements QuickShopAPI, Reloadable {
         if(dbPrefix == null || "none".equals(dbPrefix)) {
           dbPrefix = "";
         }
+        // the prefix is interpolated into every table identifier (including DDL), so an
+        // arbitrary-text prefix is a self-inflicted SQL injection; refuse it with a
+        // pointed error instead of building statements from it
+        if(!SimpleDatabaseHelperV2.SAFE_IDENTIFIER.matcher(dbPrefix).matches()) {
+          throw new IllegalStateException("database.prefix '" + dbPrefix + "' is invalid: only letters, digits and underscores are allowed (max 32 chars). It becomes part of SQL table identifiers.");
+        }
         final String user = dbCfg.getString("user");
         final String pass = dbCfg.getString("password");
         final String host = dbCfg.getString("host");

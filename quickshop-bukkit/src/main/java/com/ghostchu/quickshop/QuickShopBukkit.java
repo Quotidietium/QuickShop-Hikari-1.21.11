@@ -329,6 +329,11 @@ public class QuickShopBukkit extends JavaPlugin {
       plugin.getBootstrapLogger().info("Initialing Unirest...");
       Unirest.config()
               .concurrency(10, 5)
+              // no caller of the sync Unirest APIs sets a per-request deadline; without a
+              // global bound a dead upstream (playerdb.co lookup on the sync path, paste
+              // upload) stalls for the client default (~10s connect / 5min socket)
+              .connectTimeout(10000)
+              .socketTimeout(15000)
               .setDefaultHeader("User-Agent", "QuickShop/" + plugin.getFork() + "-" + plugin.getDescription().getVersion() + " Java/" + System.getProperty("java.version"));
       Unirest.config().verifySsl(PackageUtil.parsePackageProperly("verifySSL").asBoolean());
       if(PackageUtil.parsePackageProperly("proxyHost").isPresent()) {
