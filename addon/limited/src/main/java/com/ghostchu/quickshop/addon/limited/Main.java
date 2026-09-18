@@ -34,7 +34,9 @@ public final class Main extends JavaPlugin implements Listener {
   @Override
   public void onDisable() {
     // Plugin shutdown logic
-    plugin.getCommandManager().unregisterCmd(container);
+    if(plugin != null && container != null) {
+      plugin.getCommandManager().unregisterCmd(container);
+    }
   }
 
   @Override
@@ -122,28 +124,32 @@ public final class Main extends JavaPlugin implements Listener {
        || event.getCalendarTriggerType() == CalendarEvent.CalendarTriggerType.NOTHING_CHANGED) {
       return;
     }
-    //mutate shop extra data on the main thread: YamlConfiguration is not thread-safe and the
-    //extra tree is concurrently serialized by database save tasks
+    //collect the shop list on the global thread, then reset each shop on its own region
+    //thread: YamlConfiguration is not thread-safe and on Folia the purchase events mutate
+    //the same extra tree from the shop's region — resetting from the global thread raced
+    //them (lost resets/updates and CME inside the section)
     Util.mainThreadRun(()->plugin.getShopManager().getAllShops().forEach(shop->{
-      final ConfigurationSection manager = shop.getExtra(this);
-      final int limit = manager.getInt("limit");
-      if(limit < 1) {
-        return;
-      }
-      if(CommonUtil.isEmptyString(manager.getString("period"))) {
-        return;
-      }
-      try {
-        if(event.getCalendarTriggerType().ordinal() >= CalendarEvent.CalendarTriggerType.valueOf(manager.getString("period")).ordinal()) {
-          manager.set("data", null);
-          shop.setExtra(this, manager);
-          Log.debug("Limit data has been reset. Shop -> " + shop);
+      Util.regionThread(shop.bukkitLocation(), ()->{
+        final ConfigurationSection manager = shop.getExtra(this);
+        final int limit = manager.getInt("limit");
+        if(limit < 1) {
+          return;
         }
-      } catch(final IllegalArgumentException ignored) {
-        Log.debug("Limit data failed to reset. Shop -> " + shop + " type " + manager.getString("period") + " not exists.");
-        manager.set("period", null);
-        shop.setExtra(this, manager);
-      }
+        if(CommonUtil.isEmptyString(manager.getString("period"))) {
+          return;
+        }
+        try {
+          if(event.getCalendarTriggerType().ordinal() >= CalendarEvent.CalendarTriggerType.valueOf(manager.getString("period")).ordinal()) {
+            manager.set("data", null);
+            shop.setExtra(this, manager);
+            Log.debug("Limit data has been reset. Shop -> " + shop);
+          }
+        } catch(final IllegalArgumentException ignored) {
+          Log.debug("Limit data failed to reset. Shop -> " + shop + " type " + manager.getString("period") + " not exists.");
+          manager.set("period", null);
+          shop.setExtra(this, manager);
+        }
+      });
     }));
 
   }

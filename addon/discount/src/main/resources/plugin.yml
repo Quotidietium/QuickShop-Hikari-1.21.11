@@ -23,3 +23,12 @@ permissions:
   quickshopaddon.discount.create.specific_shops:
     default: true
     description: Allow create discount code for specific shops
+  quickshopaddon.discount.list:
+    default: true
+    description: Allow listing discount codes you own
+  quickshopaddon.discount.listall:
+    default: op
+    description: Allow listing all discount codes on this server
+  quickshopaddon.discount.remove.bypass:
+    default: op
+    description: Allow removing discount codes owned by other players

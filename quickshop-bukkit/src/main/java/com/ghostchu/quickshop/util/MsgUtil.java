@@ -25,6 +25,7 @@ import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.enchantments.Enchantment;
@@ -127,6 +128,17 @@ public class MsgUtil {
     return DECIMAL_FORMAT.get().format(value);
   }
 
+  /**
+   * A shop whose world is unloaded (Multiverse unload, world delete while shops persist)
+   * must not NPE the whole list/tag rendering — entries render with an "unknown" world
+   * placeholder instead.
+   */
+  private static String worldNameOrUnknown(@NotNull final Location location) {
+
+    final World world = location.getWorld();
+    return world != null ? world.getName() : "unknown";
+  }
+
   //todo:
   public static Component buildShopHover(@NotNull final Player player, @NotNull final Shop shop,
                                          final boolean clickPreview, final int counter) {
@@ -134,9 +146,9 @@ public class MsgUtil {
     final Location location = shop.bukkitLocation();
 
     Component component = QuickShop.getInstance().text().of(player, "addon.list.entry", counter, buildShopName(shop),
-                                              location.getWorld().getName(), location.getBlockX(),
+                                              worldNameOrUnknown(location), location.getBlockX(),
                                               location.getBlockY(), location.getBlockZ(),
-                                              shop.format(shop.bukkitLocation().getWorld().getName()),
+                                              shop.format(worldNameOrUnknown(location)),
                                               shop.getShopStackingAmount(), Util.getItemStackName(shop.getItem()),
                                               buildShopType(player, shop),
                                               buildShopState(player, shop)).forLocale();
@@ -164,8 +176,8 @@ public class MsgUtil {
     final String coords = location.getBlockX() + ", " + location.getBlockY() + ", " + location.getBlockZ();
 
     Component component = QuickShop.getInstance().text().of(player, languageString, counter, buildShopName(shop),
-                                                            location.getWorld().getName(), coords,
-                                                            shop.format(shop.bukkitLocation().getWorld().getName()),
+                                                            worldNameOrUnknown(location), coords,
+                                                            shop.format(worldNameOrUnknown(location)),
                                                             shop.getShopStackingAmount(), Util.getItemStackName(shop.getItem()),
                                                             buildShopType(player, shop),
                                                             buildShopState(player, shop), commandLabel, tagAmount).forLocale();
@@ -183,7 +195,7 @@ public class MsgUtil {
 
     String shopName = shop.getShopName();
     final Location location = shop.bukkitLocation();
-    final String combineLocation = location.getWorld().getName() + " " + location.getBlockX() + ", " + location.getBlockY() + ", " + location.getBlockZ();
+    final String combineLocation = worldNameOrUnknown(location) + " " + location.getBlockX() + ", " + location.getBlockY() + ", " + location.getBlockZ();
     if(CommonUtil.isEmptyString(shopName)) {
       shopName = combineLocation;
     }
@@ -194,7 +206,7 @@ public class MsgUtil {
   public static Component buildShopHoverTitle(@NotNull final Shop shop) {
     String shopName = shop.getShopName();
     final Location location = shop.bukkitLocation();
-    final String combineLocation = location.getWorld().getName() + " " + location.getBlockX() + ", " + location.getBlockY() + ", " + location.getBlockZ();
+    final String combineLocation = worldNameOrUnknown(location) + " " + location.getBlockX() + ", " + location.getBlockY() + ", " + location.getBlockZ();
 
     if(CommonUtil.isEmptyString(shopName)) {
       shopName = combineLocation;

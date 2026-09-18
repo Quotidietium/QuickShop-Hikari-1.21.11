@@ -203,10 +203,28 @@ public class DiscountCode {
    * Records one use against the per-player quota. Called only after a trade actually
    * committed — burning a use on a failed purchase made maxUsage=1 codes vanish without
    * the player ever getting the discount.
+   *
+   * <p>The quota check and the increment are one atomic {@code compute} step: on Folia
+   * trades on different shops run on different region threads, and the old
+   * check-then-merge split let two concurrent buyers of a maxUsage=1 server-wide code both
+   * pass and both burn it.</p>
+   *
+   * @return false when the quota was already exhausted (the caller may still have applied
+   * the discount after racing past the purchase-time check — the burn simply records the
+   * code as spent)
    */
-  public void use(@NotNull final UUID player) {
+  public boolean use(@NotNull final UUID player) {
 
-    usages.merge(player, 1, Integer::sum);
+    final boolean[] burned = {false};
+    usages.compute(player, (key, current) -> {
+      final int cur = current == null ? 0 : current;
+      if(maxUsage != -1 && cur + 1 > maxUsage) {
+        return current;
+      }
+      burned[0] = true;
+      return cur + 1;
+    });
+    return burned[0];
   }
 
   public boolean isExpired() {

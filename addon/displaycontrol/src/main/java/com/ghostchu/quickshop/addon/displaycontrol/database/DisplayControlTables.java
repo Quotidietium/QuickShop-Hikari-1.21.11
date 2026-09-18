@@ -25,7 +25,7 @@ public enum DisplayControlTables {
     table.addAutoIncrementColumn("id", true); // SHOP DATA ID
     table.addColumn("player", "VARCHAR(36) NOT NULL"); // SHOP DATA OWNER (ALL-ZERO if this is server)
     table.addColumn("displayOption", "INT NOT NULL DEFAULT 0"); // DISPLAY SETTINGS, JSON ENCODE
-    table.setIndex(IndexType.INDEX, "idx_qs_addon_display_control_psettings", "player");
+    table.setIndex(IndexType.UNIQUE_KEY, "uq_qs_addon_display_control_psettings", "player");
   });
   private final @NotNull String name;
   private final @NotNull SQLHandler<TableCreateBuilder> tableHandler;

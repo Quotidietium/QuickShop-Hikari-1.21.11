@@ -26,32 +26,35 @@ public class DisplayControlDatabaseHelper {
       plugin.getLogger().log(Level.WARNING, "Cannot initialize tables", e);
       throw e;
     }
+    migrateLegacyDuplicates(sqlManager);
 
+  }
+
+  /**
+   * Installs before the unique-index schema raced the select-then-insert toggle into several
+   * rows per player; reads picked an arbitrary one. Collapse to the oldest row per player and
+   * enforce uniqueness so the REPLACE-based toggle stays race-free. New installs already get
+   * the unique index from the table DDL. Best-effort: failures only degrade to the old
+   * behavior, and are reported.
+   */
+  private void migrateLegacyDuplicates(@NotNull final SQLManager sqlManager) {
+
+    // executeSQL swallows SQLException into the manager's default handler and returns null on failure
+    final String table = DisplayControlTables.DISPLAY_CONTROL_PLAYERS.getName();
+    final Integer deleted = sqlManager.executeSQL("DELETE FROM `" + table + "` WHERE id NOT IN (SELECT MIN(id) FROM `" + table + "` GROUP BY player)");
+    final Integer created = sqlManager.executeSQL("CREATE UNIQUE INDEX IF NOT EXISTS uq_qs_addon_display_control_psettings ON `" + table + "` (`player`)");
+    if(deleted == null || created == null) {
+      plugin.getLogger().warning("Failed to dedupe/enforce unique player index on " + table + "; duplicate display-option rows may persist. (deleted=" + deleted + ", indexed=" + created + ")");
+    }
   }
 
   public @NotNull Integer setDisplayDisableForPlayer(@NotNull final UUID uuid, final DisplayOption status) throws SQLException {
 
     Util.ensureThread(true);
-    try(SQLQuery query = DisplayControlTables.DISPLAY_CONTROL_PLAYERS.createQuery()
-            .setLimit(1)
-            .addCondition("player", uuid.toString())
-            .build().execute();
-        ResultSet set = query.getResultSet()) {
-      if(set.next()) {
-        return DisplayControlTables.DISPLAY_CONTROL_PLAYERS.createUpdate()
-                .setLimit(1)
-                .addCondition("player", uuid.toString())
-                .setColumnValues("displayOption", status.getId())
-                .build().execute();
-      } else {
-        return DisplayControlTables.DISPLAY_CONTROL_PLAYERS.createInsert()
-                .setColumnNames("player", "displayOption")
-                .setParams(uuid.toString(), status.getId())
-                .returnGeneratedKey()
-                .execute();
-      }
-    }
-
+    return DisplayControlTables.DISPLAY_CONTROL_PLAYERS.createReplace()
+            .setColumnNames("player", "displayOption")
+            .setParams(uuid.toString(), status.getId())
+            .execute();
   }
 
   @Nullable

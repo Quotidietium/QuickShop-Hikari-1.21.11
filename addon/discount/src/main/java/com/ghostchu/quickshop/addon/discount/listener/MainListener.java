@@ -126,9 +126,20 @@ public class MainListener implements Listener {
     }
     // count the use only now that the trade actually committed — the purchase-time
     // counting burned uses on trades that later failed (cancelled by another listener,
-    // insufficient funds/items), deleting maxUsage=1 codes for nothing
+    // insufficient funds/items), deleting maxUsage=1 codes for nothing.
+    // Threshold codes only actually discounted when the total met the threshold, so the
+    // success handler re-checks by re-running the pure apply() and burning a use only on
+    // a real reduction — under-threshold purchases no longer waste quota.
     switch(codeInstalled.applicableShop(purchaser, shop)) {
-      case APPLICABLE, APPLICABLE_WITH_THRESHOLD -> codeInstalled.use(purchaser);
+      case APPLICABLE, APPLICABLE_WITH_THRESHOLD -> {
+        final double raw = event.getAmount() * shop.getPrice();
+        final double discounted = codeInstalled.apply(purchaser, raw);
+        if(discounted < raw) {
+          if(!codeInstalled.use(purchaser)) {
+            Log.debug("Discount code " + codeInstalled.getCode() + " hit its usage quota concurrently; the discount already applied to trade of " + purchaser);
+          }
+        }
+      }
       default -> {
       }
     }

@@ -7,9 +7,6 @@ import com.ghostchu.quickshop.api.database.ShopOperationEnum;
 import com.ghostchu.quickshop.api.database.bean.DataRecord;
 import com.ghostchu.quickshop.obj.QUserImpl;
 import com.ghostchu.quickshop.util.logger.Log;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
 import org.jetbrains.annotations.NotNull;
 
 import java.sql.ResultSet;
@@ -19,7 +16,6 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
 public class MetricQuery {
@@ -53,39 +49,6 @@ public class MetricQuery {
     }
   }
 
-  @NotNull
-  public List<ShopTransactionRecord> queryTransactions(@NotNull final Date startTime, final long limit, final boolean descending) {
-
-    final List<ShopTransactionRecord> list = new ArrayList<>();
-    try(SQLQuery query = databaseHelper.getManager().createQuery()
-            .inTable(databaseHelper.getPrefix() + "log_transaction")
-            .addTimeCondition("time", startTime, null)
-            .selectColumns()
-            .setLimit((int)Math.max(1, limit))
-            .orderBy("id", !descending).build().execute()) {
-      final ResultSet set = query.getResultSet();
-      while(set.next()) {
-        //"time", "shop", "data", "buyer", "type", "amount", "money", "tax"
-        final String taxAccount = set.getString("tax_account");
-        final ShopTransactionRecord record = new ShopTransactionRecord(
-                set.getDate("time"),
-                UUID.fromString(set.getString("from")),
-                UUID.fromString(set.getString("to")),
-                set.getString("currency"),
-                set.getDouble("amount"),
-                taxAccount == null? null : UUID.fromString(taxAccount),
-                set.getDouble("tax_amount"),
-                set.getString("error")
-        );
-        list.add(record);
-      }
-    } catch(SQLException e) {
-      plugin.logger().warn("Querying transactions failed.", e);
-      return list;
-    }
-    return list;
-  }
-
   // Use LinkedHashMap forced because we need keep the order.
   public @NotNull LinkedHashMap<ShopMetricRecord, DataRecord> mapToDataRecord(@NotNull final List<ShopMetricRecord> metricRecords) throws ExecutionException, InterruptedException {
     // map ShopMetricRecord#getShopId to DataRecord with blocking future
@@ -98,6 +61,12 @@ public class MetricQuery {
         continue;
       }
       final DataRecord dataRecord = databaseHelper.getDataRecord(dataId).get();
+      if(dataRecord == null) {
+        // a purchase log row whose data row was purged: without the guard the null
+        // entry failed the consuming PAPI expansion
+        Log.debug("dataRecord is null for dataId " + dataId);
+        continue;
+      }
       dataRecords.put(metricRecord, dataRecord);
     }
     return dataRecords;
@@ -133,20 +102,5 @@ public class MetricQuery {
       return list;
     }
     return list;
-  }
-
-  @Data
-  @AllArgsConstructor
-  @Builder
-  public static class ShopTransactionRecord {
-
-    private Date time;
-    private UUID from;
-    private UUID to;
-    private String currency;
-    private double amount;
-    private UUID taxAccount;
-    private double taxAmount;
-    private String error;
   }
 }

@@ -153,12 +153,17 @@ public final class Main extends JavaPlugin implements Listener, PluginMessageLis
     if(!channel.equalsIgnoreCase(BUNGEE_CHANNEL)) {
       return;
     }
-    final ByteArrayDataInput in = ByteStreams.newDataInput(message);
-    final String prefix = in.readUTF();
-    //noinspection SwitchStatementWithTooFewBranches
-    switch(prefix) {
-      case RESPONSE_PREFIX -> handleBungeeBedrockPlayerCallback(in);
-      default -> getLogger().log(Level.WARNING, "Unrecognized type: " + prefix);
+    try {
+      final ByteArrayDataInput in = ByteStreams.newDataInput(message);
+      final String prefix = in.readUTF();
+      //noinspection SwitchStatementWithTooFewBranches
+      switch(prefix) {
+        case RESPONSE_PREFIX -> handleBungeeBedrockPlayerCallback(in);
+        default -> getLogger().log(Level.WARNING, "Unrecognized type: " + prefix);
+      }
+    } catch(final RuntimeException e) {
+      // the payload comes from the client channel; malformed frames are normal noise, never fatal
+      Log.debug("Rejected malformed plugin-message payload from " + player.getName() + ": " + e.getMessage());
     }
   }
 

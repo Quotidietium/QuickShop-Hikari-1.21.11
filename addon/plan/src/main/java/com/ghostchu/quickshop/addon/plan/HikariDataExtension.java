@@ -165,14 +165,10 @@ public class HikariDataExtension implements DataExtension {
             .columnThree("Item(amount)", Icon.called("box").build())
             .columnFour("Balance", Icon.called("money-bill-wave").build());
 
-    final List<ShopMetricRecord> records = this.metricQuery.queryServerPurchaseRecords(DateUtil.daysAgo(365), 50, true).stream().filter(record->switch(record.getType()) {
+    final List<ShopMetricRecord> records = this.metricQuery.queryPlayerPurchaseRecords(playerUUID, DateUtil.daysAgo(365), 50, true).stream().filter(record->switch(record.getType()) {
       //noinspection deprecation
       case PURCHASE, PURCHASE_BUYING_SHOP, PURCHASE_SELLING_SHOP -> true;
       default -> false;
-    }).filter(record->{
-      // this is the per-player tab: the query returned global rows and the parameter
-      // was ignored, showing every player's purchase history on everyone's Plan page
-      return record.getPlayer() != null && record.getPlayer().equalsIgnoreCase(playerUUID.toString());
     }).toList();
     try {
       final LinkedHashMap<ShopMetricRecord, DataRecord> recordsMapped = this.metricQuery.mapToDataRecord(records);

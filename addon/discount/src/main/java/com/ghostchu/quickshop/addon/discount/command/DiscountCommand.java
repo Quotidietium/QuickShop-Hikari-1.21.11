@@ -197,6 +197,9 @@ public class DiscountCommand implements CommandHandler<CommandSender> {
       }
     }
     main.getCodeManager().removeCode(code);
+    // create/config mutations persist immediately; a remove that only lived in memory
+    // resurrected on the next save-timer or crash
+    main.getCodeManager().saveDatabase();
     quickshop.text().of(sender, "addon.discount.discount-code-removed", code.getCode()).send();
   }
 

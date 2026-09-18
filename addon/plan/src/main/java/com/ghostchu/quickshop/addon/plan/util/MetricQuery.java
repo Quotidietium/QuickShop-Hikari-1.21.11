@@ -47,38 +47,6 @@ public class MetricQuery {
     }
   }
 
-  @NotNull
-  public List<ShopTransactionRecord> queryTransactions(@NotNull final Date startTime, final long limit, final boolean descending) {
-
-    final List<ShopTransactionRecord> list = new ArrayList<>();
-    try(SQLQuery query = databaseHelper.getManager().createQuery()
-            .inTable(databaseHelper.getPrefix() + "log_transaction")
-            .addTimeCondition("time", startTime, null)
-            .selectColumns()
-            .setLimit(1000)
-            .orderBy("id", !descending).build().execute()) {
-      final ResultSet set = query.getResultSet();
-      while(set.next()) {
-        //"time", "shop", "data", "buyer", "type", "amount", "money", "tax"
-        final ShopTransactionRecord record = new ShopTransactionRecord(
-                set.getDate("time"),
-                UUID.fromString(set.getString("from")),
-                UUID.fromString(set.getString("to")),
-                set.getString("currency"),
-                set.getDouble("amount"),
-                UUID.fromString(set.getString("tax_currency")),
-                set.getDouble("tax_amount"),
-                set.getString("error")
-        );
-        list.add(record);
-      }
-    } catch(SQLException e) {
-      e.printStackTrace();
-      return list;
-    }
-    return list;
-  }
-
   // Use LinkedHashMap forced because we need keep the order.
   public @NotNull LinkedHashMap<ShopMetricRecord, DataRecord> mapToDataRecord(@NotNull final List<ShopMetricRecord> metricRecords) throws ExecutionException, InterruptedException {
     // map ShopMetricRecord#getShopId to DataRecord with blocking future
@@ -113,24 +81,52 @@ public class MetricQuery {
             .selectColumns()
             .setLimit((int)Math.max(1, limit))
             .orderBy("id", !descending).build().execute()) {
-      final ResultSet set = query.getResultSet();
-      while(set.next()) {
-        //"time", "shop", "data", "buyer", "type", "amount", "money", "tax"
-        final ShopMetricRecord record = ShopMetricRecord.builder()
-                .time(set.getDate("time").getTime())
-                .shopId(set.getLong("shop"))
-                .type(ShopOperationEnum.valueOf(set.getString("type")))
-                .total(set.getDouble("money"))
-                .tax(set.getDouble("tax"))
-                .amount(set.getInt("amount"))
-                .player(QUserImpl.createSync(plugin.getPlayerFinder(), set.getString("buyer")))
-                .build();
-        list.add(record);
-      }
+      readPurchaseRecords(query.getResultSet(), list);
     } catch(SQLException e) {
       e.printStackTrace();
       return list;
     }
     return list;
+  }
+
+  /**
+   * Player-scoped variant: the buyer condition must live in the SQL, otherwise the global
+   * LIMIT is consumed before the filter and a player's tab can render empty despite
+   * purchases inside the window.
+   */
+  @NotNull
+  public List<ShopMetricRecord> queryPlayerPurchaseRecords(@NotNull final UUID player, @NotNull final Date startTime, final long limit, final boolean descending) {
+
+    final List<ShopMetricRecord> list = new ArrayList<>();
+    try(SQLQuery query = databaseHelper.getManager().createQuery()
+            .inTable(databaseHelper.getPrefix() + "log_purchase")
+            .addTimeCondition("time", startTime, null)
+            .addCondition("buyer", player.toString())
+            .selectColumns()
+            .setLimit((int)Math.max(1, limit))
+            .orderBy("id", !descending).build().execute()) {
+      readPurchaseRecords(query.getResultSet(), list);
+    } catch(SQLException e) {
+      e.printStackTrace();
+      return list;
+    }
+    return list;
+  }
+
+  private void readPurchaseRecords(@NotNull final ResultSet set, @NotNull final List<ShopMetricRecord> list) throws SQLException {
+
+    while(set.next()) {
+      //"time", "shop", "data", "buyer", "type", "amount", "money", "tax"
+      final ShopMetricRecord record = ShopMetricRecord.builder()
+              .time(set.getDate("time").getTime())
+              .shopId(set.getLong("shop"))
+              .type(ShopOperationEnum.valueOf(set.getString("type")))
+              .total(set.getDouble("money"))
+              .tax(set.getDouble("tax"))
+              .amount(set.getInt("amount"))
+              .player(QUserImpl.createSync(plugin.getPlayerFinder(), set.getString("buyer")))
+              .build();
+      list.add(record);
+    }
   }
 }

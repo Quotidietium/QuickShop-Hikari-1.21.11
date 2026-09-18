@@ -41,15 +41,20 @@ public class SubCommand_Limit implements CommandHandler<Player> {
       quickshop.text().of(sender, "not-managed-shop").send();
       return;
     }
-    final ConfigurationSection manager = shop.getExtra(Main.instance);
     switch(parser.getArgs().getFirst()) {
       case "set" -> {
         if(parser.getArgs().size() < 2) {
           quickshop.text().of(sender, "command.wrong-args").send();
           return;
         }
+        final int limitAmount;
         try {
-          final int limitAmount = Integer.parseInt(parser.getArgs().get(1));
+          limitAmount = Integer.parseInt(parser.getArgs().get(1));
+        } catch(NumberFormatException e) {
+          quickshop.text().of(sender, "not-a-integer", parser.getArgs().get(1)).send();
+          return;
+        }
+        mutateOnShopRegion(sender, shop, manager->{
           if(limitAmount > 0) {
             manager.set("limit", limitAmount);
             quickshop.text().of(sender, "addon.limited.success-setup").send();
@@ -58,22 +63,17 @@ public class SubCommand_Limit implements CommandHandler<Player> {
             manager.set("data", null);
             quickshop.text().of(sender, "addon.limited.success-remove").send();
           }
-          shop.setExtra(Main.instance, manager);
-        } catch(NumberFormatException e) {
-          quickshop.text().of(sender, "not-a-integer", parser.getArgs().get(1)).send();
-        }
+        });
       }
-      case "unset" -> {
+      case "unset" -> mutateOnShopRegion(sender, shop, manager->{
         manager.set("limit", null);
         manager.set("data", null);
         quickshop.text().of(sender, "addon.limited.success-remove").send();
-        shop.setExtra(Main.instance, manager);
-      }
-      case "reset" -> {
+      });
+      case "reset" -> mutateOnShopRegion(sender, shop, manager->{
         manager.set("data", null);
-        shop.setExtra(Main.instance, manager);
         quickshop.text().of(sender, "addon.limited.success-reset").send();
-      }
+      });
       case "period" -> {
         if(parser.getArgs().size() < 2) {
           quickshop.text().of(sender, "command.wrong-args").send();
@@ -81,14 +81,29 @@ public class SubCommand_Limit implements CommandHandler<Player> {
         }
         try {
           final CalendarEvent.CalendarTriggerType type = CalendarEvent.CalendarTriggerType.valueOf(parser.getArgs().get(1).toUpperCase(Locale.ROOT));
-          manager.set("period", type.name());
-          quickshop.text().of(sender, "addon.limited.success-setup").send();
-          shop.setExtra(Main.instance, manager);
+          mutateOnShopRegion(sender, shop, manager->{
+            manager.set("period", type.name());
+            quickshop.text().of(sender, "addon.limited.success-setup").send();
+          });
         } catch(IllegalArgumentException ignored) {
           quickshop.text().of(sender, "command.wrong-args", parser.getArgs().get(1)).send();
         }
       }
     }
+  }
+
+  /**
+   * Runs a shop-extra mutation on the shop's own region thread: the command executes on
+   * the player's region, while purchases mutate the same YamlConfiguration from the shop's
+   * region (Folia) — unguarded setExtra here raced them.
+   */
+  private void mutateOnShopRegion(final Player sender, final Shop shop, final java.util.function.Consumer<ConfigurationSection> mutator) {
+
+    com.ghostchu.quickshop.util.Util.regionThread(shop.bukkitLocation(), ()->{
+      final ConfigurationSection manager = shop.getExtra(Main.instance);
+      mutator.accept(manager);
+      shop.setExtra(Main.instance, manager);
+    });
   }
 
   @Override

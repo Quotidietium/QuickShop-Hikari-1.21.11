@@ -34,23 +34,26 @@ public class SubCommand_DisplayControl implements CommandHandler<Player> {
       qs.text().of(sender, "command-incorrect", "/quickshop displaycontrol <auto/enable/disable>").send();
       return;
     }
-    DisplayOption option = DisplayOption.AUTO;
     final String userInput = parser.getArgs().getFirst().trim();
+    final DisplayOption option;
     if("enable".equalsIgnoreCase(userInput)) {
       option = DisplayOption.ENABLED;
-    }
-    if("disable".equalsIgnoreCase(userInput)) {
+    } else if("disable".equalsIgnoreCase(userInput)) {
       option = DisplayOption.DISABLED;
+    } else if("auto".equalsIgnoreCase(userInput)) {
+      option = DisplayOption.AUTO;
+    } else {
+      qs.text().of(sender, "command-incorrect", "/quickshop displaycontrol <auto/enable/disable>").send();
+      return;
     }
-    final DisplayOption optionFinCopy = option;
     Util.asyncThreadRun(()->{
       try {
-        final Integer i = plugin.getDatabaseHelper().setDisplayDisableForPlayer(sender.getUniqueId(), optionFinCopy);
+        final Integer i = plugin.getDatabaseHelper().setDisplayDisableForPlayer(sender.getUniqueId(), option);
         Log.debug("Execute DisplayToggle with id " + i + " affected");
         // the in-memory map only loads at pre-login — mirror the change or the toggle
         // silently does nothing until the player re-logs
-        plugin.updateDisplayOption(sender.getUniqueId(), optionFinCopy);
-        qs.text().of(sender, "addon.displaycontrol.toggle", optionFinCopy.name()).send();
+        plugin.updateDisplayOption(sender.getUniqueId(), option);
+        qs.text().of(sender, "addon.displaycontrol.toggle", option.name()).send();
       } catch(SQLException e) {
         qs.text().of(sender, "addon.displaycontrol.toggle-exception").send();
         plugin.getLogger().log(Level.WARNING, "Cannot save the player display status", e);
@@ -63,7 +66,7 @@ public class SubCommand_DisplayControl implements CommandHandler<Player> {
   public @Nullable List<String> onTabComplete(@NotNull final Player sender, @NotNull final String commandLabel, @NotNull final CommandParser parser) {
 
     if(parser.getArgs().size() == 1) {
-      return List.of("enable", "disable");
+      return List.of("auto", "enable", "disable");
     }
     return Collections.emptyList();
   }

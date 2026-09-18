@@ -28,7 +28,8 @@ public class DataUtil {
   public String formatEconomy(@NotNull final ShopMetricRecord record) {
 
     final Shop shop = main.getQuickShop().getShopManager().getShop(record.getShopId());
-    if(shop == null || main.getQuickShop().getEconomyManager().provider() == null) {
+    // unloaded worlds answer getWorld() with null — fall through to the plain format
+    if(shop == null || main.getQuickShop().getEconomyManager().provider() == null || shop.bukkitLocation().getWorld() == null) {
       final DecimalFormat df = new DecimalFormat("#.00");
       return df.format(record.getTotal());
     }
@@ -74,8 +75,7 @@ public class DataUtil {
     } else {
       if(shop != null) {
         final Location location = shop.bukkitLocation();
-        final String template = "%s %s,%s,%s";
-        nameBuilder.append(String.format(template, location.getWorld().getName(), location.getBlockX(), location.getBlockY(), location.getBlockZ()));
+        nameBuilder.append(loc2String(location));
       } else {
         nameBuilder.append("N/A");
       }
@@ -86,8 +86,10 @@ public class DataUtil {
   @NotNull
   public String loc2String(@NotNull final Location location) {
 
+    // unloaded worlds answer getWorld() with null — that NPE failed the whole tab
+    final String worldName = location.getWorld() == null ? "unknown" : location.getWorld().getName();
     final String template = "%s %s,%s,%s";
-    return String.format(template, location.getWorld().getName(), location.getBlockX(), location.getBlockY(), location.getBlockZ());
+    return String.format(template, worldName, location.getBlockX(), location.getBlockY(), location.getBlockZ());
   }
 
   @NotNull
