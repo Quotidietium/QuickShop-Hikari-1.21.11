@@ -197,16 +197,27 @@ public class FastPlayerFinder implements PlayerFinder, SubPasteItem {
       Log.debug("Reused " + inProgress + " for uuid2Name lookup: uuid=" + uuid + ", writeCache=" + writeCache + ", executorService=" + executorService);
       return inProgress;
     }
-    final CompletableFuture<String> future =
-            CompletableFuture.supplyAsync(
-                    ()->resolver.uuid2Name(uuid, executorService, (name)->{
-                      handling.remove(uuid);
-                      if(writeCache) {
-                        cache(uuid, name);
-                      }
-                    }),
-                    QuickExecutor.getPrimaryProfileIoExecutor());
+    final CompletableFuture<String> future = new CompletableFuture<>();
+    // publish before starting the work: a concurrent caller hitting the reuse path
+    // below gets this future and joins the in-flight lookup instead of racing a
+    // duplicate; completion removes the entry even on failure (a failed lookup must
+    // not poison the cache with an eternal exceptional future)
     handling.put(uuid, future);
+    CompletableFuture.supplyAsync(
+            ()->resolver.uuid2Name(uuid, executorService, (name)->{
+              if(writeCache) {
+                cache(uuid, name);
+              }
+            }),
+            QuickExecutor.getPrimaryProfileIoExecutor())
+        .whenComplete((result, throwable)->{
+          handling.remove(uuid);
+          if(throwable != null) {
+            future.completeExceptionally(throwable);
+          } else {
+            future.complete(result);
+          }
+        });
     return future;
   }
 
@@ -230,16 +241,24 @@ public class FastPlayerFinder implements PlayerFinder, SubPasteItem {
       Log.debug("Reused " + inProgress + " for name2Uuid lookup: name=" + name + ", writeCache=" + writeCache + ", executorService=" + executorService);
       return inProgress;
     }
-    final CompletableFuture<UUID> future =
-            CompletableFuture.supplyAsync(
-                    ()->resolver.name2Uuid(name, executorService, (uuid)->{
-                      handling.remove(name);
-                      if(writeCache) {
-                        cache(uuid, name);
-                      }
-                    }),
-                    QuickExecutor.getPrimaryProfileIoExecutor());
+    final CompletableFuture<UUID> future = new CompletableFuture<>();
+    // publish before starting the work: see uuid2NameFuture
     handling.put(name, future);
+    CompletableFuture.supplyAsync(
+            ()->resolver.name2Uuid(name, executorService, (uuid)->{
+              if(writeCache) {
+                cache(uuid, name);
+              }
+            }),
+            QuickExecutor.getPrimaryProfileIoExecutor())
+        .whenComplete((result, throwable)->{
+          handling.remove(name);
+          if(throwable != null) {
+            future.completeExceptionally(throwable);
+          } else {
+            future.complete(result);
+          }
+        });
     return future;
   }
 

@@ -44,7 +44,7 @@ public final class QUserImpl implements QUser {
     }
     return this.executorService;
   }
-  private String username;
+  private volatile String username;
   private UUID uniqueId;
   private boolean realPlayer;
 

@@ -114,7 +114,7 @@ public class SubCommand_History implements CommandHandler<Player> {
       MenuManager.instance().addViewer(viewer);
       try {
         final List<ShopHistory.ShopHistoryRecord> queryResult = shopHistory.query();
-        final ShopHistory.ShopSummary summary = shopHistory.generateSummary().join();
+        final ShopHistory.ShopSummary summary = shopHistory.generateSummary().orTimeout(60, java.util.concurrent.TimeUnit.SECONDS).join();
         Log.debug(summary.toString());
 
         final Map<Long, DataRecord> dataRecords = new ConcurrentHashMap<>();
@@ -146,7 +146,7 @@ public class SubCommand_History implements CommandHandler<Player> {
                           }));
         }
 
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).orTimeout(60, java.util.concurrent.TimeUnit.SECONDS).join();
 
         viewer.addData(SHOPS_DATA, shops);
         viewer.addData(HISTORY_RECORDS, queryResult);

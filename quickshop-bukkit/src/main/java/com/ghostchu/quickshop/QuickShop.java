@@ -1319,6 +1319,10 @@ public class QuickShop implements QuickShopAPI, Reloadable {
       logger.info("Unloading all loaded shops...");
       shopManager.getLoadedShops().forEach(shop->shopManager.unloadShop(shop));
     }
+    if(this.shopLoader != null) {
+      logger.info("Shutting down shop loader worker pool...");
+      this.shopLoader.shutdown();
+    }
     if(metricBatcher != null) {
       logger.info("Flushing pending metric records...");
       metricBatcher.flushSync(10);

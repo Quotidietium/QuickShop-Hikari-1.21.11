@@ -92,10 +92,14 @@ public class SubCommand_StaffAll implements CommandHandler<Player> {
                       default -> plugin.text().of(sender, "command.wrong-args").send();
                     }
                     if(permissionGroup != null) {
-
-                      for(final Shop shop : shops) {
-                        shop.setPlayerGroup(uuid, permissionGroup);
-                      }
+                      final BuiltInShopPermissionGroup group = permissionGroup;
+                      // setPlayerGroup mutates shop state + schedules a save: keep it
+                      // on the main thread like every other shop mutation
+                      Util.mainThreadRun(()->{
+                        for(final Shop shop : shops) {
+                          shop.setPlayerGroup(uuid, group);
+                        }
+                      });
                     }
                   })
                   .exceptionally(throwable->{

@@ -90,7 +90,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static com.ghostchu.quickshop.util.Util.waitForFuture;
@@ -910,7 +912,17 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       return space;
     } else {
 
-      return plugin.getShopManager().queryShopInventoryCacheInDatabase(this).join().getSpace();
+      try {
+        return plugin.getShopManager().queryShopInventoryCacheInDatabase(this).get(5, TimeUnit.SECONDS).getSpace();
+      } catch(final InterruptedException e) {
+        Thread.currentThread().interrupt();
+        Log.debug("Interrupted while waiting for remaining space of shop " + this);
+        return 0;
+      } catch(final ExecutionException | TimeoutException e) {
+        // fail-closed: 0 reports "no space" instead of hanging the calling thread
+        Log.debug("Failed to query remaining space of shop " + this + ": " + e.getMessage());
+        return 0;
+      }
     }
   }
 
@@ -967,7 +979,18 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
           future.complete(stock);
         });
 
-    return future.join();
+    try {
+      return future.get(5, TimeUnit.SECONDS);
+    } catch(final InterruptedException e) {
+      Thread.currentThread().interrupt();
+      Log.debug("Interrupted while waiting for remaining stock of shop " + this);
+      return 0;
+    } catch(final ExecutionException | TimeoutException e) {
+      // fail-closed: 0 blocks the trade with a stock message instead of hanging
+      // the calling thread on a region task that never ran
+      Log.debug("Timed out waiting for remaining stock of shop " + this + ": " + e.getMessage());
+      return 0;
+    }
   }
 
   /**

@@ -421,7 +421,7 @@ public class MainPage extends QuickShopPage {
 
                                              try {
                                                final List<ShopHistory.ShopHistoryRecord> queryResult = shopHistory.query();
-                                               final ShopHistory.ShopSummary summary = shopHistory.generateSummary().join();
+                                               final ShopHistory.ShopSummary summary = shopHistory.generateSummary().orTimeout(60, java.util.concurrent.TimeUnit.SECONDS).join();
                                                Log.debug(summary.toString());
 
                                                // the history page skips any record whose item snapshot is
@@ -447,7 +447,7 @@ public class MainPage extends QuickShopPage {
                                                                    return null;
                                                                  }));
                                                }
-                                               java.util.concurrent.CompletableFuture.allOf(dataFutures.toArray(new java.util.concurrent.CompletableFuture[0])).join();
+                                               java.util.concurrent.CompletableFuture.allOf(dataFutures.toArray(new java.util.concurrent.CompletableFuture[0])).orTimeout(60, java.util.concurrent.TimeUnit.SECONDS).join();
 
                                                final MenuViewer historyViewer = new MenuViewer(id);
                                                // a stale viewer would keep its old data map

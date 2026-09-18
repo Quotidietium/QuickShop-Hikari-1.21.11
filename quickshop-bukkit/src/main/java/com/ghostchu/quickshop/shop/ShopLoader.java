@@ -65,6 +65,15 @@ public class ShopLoader implements SubPasteItem {
     this.executorService = Executors.newWorkStealingPool(parallelism);
   }
 
+  /**
+   * Shut down the loader's worker pool. Must be called on plugin disable - the
+   * pool is otherwise never terminated and its threads leak across reloads.
+   */
+  public void shutdown() {
+
+    this.executorService.shutdown();
+  }
+
   public void loadShops() {
 
     loadShops(null);

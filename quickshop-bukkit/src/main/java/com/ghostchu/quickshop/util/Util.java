@@ -163,7 +163,15 @@ public class Util {
       return;
     }
 
-    QuickShop.folia().getScheduler().runLaterAsync(runnable, 0);
+    // FoliaLib's async scheduler invokes the task bare: any exception would vanish
+    // without a trace (no console log) - wrap so failures surface
+    QuickShop.folia().getScheduler().runLaterAsync(()->{
+      try {
+        runnable.run();
+      } catch(final Throwable throwable) {
+        plugin.logger().warn("An uncaught exception was thrown by an async task:", throwable);
+      }
+    }, 0);
   }
 
   public static void playClickSound(@NotNull final Player player) {

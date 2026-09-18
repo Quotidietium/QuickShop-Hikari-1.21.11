@@ -73,11 +73,13 @@ public class SimpleTextManager implements TextManager, Reloadable, SubPasteItem 
 
   private static final String DEFAULT_LOCALE = "en_us";
   private static final String LOCALE_MAPPING_SYNTAX = "locale";
-  public final Set<PostProcessor> postProcessors = new LinkedHashSet<>();
+  // mutated by the async language reload while the main thread iterates on every
+  // translation render - copy-on-write keeps readers on a stable snapshot
+  public final Set<PostProcessor> postProcessors = new java.util.concurrent.CopyOnWriteArraySet<>();
   private final QuickShop plugin;
   // <File <Locale, Section>>
   private final LanguageFilesManager languageFilesManager = new LanguageFilesManager();
-  private final Set<String> availableLanguages = new LinkedHashSet<>();
+  private final Set<String> availableLanguages = new java.util.concurrent.CopyOnWriteArraySet<>();
   private final ConcurrentHashMap<Locale, NumberFormat> numberFormatCache = new ConcurrentHashMap<>();
   /**
    * (locale, path) to raw template string. Sign and chat rendering re-read the same
