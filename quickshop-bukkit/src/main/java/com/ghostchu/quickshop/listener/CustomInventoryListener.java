@@ -45,6 +45,30 @@ public class CustomInventoryListener extends AbstractQSListener {
   }
 
   /**
+   * TNML menus build holder-less inventories, so the preview guard above never fires
+   * for them. Any drag reaching the top (menu) inventory of an open menu would plant
+   * items into slots the menu discards on close - cancel those drags; drags confined
+   * to the player's own inventory stay untouched.
+   */
+  @EventHandler(ignoreCancelled = true)
+  public void menuDragEvent(final InventoryDragEvent e) {
+
+    if(!(e.getWhoClicked() instanceof org.bukkit.entity.Player player)) {
+      return;
+    }
+    if(!MenuManager.instance().inMenu(player.getUniqueId())) {
+      return;
+    }
+    final int topSize = e.getView().getTopInventory().getSize();
+    for(final int rawSlot : e.getRawSlots()) {
+      if(rawSlot < topSize) {
+        e.setCancelled(true);
+        return;
+      }
+    }
+  }
+
+  /**
    * Workaround for TNML's 6-second inventory click blocking after GUI close.
    * TNML adds players to a "recentlyClosed" map when they close a menu GUI,
    * and blocks all inventory clicks for 6 seconds. This is excessive and

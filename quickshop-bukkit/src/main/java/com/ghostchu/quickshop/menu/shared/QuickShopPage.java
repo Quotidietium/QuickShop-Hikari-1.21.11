@@ -207,7 +207,9 @@ public class QuickShopPage extends QuickShopPlayerPage {
     for(int i = 0; i < args.length; i++) {
 
       final Object arg = args[i];
-      workingStr = workingStr.replace("{" + i + "}", (arg != null)? arg.toString() : "");
+      // args are user-controlled data (shop names, search terms, prices): escape
+      // MiniMessage tags so they render as text instead of being parsed as markup
+      workingStr = workingStr.replace("{" + i + "}", (arg != null)? QuickShop.getInstance().platform().miniMessage().escapeTags(arg.toString()) : "");
     }
     return workingStr;
   }

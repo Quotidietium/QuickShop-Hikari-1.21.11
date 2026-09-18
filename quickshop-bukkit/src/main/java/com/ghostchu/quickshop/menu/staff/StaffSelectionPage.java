@@ -269,6 +269,15 @@ public class StaffSelectionPage {
                                                      }
                                                      shop.get().setPlayerGroup(uuid, BuiltInShopPermissionGroup.EVERYONE);
                                                      QuickShop.getInstance().text().of(id, "shop-staff-deleted", name).send();
+                                                     // the chat flow closed the inventory, which
+                                                     // dropped the viewer - rebuild what this page
+                                                     // reads or the auto-reopen renders an empty menu
+                                                     final net.tnemc.menu.core.viewer.MenuViewer refreshViewer = new net.tnemc.menu.core.viewer.MenuViewer(id);
+                                                     refreshViewer.addData(SHOP_DATA_ID, capturedShopId);
+                                                     refreshViewer.addData(STAFF_SEARCH, searchQuery);
+                                                     refreshViewer.addData(staffPageID, page);
+                                                     net.tnemc.menu.core.manager.MenuManager.instance().removeViewer(id);
+                                                     net.tnemc.menu.core.manager.MenuManager.instance().addViewer(refreshViewer);
                                                      return true;
                                                    }
                                                    return true;

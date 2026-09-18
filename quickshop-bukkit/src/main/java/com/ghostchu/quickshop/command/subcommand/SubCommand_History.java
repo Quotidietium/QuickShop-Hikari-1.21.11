@@ -153,6 +153,11 @@ public class SubCommand_History implements CommandHandler<Player> {
         viewer.addData(HISTORY_DATA_RECORDS, dataRecords);
         viewer.addData(HISTORY_SUMMARY, summary);
         Util.mainThreadRun(()->{
+          // the player may have quit during the DB round trips
+          if(!sender.isOnline()) {
+            MenuManager.instance().removeViewer(sender.getUniqueId());
+            return;
+          }
           MenuManager.instance().open("qs:history", 1, menuPlayer);
         });
 

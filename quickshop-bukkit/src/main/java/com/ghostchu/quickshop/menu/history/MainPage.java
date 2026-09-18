@@ -135,6 +135,9 @@ public class MainPage {
         final int start = ((page - 1) * items);
 
         final List<Shop> shops = (ArrayList<Shop>)shopsData.get();
+        if(shops.isEmpty()) {
+          return;
+        }
         final List<ShopHistory.ShopHistoryRecord> queryResult = (List<ShopHistory.ShopHistoryRecord>)historyData.get();
         final ShopHistory.ShopSummary summary = (ShopHistory.ShopSummary)summaryData.get();
 

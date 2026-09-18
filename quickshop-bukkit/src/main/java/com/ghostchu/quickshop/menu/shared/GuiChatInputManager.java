@@ -51,6 +51,10 @@ public class GuiChatInputManager implements Listener {
   // and build a second manager whose pendingInputs is forever empty
   private static volatile GuiChatInputManager instance;
 
+  // a prompt older than this is dropped instead of consumed: pending inputs must not
+  // wait forever for a message they would swallow (and for confirm prompts, execute)
+  private static final long INPUT_TTL_MS = 60_000L;
+
   private final Map<UUID, ChatInputContext> pendingInputs = new ConcurrentHashMap<>();
   private final QuickShop plugin;
   // same snapshot contract as ChatListener: the gate is read once per instance, not per
@@ -99,7 +103,7 @@ public class GuiChatInputManager implements Listener {
 
     ensureRegistered();
 
-    pendingInputs.put(player.getUniqueId(), new ChatInputContext(handler, menuName, menuPage));
+    pendingInputs.put(player.getUniqueId(), new ChatInputContext(handler, menuName, menuPage, System.currentTimeMillis()));
 
     if(prompt != null && !prompt.isEmpty()) {
       player.sendMessage(prompt);
@@ -178,17 +182,28 @@ public class GuiChatInputManager implements Listener {
       return;
     }
 
+    // an expired prompt must neither swallow the message nor run its handler - drop
+    // silently and let the chat through (the handler stays removed)
+    if(System.currentTimeMillis() - context.createdAt() > INPUT_TTL_MS) {
+      Log.debug("GuiChatInputManager: Dropped expired input from " + event.getPlayer().getName());
+      return;
+    }
+
     // Cancel the event so it doesn't show in chat
     event.setCancelled(true);
 
-    final String message = PlainTextComponentSerializer.plainText().serialize(event.message()).trim();
+    String message = PlainTextComponentSerializer.plainText().serialize(event.message()).trim();
+    // the raw string is client-controlled: legacy section codes and control
+    // characters must not feed handlers (names, searches) or viewer data
+    message = message.replaceAll("(?i)§[0-9a-fk-or]", "").replaceAll("\\p{Cntrl}", "").trim();
+    final String input = message;
     final Player eventPlayer = event.getPlayer();
     Log.debug("GuiChatInputManager: Received input from " + eventPlayer.getName() + ": " + message);
 
     // Process on the player's region thread for Folia compatibility
     QuickShop.folia().getScheduler().runAtEntityLater(eventPlayer, ()->{
       try {
-        final boolean accepted = context.handler().apply(message);
+        final boolean accepted = context.handler().apply(input);
         if(accepted) {
           Log.debug("GuiChatInputManager: Input accepted, removed handler for " + playerId);
 
@@ -198,8 +213,9 @@ public class GuiChatInputManager implements Listener {
           }
         } else {
           // the handler wants more input — re-arm only if no new request took the slot
-          // while this task was pending (a newer prompt must win over the stale one)
-          pendingInputs.putIfAbsent(playerId, context);
+          // while this task was pending (a newer prompt must win over the stale one);
+          // the fresh timestamp restarts the expiry budget for the follow-up message
+          pendingInputs.putIfAbsent(playerId, new ChatInputContext(context.handler(), context.menuName(), context.menuPage(), System.currentTimeMillis()));
         }
       } catch(final Exception e) {
         plugin.logger().warn("Error processing GUI chat input for player " + playerId, e);
@@ -270,6 +286,7 @@ public class GuiChatInputManager implements Listener {
   private record ChatInputContext(
           Function<String, Boolean> handler,
           @Nullable String menuName,
-          int menuPage
+          int menuPage,
+          long createdAt
   ) { }
 }

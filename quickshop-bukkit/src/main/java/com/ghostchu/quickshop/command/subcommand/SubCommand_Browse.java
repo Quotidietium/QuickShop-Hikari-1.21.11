@@ -81,7 +81,14 @@ public class SubCommand_Browse implements CommandHandler<Player> {
       // the menu open builds the per-player icon map and reads the player's world —
       // it must not race main-thread click resolution on the page maps, and world
       // access is region-sensitive under Folia
-      Util.mainThreadRun(()->MenuManager.instance().open("qs:browse", 1, menuPlayer));
+      Util.mainThreadRun(()->{
+        // the player may have quit during the data load
+        if(!sender.isOnline()) {
+          MenuManager.instance().removeViewer(sender.getUniqueId());
+          return;
+        }
+        MenuManager.instance().open("qs:browse", 1, menuPlayer);
+      });
     });
   }
 

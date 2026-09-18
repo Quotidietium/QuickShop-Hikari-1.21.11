@@ -97,7 +97,10 @@ public class QuickShopPlayerPage extends PlayerInstancePage {
     if(clickHandler != null) {
       return clickHandler.apply(handler);
     }
-    return icons.containsKey(slot);
+    // unhandled top-area clicks (empty menu slots) must be cancelled: the client can
+    // plant its held item into the slot, and the menu inventory is discarded on
+    // close, silently destroying the item
+    return true;
   }
 
   /**

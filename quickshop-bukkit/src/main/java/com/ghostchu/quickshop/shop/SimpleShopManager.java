@@ -363,7 +363,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
 
     final QUser buyerQUser = QUserImpl.createFullFilled(buyer);
     if(!plugin.perm().hasPermission(buyer, "quickshop.other.use") && !shop.playerAuthorize(buyer.getUniqueId(), BuiltInShopPermission.PURCHASE)) {
-      plugin.text().of("no-permission").send();
+      plugin.text().of(buyer, "no-permission").send();
       return false;
     }
 
@@ -631,7 +631,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     final QUser sellerQUser = QUserImpl.createFullFilled(seller);
 
     if(!plugin.perm().hasPermission(seller, "quickshop.other.use") && !shop.playerAuthorize(seller.getUniqueId(), BuiltInShopPermission.PURCHASE)) {
-      plugin.text().of("no-permission").send();
+      plugin.text().of(seller, "no-permission").send();
       return false;
     }
 
