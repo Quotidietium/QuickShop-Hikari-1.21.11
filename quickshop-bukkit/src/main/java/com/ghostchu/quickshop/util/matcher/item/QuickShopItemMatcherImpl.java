@@ -192,14 +192,14 @@ public class QuickShopItemMatcherImpl implements ItemMatcher, Reloadable {
     }
 
     final String shopIdOrigin = lookupShopId(requireStack);
-    if(shopIdOrigin != null) {
-      Log.debug("ShopId compare -> Origin: " + shopIdOrigin + "  Given: " + plugin.platform().getItemShopId(givenStack));
-      // the legacy shopId alias must never widen a cross-material mismatch into a match
-      if(requireStack.getType().equals(givenStack.getType())) {
-        final String shopIdTester = plugin.platform().getItemShopId(givenStack);
-        if(shopIdOrigin.equals(shopIdTester)) {
-          return true;
-        }
+    // the legacy shopId alias must never widen a cross-material mismatch into a match,
+    // and the debug read used to construct a whole NBTItem for the tester per slot even
+    // when the type gate would have refused — the compare now lives inside the gate
+    if(shopIdOrigin != null && requireStack.getType().equals(givenStack.getType())) {
+      final String shopIdTester = plugin.platform().getItemShopId(givenStack);
+      Log.debug("ShopId compare -> Origin: " + shopIdOrigin + "  Given: " + shopIdTester);
+      if(shopIdOrigin.equals(shopIdTester)) {
+        return true;
       }
     }
 

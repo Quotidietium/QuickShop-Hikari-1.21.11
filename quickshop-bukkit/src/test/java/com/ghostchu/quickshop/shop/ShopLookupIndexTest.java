@@ -41,6 +41,12 @@ class ShopLookupIndexTest {
     plugin = mock(QuickShop.class);
     quickShopStatic.when(QuickShop::getInstance).thenReturn(plugin);
     com.ghostchu.quickshop.MockBukkit.install(bukkitStatic, plugin);
+    // R60: sign refreshes now always schedule via the region scheduler (the loaded
+    // check runs inside the callback), so the harness must provide a folia handle
+    final var foliaScheduler = mock(com.tcoded.folialib.impl.PlatformScheduler.class);
+    final var foliaLib = mock(com.tcoded.folialib.FoliaLib.class);
+    when(foliaLib.getScheduler()).thenReturn(foliaScheduler);
+    quickShopStatic.when(QuickShop::folia).thenReturn(foliaLib);
 
     final var bukkitPlugin = mock(com.ghostchu.quickshop.QuickShopBukkit.class);
     lenient().when(plugin.getJavaPlugin()).thenReturn(bukkitPlugin);

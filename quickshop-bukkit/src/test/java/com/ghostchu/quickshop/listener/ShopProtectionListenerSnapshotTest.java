@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -163,7 +165,7 @@ class ShopProtectionListenerSnapshotTest {
   }
 
   @Test
-  void explodeProtectCancelsOncePerEventWhenShopsAreHit() {
+  void explodeProtectCancelsWholeEventOnceAndSkipsRemainingLookups() {
 
     configValues.put("protect.explode", Boolean.TRUE);
     listener = new ShopProtectionListener(plugin);
@@ -171,25 +173,52 @@ class ShopProtectionListenerSnapshotTest {
 
     listener.onBlockExplode(event);
 
-    // the loop cancels once per hit shop-block (idempotent), never deletes
-    verify(event, times(3)).setCancelled(true);
+    // the whole explosion is cancelled exactly once; the walk stops immediately
+    // instead of re-cancelling per hit block
+    verify(event, times(1)).setCancelled(true);
     verify(shopManager, never()).deleteShop(any(Shop.class));
   }
 
   @Test
-  void explodeProtectFalseDeletesHitShopsAndReloadFlipsTheBehavior() {
+  void explodeProtectFalseDeletesContainerHitsButShieldsSignOnlyHits() {
 
+    // R60 semantics with explode protection off: a blast hitting the shop CONTAINER
+    // deletes the shop (vanilla block drops apply), but a hit on just the attached
+    // sign is shielded from the block list — deleting the whole shop because the sign
+    // blew up left the stocked container standing unprotected
     configValues.put("protect.explode", Boolean.FALSE);
     listener = new ShopProtectionListener(plugin);
-    listener.onBlockExplode(explosionWithShops(2));
-    verify(shopManager, times(2)).deleteShop(any(Shop.class));
+
+    final Location containerLoc = new Location(null, 20, 60, 200);
+    final Block container = mock(Block.class);
+    lenient().when(container.getLocation()).thenReturn(containerLoc);
+    final Shop containerShop = mock(Shop.class);
+    lenient().when(shopManager.getShopIncludeAttached(containerLoc)).thenReturn(containerShop);
+    lenient().when(shopManager.getShop(containerLoc)).thenReturn(containerShop);
+
+    final Location signLoc = new Location(null, 21, 60, 200);
+    final Block sign = mock(Block.class);
+    lenient().when(sign.getLocation()).thenReturn(signLoc);
+    lenient().when(shopManager.getShopIncludeAttached(signLoc)).thenReturn(containerShop);
+    // direct lookup misses: this block is only the attached sign, not the container
+    lenient().when(shopManager.getShop(signLoc)).thenReturn(null);
+
+    final List<Block> blocks = new ArrayList<>(List.of(sign, container));
+    final BlockExplodeEvent event = mock(BlockExplodeEvent.class);
+    when(event.blockList()).thenReturn(blocks);
+
+    listener.onBlockExplode(event);
+
+    verify(shopManager, times(1)).deleteShop(any(Shop.class));
+    assertTrue(blocks.contains(container), "container block stays in the blast");
+    assertFalse(blocks.contains(sign), "sign-only hit is shielded from the blast");
 
     configValues.put("protect.explode", Boolean.TRUE);
     listener.reloadModule();
     final var after = explosionWithShops(1);
     listener.onBlockExplode(after);
-    // still exactly two deletes: the reloaded snapshot cancelled instead
-    verify(shopManager, times(2)).deleteShop(any(Shop.class));
+    // still exactly one delete: the reloaded snapshot cancelled instead
+    verify(shopManager, times(1)).deleteShop(any(Shop.class));
     verify(after).setCancelled(true);
   }
 }

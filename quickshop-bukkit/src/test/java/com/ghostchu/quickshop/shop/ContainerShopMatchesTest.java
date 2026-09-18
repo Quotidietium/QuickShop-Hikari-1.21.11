@@ -389,12 +389,14 @@ class ContainerShopMatchesTest {
   }
 
   @Test
-  void crossTypeWithShopIdStillComparedAndCanMatch() {
+  void crossTypeWithShopIdCannotMatchSinceR60MaterialGate() {
 
     assertEquals(0, AbstractQSEvent.getHandlerList().getRegisteredListeners().length);
     final var platform = mock(com.ghostchu.quickshop.platform.Platform.class);
     when(plugin.platform()).thenReturn(platform);
-    // both stacks carry the same external shop id: the shopId path may accept them
+    // both stacks carry the same external shop id, but differing materials can never
+    // match: the alias read is type-gated so a colliding/forged tag cannot widen a
+    // cross-material mismatch into a match
     when(platform.getItemShopId(any(ItemStack.class))).thenReturn("shop-1");
 
     final QuickShopItemMatcherImpl matcher = new QuickShopItemMatcherImpl(plugin);
@@ -403,7 +405,11 @@ class ContainerShopMatchesTest {
     final ItemStack require = slot(Material.DIAMOND);
     final ItemStack given = slot(Material.IRON_INGOT);
 
-    assertTrue(matcher.matches(require, given), "a shared shopId outranks the type gate");
+    assertFalse(matcher.matches(require, given), "the shopId alias never overrides the type gate");
+    // the prototype side is read for its alias, but the tester side is never consulted
+    // across materials
+    verify(platform).getItemShopId(require);
+    verify(platform, never()).getItemShopId(given);
   }
 
   @Test

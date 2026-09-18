@@ -181,7 +181,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
         return;
       }
 
-      if(this.hopperOwnerExclude && destinationHolder instanceof final Hopper hopper) {
+      if(this.hopperOwnerExclude && event.getDestination().getHolder() instanceof final Hopper hopper) {
         final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
         if(hopperPersistentData != null) {
           if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
@@ -202,7 +202,9 @@ public class ShopProtectionListener extends AbstractProtectionListener {
         return;
       }
 
-      if(this.hopperOwnerExclude && sourceHolder instanceof final Hopper hopper) {
+      // the PDC authorization is read through the snapshot holders, mirroring the
+      // extraction branch's contract (the live holder's PDC is not authoritative)
+      if(this.hopperOwnerExclude && event.getSource().getHolder() instanceof final Hopper hopper) {
         final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
         if(hopperPersistentData != null) {
           if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
@@ -220,7 +222,8 @@ public class ShopProtectionListener extends AbstractProtectionListener {
     // same live-holder gate as the hopper handler; snapshot holder only in the branch.
     // Dispensers initiate the same InventoryMoveItemEvent when loading a faced container
     // and used to bypass the plain-Dropper check entirely
-    if(!this.dropperProtect || !(event.getInitiator().getHolder(false) instanceof Dropper || event.getInitiator().getHolder(false) instanceof Dispenser)) {
+    final InventoryHolder initiator = event.getInitiator().getHolder(false);
+    if(!this.dropperProtect || !(initiator instanceof Dropper || initiator instanceof Dispenser)) {
       return;
     }
 

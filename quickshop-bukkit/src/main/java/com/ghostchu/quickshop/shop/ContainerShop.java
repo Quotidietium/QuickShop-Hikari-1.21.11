@@ -2114,7 +2114,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   public void setSignText(@NotNull final ProxiedLocale locale) {
 
     //Util.ensureThread(false);
-    // the loaded check must run ON the region thread inside the callback: callers
+    // cheap bail first: no world means nothing to render, and callers on async threads
+    // (SignUpdateWatcher) must not touch the scheduler-dependent path for dead locations
+    if(this.location.getWorld() == null) {
+      return;
+    }
+    // the loaded-chunk check must run ON the region thread inside the callback: callers
     // include the async SignUpdateWatcher thread, where World.isChunkLoaded is an
     // unsupported cross-thread chunk query whose stale result silently dropped sign
     // updates for chunks mid load/unload
