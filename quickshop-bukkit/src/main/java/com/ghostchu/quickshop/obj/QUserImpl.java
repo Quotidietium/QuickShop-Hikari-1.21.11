@@ -389,7 +389,14 @@ public final class QUserImpl implements QUser {
   @Override
   public int hashCode() {
 
-    return Objects.hash(username, uniqueId, realPlayer);
+    // hashCode must mirror equals(), which compares only the identity field per player type.
+    // The username of a real-player QUser is filled asynchronously after construction, so
+    // hashing it made QUser-keyed maps (benefits, caches) lose every entry once the name
+    // resolved — the object kept its old bucket while its hash silently changed.
+    if(this.realPlayer) {
+      return Objects.hash(Boolean.TRUE, this.uniqueId);
+    }
+    return Objects.hash(Boolean.FALSE, this.username);
   }
 
   @Override

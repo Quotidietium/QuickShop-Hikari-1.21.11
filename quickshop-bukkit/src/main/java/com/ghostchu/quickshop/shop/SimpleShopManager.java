@@ -127,6 +127,15 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
 
   protected final InteractiveManager interactiveManager;
   protected final TaxManager taxManager;
+
+  /**
+   * Exposed for ShopUtil's trade-all affordability cap, which must apply the same shop-side
+   * tax rate the actual transaction will.
+   */
+  public TaxManager getTaxManager() {
+
+    return this.taxManager;
+  }
   @Getter
   @Nullable
   private QUser cacheTaxAccount;
@@ -400,6 +409,14 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         total = e.getTotal(); // Allow addon to set it
       }
     }
+    if(!Double.isFinite(total) || total <= 0) {
+      // a listener-supplied total flows straight into BigDecimal transfers: a negative
+      // value reverses both transfer directions (free money), NaN/Infinity throw deep in
+      // the economy layer
+      plugin.text().of(buyer, "trade-invalid-amount", String.valueOf(total)).send();
+      plugin.logger().warn("Rejected a trade whose total was rewritten to a non-finite or non-positive value ({}) by a listener.", total);
+      return false;
+    }
     QUser taxAccount = null;
     if(shop.getTaxAccount() != null) {
       taxAccount = shop.getTaxAccount();
@@ -654,6 +671,11 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       } else {
         total = e.getTotal(); // Allow addon to set it
       }
+    }
+    if(!Double.isFinite(total) || total <= 0) {
+      plugin.text().of(seller, "trade-invalid-amount", String.valueOf(total)).send();
+      plugin.logger().warn("Rejected a trade whose total was rewritten to a non-finite or non-positive value ({}) by a listener.", total);
+      return false;
     }
     // Money handling
     // SELLING Player -> Shop Owner

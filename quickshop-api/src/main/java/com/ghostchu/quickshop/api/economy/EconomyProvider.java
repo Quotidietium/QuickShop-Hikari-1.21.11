@@ -116,9 +116,7 @@ public interface EconomyProvider {
       if(this.withdraw(from, world, amount)) {
 
         if(this.deposit(to, world, amount)) {
-
-          this.deposit(from, world, amount);
-          return true; //TODO: This was false before which I believe was a bug, but need to test to confirm.
+          return true;
         }
         return false;
       }

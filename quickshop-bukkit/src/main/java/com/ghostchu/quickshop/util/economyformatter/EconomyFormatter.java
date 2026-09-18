@@ -58,10 +58,15 @@ public class EconomyFormatter implements Reloadable {
       return getInternalFormat(n);
     }
 
-    Log.debug("Economy Provider null check: " + (plugin.getEconomyManager().provider() == null));
+    final var provider = plugin.getEconomyManager().provider();
+    if(provider == null) {
+      // the debug line that used to sit here logged the null check and then dereferenced
+      // it anyway — a missing provider must fall back to the internal formatter
+      return getInternalFormat(n);
+    }
 
     try {
-      final String formatted = plugin.getEconomyManager().provider().format(BigDecimal.valueOf(n), world.getName());
+      final String formatted = provider.format(BigDecimal.valueOf(n), world.getName());
       if(CommonUtil.isEmptyString(formatted)) {
         Log.debug(
                 "Use alternate-currency-symbol to formatting, Cause economy plugin returned null");
@@ -69,9 +74,11 @@ public class EconomyFormatter implements Reloadable {
       } else {
         return formatted;
       }
-    } catch(final NumberFormatException e) {
+    } catch(final Exception e) {
+      // economy plugins throw arbitrary runtime exceptions from format(); the previous
+      // NumberFormatException-only catch let an NPE escape into the sign/menu render path
       Log.debug(e.getMessage());
-      Log.debug("Use alternate-currency-symbol to formatting, Cause NumberFormatException");
+      Log.debug("Use alternate-currency-symbol to formatting, Cause economy format failure");
       return getInternalFormat(n);
     }
   }

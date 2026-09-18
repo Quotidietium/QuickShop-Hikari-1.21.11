@@ -79,8 +79,12 @@ public class EconomyLoader {
   private EconomyProvider loadVault() {
 
     final VaultProvider vault = new VaultProvider(plugin);
-    final boolean taxEnabled = plugin.getConfig().getDouble("tax", 0.0d) > 0;
-    final String taxAccount = plugin.getConfig().getString("tax-account", "tax");
+    // the shipped keys are shop-tax.* (QuickShopTaxManager reads the same two); the legacy
+    // root-level "tax"/"tax-account" keys never existed in any shipped config.yml, so the
+    // tax-account pre-creation below had been dead code forever
+    final boolean taxEnabled = plugin.getConfig().getDouble("shop-tax.basic.rate", 0.0d) > 0
+                               || "progressive".equalsIgnoreCase(plugin.getConfig().getString("shop-tax.type", "basic"));
+    final String taxAccount = plugin.getConfig().getString("shop-tax.account", "tax");
     if(!vault.valid()) {
       return null;
     }

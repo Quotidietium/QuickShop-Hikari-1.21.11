@@ -63,11 +63,18 @@ public class QSEconomyTransaction implements EconomyTransaction {
   private @NotNull String world;
   private @NotNull BigDecimal amount;
   private @NotNull BigDecimal tax = BigDecimal.ZERO;
-  private final @NotNull BigDecimal fromAmount;
+  private @NotNull BigDecimal fromAmount;
   private @NotNull BigDecimal amountAfterTax = BigDecimal.ZERO;
   private @NotNull BigDecimal toTax = BigDecimal.ZERO;
   private @NotNull BigDecimal fromTax = BigDecimal.ZERO;
-  private final @NotNull BigDecimal totalTax;
+  private @NotNull BigDecimal totalTax;
+
+  /**
+   * One-way latch flipped the moment an operation moved real money: a transaction that
+   * already withdrew or deposited must never be committed again — a retry would withdraw
+   * or pay out a second time (the operation stack only compensates via rollback()).
+   */
+  private final java.util.concurrent.atomic.AtomicBoolean moneyMoved = new java.util.concurrent.atomic.AtomicBoolean(false);
 
   private @Nullable QUser from;
   private @Nullable QUser to;
@@ -107,9 +114,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
 
     this.fromTax = CalculateUtil.subtract(fromAmount, amount);
 
-    //must sum the converted amount fields, not the rate parameters - depositing the raw
-    //rate sum into the tax account would silently destroy the rest of the collected tax
-    this.totalTax = this.toTax.add(this.fromTax);
+    recalc();
 
     if(from == null && to == null) {
       lastError = "From and To cannot be null in same time.";
@@ -127,6 +132,21 @@ public class QSEconomyTransaction implements EconomyTransaction {
     if(com.ghostchu.quickshop.api.event.AbstractQSEvent.hasListeners()) {
       new EconomyTransactionEvent(this).callEvent();
     }
+  }
+
+  /**
+   * Re-derives the converted amount fields from the current {@link #amount}, {@link #toTax}
+   * and {@link #fromTax}. The API setters (also reachable by addons through
+   * {@link EconomyTransactionEvent}) previously mutated their field and nothing else, so the
+   * actual transfers kept using the constructor-time amounts.
+   */
+  private void recalc() {
+
+    this.amountAfterTax = CalculateUtil.subtract(this.amount, this.toTax);
+    this.fromAmount = this.amount.add(this.fromTax);
+    //must sum the converted amount fields, not the rate parameters - depositing the raw
+    //rate sum into the tax account would silently destroy the rest of the collected tax
+    this.totalTax = this.toTax.add(this.fromTax);
   }
 
   public static QSEconomyTransactionBuilder builder() {
@@ -154,6 +174,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
   public void amount(final @NotNull BigDecimal amount) {
 
     this.amount = amount;
+    recalc();
   }
 
   /**
@@ -271,6 +292,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
   @Override
   public void toTax(final BigDecimal tax) {
     this.toTax = tax;
+    recalc();
   }
 
   /**
@@ -297,6 +319,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
   @Override
   public void fromTax(final BigDecimal tax) {
     this.fromTax = tax;
+    recalc();
   }
 
   public String lastError() {
@@ -375,6 +398,13 @@ public class QSEconomyTransaction implements EconomyTransaction {
    */
   @Override
   public boolean commit(@NotNull final TransactionCallback callback) {
+
+    if(this.moneyMoved.get()) {
+      this.lastError = "Transaction already moved funds and cannot be committed again; call rollback() or create a new transaction.";
+      QuickShop.getInstance().logger().warn("Rejected a repeated commit() on an already-spent transaction ({} => {})", from, to);
+      callback.onFailed(this);
+      return false;
+    }
 
     final QUser fromSnap = from, toSnap = to;
     final BigDecimal amountSnap = amount, fromAmountSnap = fromAmount, afterTaxSnap = amountAfterTax, fromTaxSnap = fromTax, toTaxSnap = toTax;
@@ -514,6 +544,11 @@ public class QSEconomyTransaction implements EconomyTransaction {
           if(!result && !continueOnFail) {
             break;
           }
+          if(!result) {
+            // continueOnFail: the refund failed but the loop moves on — without this log
+            // the lost refund leaves no operator-visible trace at all
+            QuickShop.getInstance().logger().warn("Failed to rollback transaction: {}; Operation: {}; Transaction: {}; Continuing...", provider.lastError(), operation, this);
+          }
 
           operations.add(operation);
         } catch(final Exception ignore) {
@@ -552,6 +587,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
         return false;
       }
 
+      this.moneyMoved.set(true);
       processingStack.push(operation);
       return true;
     } catch(final Exception ignore) {

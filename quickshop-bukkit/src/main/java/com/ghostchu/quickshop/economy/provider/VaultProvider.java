@@ -60,6 +60,14 @@ public class VaultProvider implements EconomyProvider, Listener {
 
   private boolean setup() {
 
+    // register the service listener BEFORE any early return: when the economy plugin
+    // registers its Vault service after this provider was constructed (slow-loading
+    // economy plugin), this listener is the only thing that can re-run setup() — the
+    // old code returned before registering it and the provider never healed
+    org.bukkit.event.HandlerList.unregisterAll(this);
+    Bukkit.getPluginManager().registerEvents(this, QuickShop.getInstance().getJavaPlugin());
+    Log.debug("Economy service listener was registered.");
+
     if(!CommonUtil.isClassAvailable("net.milkbowl.vault.economy.Economy")) {
       return false; // QUICKSHOP-YS I can't believe it broken almost a year and nobody found it, my sentry exploded.
     }
@@ -88,12 +96,6 @@ public class VaultProvider implements EconomyProvider, Listener {
       QuickShop.getInstance().logger().info("Using economy system: " + this.economy.getName());
     }
 
-    // re-registration safety: setup() re-runs on every economy ServiceRegister/-Unregister
-    // event and Bukkit does not deduplicate listener registrations — unregister first or
-    // each service churn doubles our handlers exponentially
-    org.bukkit.event.HandlerList.unregisterAll(this);
-    Bukkit.getPluginManager().registerEvents(this, QuickShop.getInstance().getJavaPlugin());
-    Log.debug("Economy service listener was registered.");
     return true;
   }
 
@@ -211,6 +213,9 @@ public class VaultProvider implements EconomyProvider, Listener {
     if(!valid()) {
       return false;
     }
+    if(!isSaneAmount(amount)) {
+      return false;
+    }
     try {
       final EconomyResponse response = Objects.requireNonNull(this.economy).depositPlayer(Bukkit.getOfflinePlayer(user.getUniqueId()), world, amount.doubleValue());
       if(response.transactionSuccess()) {
@@ -245,6 +250,9 @@ public class VaultProvider implements EconomyProvider, Listener {
     if(!valid()) {
       return false;
     }
+    if(!isSaneAmount(amount)) {
+      return false;
+    }
     try {
 
       if(balance(user, world).compareTo(amount) < 0) {
@@ -273,6 +281,20 @@ public class VaultProvider implements EconomyProvider, Listener {
   public net.milkbowl.vault.economy.Economy economy() {
 
     return economy;
+  }
+
+  /**
+   * Guards the economy core against listener-supplied values: a negative amount makes most
+   * Vault implementations reverse the transfer direction (withdraw = credit), and NaN or
+   * infinite doubles corrupt account balances outright.
+   */
+  private boolean isSaneAmount(final @NotNull BigDecimal amount) {
+
+    if(amount.signum() <= 0 || !Double.isFinite(amount.doubleValue())) {
+      this.lastError = "Rejected non-positive or non-finite transfer amount: " + amount;
+      return false;
+    }
+    return true;
   }
 
   @EventHandler

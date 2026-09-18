@@ -714,6 +714,7 @@ operation-in-progress: <red>已有导出/恢复操作正在进行，请等待其
 importing-backup-failed: <red>导入前自动备份失败，导入已中止，数据库未做任何修改。请检查服务器控制台，待备份恢复可用后重试。
 importing-schema-newer: <red>导入的数据库 schema 版本（<yellow>{0}</yellow>）高于本构建支持的最高版本（<yellow>{1}</yellow>），在恢复导入前备份之前将拒绝重启服务器。
 importing-schema-older: <yellow>导入的数据库 schema 版本为 <yellow>{0}</yellow>，将在下次重启时自动迁移至版本 <yellow>{1}</yellow>。
+trade-invalid-amount: <red>交易已被拒绝：计算出的总额（<yellow>{0}</yellow>）无效，请联系管理员。
 transfer-sent: <green>商店转移请求已发送到 <yellow>{0}</yellow>。
 transfer-request: <yellow>玩家 <aqua>{0}</aqua> 请求将他们的商店转移给您。您想接受这次来自 <aqua>{0}</aqua> 的商店吗？
 transfer-single-request: <yellow>玩家 <aqua>{0}</aqua> 想要将商店转让给您。您想要接受请求吗？

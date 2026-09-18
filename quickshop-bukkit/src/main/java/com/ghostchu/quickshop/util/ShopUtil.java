@@ -18,6 +18,7 @@ package com.ghostchu.quickshop.util;
  */
 
 import com.ghostchu.quickshop.QuickShop;
+import com.ghostchu.quickshop.shop.SimpleShopManager;
 import com.ghostchu.quickshop.api.economy.EconomyProvider;
 import com.ghostchu.quickshop.api.event.Phase;
 import com.ghostchu.quickshop.api.event.settings.type.ShopOwnerEvent;
@@ -418,12 +419,25 @@ public class ShopUtil {
     final int shopHaveSpaces =
             Util.countSpace(shop.getInventory(), shop);
     final int invHaveItems = Util.countItems(new BukkitInventoryWrapper(p.getInventory()), shop);
-    // Check if shop owner has enough money
+    // Check if shop owner has enough money — the transaction withdraws price*(1+shopRate)
+    // per item from the owner, so the cap must use the taxed per-item cost or the capped
+    // trade is refused afterwards with "the owner can't afford to buy from you"
     final double ownerBalance = eco
             .balance(shop.getOwner(), shop.bukkitLocation().getWorld().getName()).doubleValue();
     final int ownerCanAfford;
-    if(shop.getPrice() != 0) {
-      ownerCanAfford = (int)(ownerBalance / shop.getPrice());
+    final double shopSideRate;
+    if(!shop.isUnlimited() || QuickShop.getInstance().getConfig().getBoolean("shop.pay-unlimited-shop-owners")) {
+      shopSideRate = ((SimpleShopManager)QuickShop.getInstance().getShopManager())
+                             .getTaxManager()
+                             .provider()
+                             .calculateTax(shop, QUserImpl.createFullFilled(p))
+                             .shopRate();
+    } else {
+      shopSideRate = 0.0d; // no payer, no from-tax
+    }
+    final double taxedPrice = shop.getPrice() * (1.0d + shopSideRate);
+    if(taxedPrice > 0) {
+      ownerCanAfford = (int)(ownerBalance / taxedPrice);
     } else {
       ownerCanAfford = Integer.MAX_VALUE;
     }

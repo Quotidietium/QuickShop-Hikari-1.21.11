@@ -873,6 +873,7 @@ operation-in-progress: <red>Another export/recovery operation is already running
 importing-backup-failed: <red>The automatic pre-import backup failed. The import was ABORTED and nothing was modified. Check the server console and retry once the backup works.
 importing-schema-newer: <red>The imported database uses schema version <yellow>{0}</yellow>, which is NEWER than this build supports (<yellow>{1}</yellow>). Restarting will be refused until you restore the pre-import backup.
 importing-schema-older: <yellow>The imported database uses schema version <yellow>{0}</yellow>; migrations to version <yellow>{1}</yellow> will run on the next restart.
+trade-invalid-amount: <red>The trade was rejected because the calculated total (<yellow>{0}</yellow>) is invalid. Please contact an administrator.
 transfer-sent: <green>Shop Transfer-request sent to <yellow>{0}</yellow>.
 transfer-request: <yellow>Player <aqua>{0}</aqua> would like to transfer their Shops
   to you. Do you want to accept the request?
