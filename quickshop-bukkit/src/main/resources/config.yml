@@ -793,7 +793,12 @@ matcher:
 
 # Shop Protection Toggles
 protect:
+  # true = any explosion touching a shop is cancelled entirely.
+  # false = explosions may destroy the shop container (vanilla block drops apply);
+  # the attached sign is always shielded and never deletes the shop by itself.
   explode: true
+  # Protect shop containers and signs from burning away (fire/lava).
+  burn: true
   hopper: true
   hopper-owner-exclude: false
   dropper: true

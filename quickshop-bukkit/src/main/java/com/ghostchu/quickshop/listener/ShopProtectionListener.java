@@ -16,10 +16,13 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.Dispenser;
 import org.bukkit.block.Dropper;
 import org.bukkit.block.Hopper;
+import org.bukkit.entity.minecart.HopperMinecart;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.block.BlockBurnEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPistonExtendEvent;
 import org.bukkit.event.block.BlockPistonRetractEvent;
@@ -28,9 +31,11 @@ import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.world.StructureGrowEvent;
+import org.bukkit.inventory.InventoryHolder;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Iterator;
 import java.util.List;
 
 public class ShopProtectionListener extends AbstractProtectionListener {
@@ -43,6 +48,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   private boolean dropperOwnerExclude;
   private boolean entityProtect;
   private boolean explodeProtect;
+  private boolean burnProtect;
 
   public ShopProtectionListener(@NotNull final QuickShop plugin) {
 
@@ -57,27 +63,14 @@ public class ShopProtectionListener extends AbstractProtectionListener {
     this.dropperProtect = plugin.getConfig().getBoolean("protect.dropper", true);
     this.dropperOwnerExclude = plugin.getConfig().getBoolean("protect.dropper-owner-exclude", false);
     this.entityProtect = plugin.getConfig().getBoolean("protect.entity", true);
-    this.explodeProtect = plugin.getConfig().getBoolean("protect.explode");
+    this.explodeProtect = plugin.getConfig().getBoolean("protect.explode", true);
+    this.burnProtect = plugin.getConfig().getBoolean("protect.burn", true);
   }
 
   @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
   public void onBlockExplode(final BlockExplodeEvent e) {
 
-    for(int i = 0, a = e.blockList().size(); i < a; i++) {
-      final Block b = e.blockList().get(i);
-      Shop shop = getShopNature(b.getLocation(), true);
-      if(shop == null) {
-        shop = getShopNextTo(b.getLocation());
-      }
-      if(shop != null) {
-        if(this.explodeProtect) {
-          e.setCancelled(true);
-        } else {
-          plugin.logEvent(new ShopRemoveLog(QUserImpl.createFullFilled(CommonUtil.getNilUniqueId(), "Exploding", false), "BlockBreak(explode)", shop.saveToInfoStorage()));
-          plugin.getShopManager().deleteShop(shop);
-        }
-      }
-    }
+    handleExplosion(e.blockList().iterator(), "BlockBreak(explode)", "Exploding", ()->e.setCancelled(true));
   }
 
   /**
@@ -119,8 +112,22 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
   public void onExplode(final EntityExplodeEvent e) {
 
-    for(int i = 0, a = e.blockList().size(); i < a; i++) {
-      final Block b = e.blockList().get(i);
+    handleExplosion(e.blockList().iterator(), "BlockBreak(explode)", "EntityExploding", ()->e.setCancelled(true));
+  }
+
+  /**
+   * Shared explosion walk for both explode event flavors.
+   *
+   * <p>With explode protection on, any shop involvement cancels the whole explosion
+   * (nothing of it will happen). With protection off, only the shop CONTAINER itself
+   * may be destroyed and unregistered — a blast hitting just the attached sign used to
+   * delete the whole shop while the stocked container survived unprotected in the
+   * world, so the sign block is now shielded from the block list instead.</p>
+   */
+  private void handleExplosion(@NotNull final Iterator<Block> blocks, @NotNull final String logType, @NotNull final String logName, @NotNull final Runnable cancelWholeExplosion) {
+
+    while(blocks.hasNext()) {
+      final Block b = blocks.next();
       Shop shop = getShopNature(b.getLocation(), true);
       if(shop == null) {
         shop = getShopNextTo(b.getLocation());
@@ -130,10 +137,15 @@ public class ShopProtectionListener extends AbstractProtectionListener {
       }
 
       if(this.explodeProtect) {
-        e.setCancelled(true);
-      } else {
-        plugin.logEvent(new ShopRemoveLog(QUserImpl.createFullFilled(CommonUtil.getNilUniqueId(), "EntityExploding", false), "BlockBreak(explode)", shop.saveToInfoStorage()));
+        cancelWholeExplosion.run();
+        return;
+      }
+      if(getShopNature(b.getLocation(), false) != null) {
+        plugin.logEvent(new ShopRemoveLog(QUserImpl.createFullFilled(CommonUtil.getNilUniqueId(), logName, false), logType, shop.saveToInfoStorage()));
         plugin.getShopManager().deleteShop(shop);
+      } else {
+        // sign-only hit: keep the sign (and the shop it belongs to) out of the blast
+        blocks.remove();
       }
     }
   }
@@ -146,37 +158,69 @@ public class ShopProtectionListener extends AbstractProtectionListener {
     // getHolder(false) answers the same question against the live state. The PDC read
     // below still goes through the snapshot holder — the rare branch pays the old cost,
     // the every-move gate no longer does
-    if(!this.hopperProtect || !(event.getDestination().getHolder(false) instanceof Hopper)) {
+    if(!this.hopperProtect) {
       return;
     }
+    final InventoryHolder destinationHolder = event.getDestination().getHolder(false);
+    final InventoryHolder sourceHolder = event.getSource().getHolder(false);
+    // extraction = a hopper (block OR minecart — the minecart variant used to slip past
+    // the plain-Hopper check and silently drain shops) pulling FROM the shop;
+    // injection = a hopper pushing INTO the shop container, which pollutes stock/space
+    // accounting without any purchase record
+    final boolean extraction = destinationHolder instanceof Hopper || destinationHolder instanceof HopperMinecart;
+    final boolean injection = !extraction && (sourceHolder instanceof Hopper || sourceHolder instanceof HopperMinecart);
+    if(extraction) {
+      final Location loc = event.getSource().getLocation();
+      if(loc == null) {
+        return;
+      }
 
-    final Location loc = event.getSource().getLocation();
-    if(loc == null) {
-      return;
-    }
+      final Shop shop = getShopRedstone(loc, true);
 
-    final Shop shop = getShopRedstone(loc, true);
+      if(shop == null) {
+        return;
+      }
 
-    if(shop == null) {
-      return;
-    }
-
-    if(this.hopperOwnerExclude && event.getDestination().getHolder() instanceof final Hopper hopper) {
-      final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
-      if(hopperPersistentData != null) {
-        if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
-          return;
+      if(this.hopperOwnerExclude && destinationHolder instanceof final Hopper hopper) {
+        final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
+        if(hopperPersistentData != null) {
+          if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
+            return;
+          }
         }
       }
+      event.setCancelled(true);
+    } else if(injection) {
+      final Location loc = event.getDestination().getLocation();
+      if(loc == null) {
+        return;
+      }
+
+      final Shop shop = getShopRedstone(loc, true);
+
+      if(shop == null) {
+        return;
+      }
+
+      if(this.hopperOwnerExclude && sourceHolder instanceof final Hopper hopper) {
+        final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
+        if(hopperPersistentData != null) {
+          if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
+            return;
+          }
+        }
+      }
+      event.setCancelled(true);
     }
-    event.setCancelled(true);
   }
 
   @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
   public void onDropperMoveItem(final InventoryMoveItemEvent event) {
 
-    // same live-holder gate as the hopper handler; snapshot holder only in the branch
-    if(!this.dropperProtect || !(event.getInitiator().getHolder(false) instanceof Dropper)) {
+    // same live-holder gate as the hopper handler; snapshot holder only in the branch.
+    // Dispensers initiate the same InventoryMoveItemEvent when loading a faced container
+    // and used to bypass the plain-Dropper check entirely
+    if(!this.dropperProtect || !(event.getInitiator().getHolder(false) instanceof Dropper || event.getInitiator().getHolder(false) instanceof Dispenser)) {
       return;
     }
 
@@ -202,6 +246,22 @@ public class ShopProtectionListener extends AbstractProtectionListener {
     event.setCancelled(true);
   }
 
+  /*
+   * Shop signs and their containers are flammable-adjacent: signs burn off and leave
+   * the shop signless (and unprotected from re-claim attempts), containers of modded
+   * flammable types burn with their stock. Gate on protect.burn.
+   */
+  @EventHandler(ignoreCancelled = true)
+  public void onBlockBurn(final BlockBurnEvent e) {
+
+    if(!this.burnProtect) {
+      return;
+    }
+    if(getShopNature(e.getBlock().getLocation(), true) != null) {
+      e.setCancelled(true);
+    }
+  }
+
   @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
   public void onPlaceProtectedBlock(final BlockPlaceEvent e) {
 
@@ -220,6 +280,14 @@ public class ShopProtectionListener extends AbstractProtectionListener {
         dropper.getPersistentDataContainer().set(dropperKey, HopperPersistentDataType.INSTANCE, new HopperPersistentData(e.getPlayer().getUniqueId()));
         dropper.setBlockData(e.getBlockPlaced().getBlockData());
         dropper.update();
+      }
+    } else if(placedType == Material.DISPENSER) {
+      // the injection guard covers dispensers too, so the owner-exclude tag must exist
+      // for them as well — without it an authorized dispenser is always blocked
+      if(e.getBlockPlaced().getState() instanceof final Dispenser dispenser) {
+        dispenser.getPersistentDataContainer().set(dropperKey, HopperPersistentDataType.INSTANCE, new HopperPersistentData(e.getPlayer().getUniqueId()));
+        dispenser.setBlockData(e.getBlockPlaced().getBlockData());
+        dispenser.update();
       }
     }
   }
