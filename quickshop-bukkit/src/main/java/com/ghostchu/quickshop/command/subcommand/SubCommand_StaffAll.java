@@ -49,7 +49,9 @@ public class SubCommand_StaffAll implements CommandHandler<Player> {
                 if(staffs.isEmpty()) {
                   MsgUtil.sendDirectMessage(sender, plugin.text().of(sender, "tableformat.left_begin").forLocale()
                           .append(plugin.text().of(sender, "shop-staff-empty").forLocale()));
-                  return;
+                  // continue, not return: the first staff-less shop must not cut the
+                  // listing of the player's remaining shops
+                  continue;
                 }
                 Util.asyncThreadRun(()->{
                   for(final UUID uuid : staffs) {
@@ -69,6 +71,12 @@ public class SubCommand_StaffAll implements CommandHandler<Player> {
         }
         case 2 -> {
           final String name = parser.getArgs().get(1);
+          // same ghost-player gate as /qs staff: name resolution never fails, so a typo
+          // would otherwise add a phantom staff UUID to EVERY owned shop at once
+          if(org.bukkit.Bukkit.getPlayerExact(name) == null && org.bukkit.Bukkit.getOfflinePlayerIfCached(name) == null) {
+            plugin.text().of(sender, "unknown-player").send();
+            return;
+          }
           plugin.getPlayerFinder().name2UuidFuture(parser.getArgs().get(1))
                   .thenAccept(uuid->{
                     BuiltInShopPermissionGroup permissionGroup = null;

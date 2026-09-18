@@ -7,6 +7,7 @@ import com.ghostchu.quickshop.api.event.Phase;
 import com.ghostchu.quickshop.api.event.settings.type.ShopUnlimitedEvent;
 import com.ghostchu.quickshop.api.obj.QUser;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.shop.SimpleShopManager;
 import com.ghostchu.quickshop.util.logger.Log;
 import org.bukkit.entity.Player;
@@ -27,6 +28,15 @@ public class SubCommand_Unlimited implements CommandHandler<Player> {
     final Shop shop = getLookingShop(sender);
     if(shop == null) {
       plugin.text().of(sender, "not-looking-at-shop").send();
+      return;
+    }
+
+    // same dual gate as every other shop-mutating command: without it anyone holding
+    // the global node could flip (and with unlimited-shop-owner-change confiscate)
+    // any player's shop
+    if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.SET_UNLIMITED)
+       && !plugin.perm().hasPermission(sender, "quickshop.other.unlimited")) {
+      plugin.text().of(sender, "no-permission").send();
       return;
     }
 

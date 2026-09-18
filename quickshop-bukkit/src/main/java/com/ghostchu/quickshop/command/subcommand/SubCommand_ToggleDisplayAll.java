@@ -66,6 +66,10 @@ public class SubCommand_ToggleDisplayAll implements CommandHandler<Player> {
     final boolean serverFinal = server;
 
     final QUser senderQUser = QUserImpl.createFullFilled(sender);
+    // the effective scope is what the list actually contained — a non-admin asking for
+    // "server" silently falls back to their own shops and must not get the server
+    // message for that
+    final boolean actualServer = sender.hasPermission("quickshop.toggledisplayall.admin") && serverFinal;
     final List<Shop> shopsToToggle = shopsToToggle(sender, senderQUser, serverFinal);
 
     for(final Shop shop : shopsToToggle) {
@@ -76,7 +80,8 @@ public class SubCommand_ToggleDisplayAll implements CommandHandler<Player> {
          && !plugin.perm().hasPermission(sender, "quickshop.other.toggledisplay")) {
         plugin.text().of(sender, "not-managed-shop").send();
 
-        return;
+        // continue, not return: aborting mid-loop leaves half the shops toggled
+        continue;
       }
 
       ShopDisplayEvent event = new ShopDisplayEvent(Phase.PRE, shop, shop.isDisableDisplay(), !shop.isDisableDisplay());
@@ -95,7 +100,7 @@ public class SubCommand_ToggleDisplayAll implements CommandHandler<Player> {
       event.callEvent();
     }
 
-    final String message = (server)? ((off)? "display-turn-off-all" : "display-turn-on-all") : ((off)? "display-turn-off-owned" : "display-turn-on-owned");
+    final String message = (actualServer)? ((off)? "display-turn-off-all" : "display-turn-on-all") : ((off)? "display-turn-off-owned" : "display-turn-on-owned");
     plugin.text().of(sender, message).send();
   }
 

@@ -23,7 +23,10 @@ import java.util.regex.Pattern;
 
 public class ItemMarker implements Reloadable, SubPasteItem {
 
-  private static final String NAME_REG_EXP = "[a-zA-Z0-9_]*";
+  // '+' not '*': the empty string matches '*' and then makes Bukkit's
+  // MemorySection.set throw IllegalArgumentException (empty path) straight out of the
+  // lookup command
+  private static final String NAME_REG_EXP = "[a-zA-Z0-9_]+";
   private final QuickShop plugin;
   private final Map<String, ItemStack> stacks = new HashMap<>();
   private final File file;
@@ -134,11 +137,13 @@ public class ItemMarker implements Reloadable, SubPasteItem {
   @NotNull
   public OperationResult save(@NotNull final String itemName, @NotNull final ItemStack itemStack) {
 
-    if(stacks.containsKey(itemName)) {
-      return OperationResult.NAME_CONFLICT;
-    }
+    // validate before any mutation: a rejected name must not leave a half-applied
+    // entry in the in-memory map
     if(!namePattern.matcher(itemName).matches()) {
       return OperationResult.REGEXP_FAILURE;
+    }
+    if(stacks.containsKey(itemName)) {
+      return OperationResult.NAME_CONFLICT;
     }
     stacks.put(itemName, itemStack);
     configuration.set(itemName, itemStack);

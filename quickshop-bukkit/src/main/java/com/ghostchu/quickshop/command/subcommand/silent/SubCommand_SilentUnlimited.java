@@ -4,6 +4,7 @@ import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.command.CommandParser;
 import com.ghostchu.quickshop.api.obj.QUser;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.shop.SimpleShopManager;
 import com.ghostchu.quickshop.util.MsgUtil;
 import org.bukkit.entity.Player;
@@ -18,6 +19,14 @@ public class SubCommand_SilentUnlimited extends SubCommand_SilentBase {
 
   @Override
   protected void doSilentCommand(final Player sender, @NotNull final Shop shop, @NotNull final CommandParser parser) {
+
+    // same dual gate as the visible /qs unlimited (this command is directly typeable,
+    // the runtime-uuid is the only thing that was protecting it)
+    if(!shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.SET_UNLIMITED)
+       && !plugin.perm().hasPermission(sender, "quickshop.other.unlimited")) {
+      plugin.text().of(sender, "no-permission").send();
+      return;
+    }
 
     shop.setUnlimited(!shop.isUnlimited());
     shop.setSignText(plugin.text().findRelativeLanguages(sender));

@@ -11,6 +11,7 @@ import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.logger.Log;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.util.BlockIterator;
@@ -75,6 +76,13 @@ public class SubCommand_Staff implements CommandHandler<Player> {
         }
         case 2 -> {
           final String name = parser.getArgs().get(1);
+          // the player finder's name resolution never fails (it silently falls back to
+          // a deterministic offline-mode hash UUID), so without this gate a typo would
+          // write a ghost staff UUID into the shop's permission table
+          if(Bukkit.getPlayerExact(name) == null && Bukkit.getOfflinePlayerIfCached(name) == null) {
+            plugin.text().of(sender, "unknown-player").send();
+            return;
+          }
           plugin.getPlayerFinder().name2UuidFuture(parser.getArgs().get(1))
                   .thenAccept(uuid->{
                     BuiltInShopPermissionGroup permissionGroup = null;

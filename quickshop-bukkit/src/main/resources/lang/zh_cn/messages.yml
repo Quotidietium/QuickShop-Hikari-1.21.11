@@ -561,6 +561,7 @@ permission:
     set-stack-amount: <yellow>允许拥有此权限的用户设置商店堆叠金额
     set-name: <yellow>允许拥有此权限的用户设置商店名称。
     set-sign-type: <yellow>更改商店牌子类型
+    set-unlimited: <yellow>允许拥有此权限的用户切换商店的无限模式。
     view-purchase-logs: <yellow>查看商店交易日志的权限
   group:
     everyone: <yellow>除商店店主外，所有用户的默认权限组。

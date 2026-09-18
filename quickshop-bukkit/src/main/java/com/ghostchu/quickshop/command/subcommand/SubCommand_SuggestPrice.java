@@ -39,6 +39,7 @@ public class SubCommand_SuggestPrice implements CommandHandler<Player> {
 
       plugin.text().of(sender, "suggest-wait").send();
       Util.asyncThreadRun(()->{
+        try {
         Shop shop1 = null;
 
         for(final Shop shopTest : plugin.getShopManager().getAllShops()) {
@@ -72,29 +73,38 @@ public class SubCommand_SuggestPrice implements CommandHandler<Player> {
           return;
         }
 
-        double min = CommonUtil.min(matchedBuy);
-        double max = CommonUtil.max(matchedBuy);
-        double avg = CommonUtil.avg(matchedBuy);
-        double med = CommonUtil.med(matchedBuy);
-
+        // stats per side only when that side has enough samples: the totalSize gate
+        // above can pass with one side empty, and med()/avg() on an empty list throw
+        // (get(-1)) or return NaN
         if(matchedBuy.size() >= 3) {
+          final double min = CommonUtil.min(matchedBuy);
+          final double max = CommonUtil.max(matchedBuy);
+          final double avg = CommonUtil.avg(matchedBuy);
+          final double med = CommonUtil.med(matchedBuy);
           final Component suggest = plugin.text().of(sender, "price-suggest", matchedBuy.size(), format(max, shop1), format(min, shop1), format(avg, shop1), format(med, shop1), format(med, shop1)).forLocale();
           plugin.text().of(sender, "price-suggest-multi", plugin.text().of(sender, "shop-type.buying").forLocale(), suggest).send();
         }
 
         if(matchedSell.size() >= 3) {
-          min = CommonUtil.min(matchedSell);
-          max = CommonUtil.max(matchedSell);
-          avg = CommonUtil.avg(matchedSell);
-          med = CommonUtil.med(matchedSell);
+          final double min = CommonUtil.min(matchedSell);
+          final double max = CommonUtil.max(matchedSell);
+          final double avg = CommonUtil.avg(matchedSell);
+          final double med = CommonUtil.med(matchedSell);
           final Component suggest = plugin.text().of(sender, "price-suggest", matchedSell.size(), format(max, shop1), format(min, shop1), format(avg, shop1), format(med, shop1), format(med, shop1)).forLocale();
           plugin.text().of(sender, "price-suggest-multi", plugin.text().of(sender, "shop-type.selling").forLocale(), suggest).send();
+        }
+        } catch(final Exception e) {
+          // the async task has no caller left to receive the throwable — without this
+          // the player waits forever behind "suggest-wait" while the error only hits logs
+          plugin.logger().warn("Failed to suggest price for {}", sender.getName(), e);
+          plugin.text().of(sender, "internal-error").send();
         }
       });
       return;
     }
     plugin.text().of(sender, "suggest-wait").send();
     Util.asyncThreadRun(()->{
+      try {
       final List<Double> matched = plugin.getShopManager().getAllShops().stream()
               .filter(s->s.getShopId() != shop.getShopId())
               .filter(s->s.shopType().identifier().equalsIgnoreCase(shop.shopType().identifier()))
@@ -110,6 +120,10 @@ public class SubCommand_SuggestPrice implements CommandHandler<Player> {
       final double avg = CommonUtil.avg(matched);
       final double med = CommonUtil.med(matched);
       plugin.text().of(sender, "price-suggest", matched.size(), format(max, shop), format(min, shop), format(avg, shop), format(med, shop), format(med, shop)).send();
+      } catch(final Exception e) {
+        plugin.logger().warn("Failed to suggest price for {}", sender.getName(), e);
+        plugin.text().of(sender, "internal-error").send();
+      }
     });
   }
 

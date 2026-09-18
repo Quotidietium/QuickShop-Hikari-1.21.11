@@ -665,6 +665,8 @@ permission:
       stack amount.
     set-name: <yellow>Permission to allow users who have this to set the shop name.
     set-sign-type: <yellow>Change the sign material that attached on the shop.
+    set-unlimited: <yellow>Permission to allow users who have this to toggle the
+      shop unlimited status.
     view-purchase-logs: <yellow>Permission to view shop purchase logs.
   group:
     everyone: <yellow>Default group for all users except shop owner.

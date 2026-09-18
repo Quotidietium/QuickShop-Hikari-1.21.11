@@ -84,6 +84,12 @@ public class SubCommand_Permission implements CommandHandler<Player> {
           plugin.text().of(sender, "bad-command-usage-detailed", "set,list,unset").send();
           return;
         }
+        // name resolution never fails (offline-hash fallback); the uuid==null branch
+        // below is dead code — this gate is what actually rejects ghost players
+        if(org.bukkit.Bukkit.getPlayerExact(targetFinal) == null && org.bukkit.Bukkit.getOfflinePlayerIfCached(targetFinal) == null) {
+          plugin.text().of(sender, "unknown-player", targetFinal).send();
+          return;
+        }
         plugin.getPlayerFinder().name2UuidFuture(targetFinal).whenComplete((uuid, throwable)->{
           if(throwable != null) {
             plugin.logger().warn("Failed to get uuid of player " + targetFinal, throwable);

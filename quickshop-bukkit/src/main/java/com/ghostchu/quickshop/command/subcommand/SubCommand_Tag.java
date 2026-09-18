@@ -183,15 +183,15 @@ public class SubCommand_Tag implements CommandHandler<Player> {
     }
 
     final TreeMap<Long, Integer> count = plugin.tagManager().tagsCount(sender.getUniqueId());
+    // a player without tags still gets a {TOTAL_INDEX: 0} map back — that non-empty
+    // result used to slip past the isEmpty check and paginate an empty entry list
+    final int total = count.remove(TOTAL_INDEX);
     if(count.isEmpty()) {
       plugin.text().of(sender, "tags.tag.no-tagged-shops").send();
       return;
     }
 
     final int page = (parser.getArgs().size() >= 2)? Util.parseIntegerSafely(parser.getArgs().get(1), 1) : 1;
-
-    final int total = count.get(TOTAL_INDEX);
-    count.remove(TOTAL_INDEX);
     final PaginationOptions<String> options = PaginationOptions
             .builder()
             .setCommand(commandLabel + " tag shops")
@@ -207,6 +207,11 @@ public class SubCommand_Tag implements CommandHandler<Player> {
               //TODO: Fix up this message a bit
               final long shopID = (Long)entry;
               final Shop shop = plugin.getShopManager().getShop(shopID);
+              if(shop == null) {
+                // tag index rows of deleted shops are cleaned best-effort; a stale id
+                // must not abort the whole listing with an NPE
+                return;
+              }
 
               MsgUtil.sendDirectMessage(sender, MsgUtil.buildShopHoverTag(sender, shop, "tags.tag.shops-entry", true,
                                                                           (int)pos, commandLabel + " tag list 1 " + shopID,

@@ -37,7 +37,9 @@ public final class Pagination<I> {
   public Pagination(final PaginationOptions<I> options) {
     this.options = options;
 
-    this.totalPages = (options.entries().size() + options.maxPerPage() - 1) / options.maxPerPage();
+    // an empty entry list must still report one page: with totalPages 0 the clamp below
+    // settles page on 0 and the entry loop starts at a negative index (IOOBE)
+    this.totalPages = Math.max(1, (options.entries().size() + options.maxPerPage() - 1) / options.maxPerPage());
 
     if(options.currentPage() < 1) {
       this.page = 1;

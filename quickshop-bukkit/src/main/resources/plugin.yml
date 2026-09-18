@@ -152,6 +152,7 @@ permissions:
       quickshop.other.empty: true
       quickshop.other.refill: true
       quickshop.other.toggledisplay: true
+      quickshop.other.unlimited: true
       quickshop.purge: true
       quickshop.other.setowner: true
       quickshop.taxaccount: true
@@ -205,6 +206,10 @@ permissions:
     default: op
   quickshop.bypass.<itemID>:
     description: Allows a player to sell blacklisted <itemIDs>.
+    default: op
+  quickshop.other.unlimited:
+    description: Allows a staff member to toggle the unlimited status of someone
+      else's shop.
     default: op
   quickshop.other.destroy:
     description: Allows a staff member to destroy other player's shops even if they are locked.

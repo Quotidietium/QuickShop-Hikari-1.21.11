@@ -60,7 +60,9 @@ public class SubCommand_Name implements CommandHandler<Player> {
       return;
     }
 
-    String shopName = parser.getArgs().getFirst();
+    // the parser splits on spaces with no quoting: taking only the first arg silently
+    // dropped everything after the first word (while still charging the naming fee)
+    String shopName = String.join(" ", parser.getArgs());
     // Translate the all chat colors
     shopName = ChatColor.translateAlternateColorCodes('&', shopName);
     // Then strip all of them, Shop name reference is disallow any color

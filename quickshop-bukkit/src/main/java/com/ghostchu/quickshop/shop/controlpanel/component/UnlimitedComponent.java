@@ -21,6 +21,7 @@ import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.QuickShopAPI;
 import com.ghostchu.quickshop.api.shop.ControlComponent;
 import com.ghostchu.quickshop.api.shop.Shop;
+import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.util.MsgUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
@@ -58,7 +59,11 @@ public class UnlimitedComponent implements ControlComponent {
   @Override
   public boolean applies(final @NotNull QuickShopAPI plugin, final @NotNull Player sender, final @NotNull Shop shop) {
 
-    return sender.hasPermission("quickshop.unlimited");
+    // mirror the command-side dual gate: the global node alone would show (and run) an
+    // unlimited toggle for shops the player has no authority over
+    return sender.hasPermission("quickshop.unlimited")
+           && (shop.playerAuthorize(sender.getUniqueId(), BuiltInShopPermission.SET_UNLIMITED)
+               || sender.hasPermission("quickshop.other.unlimited"));
   }
 
   /**

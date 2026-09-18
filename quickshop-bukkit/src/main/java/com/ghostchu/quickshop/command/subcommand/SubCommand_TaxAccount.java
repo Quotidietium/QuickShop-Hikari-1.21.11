@@ -37,7 +37,14 @@ public class SubCommand_TaxAccount implements CommandHandler<Player> {
         plugin.text().of(sender, "taxaccount-unset").send();
         return;
       }
-      QUserImpl.createAsync(plugin.getPlayerFinder(), parser.getArgs().getFirst())
+      // name resolution never fails (offline-hash fallback); without the gate a typo
+      // becomes a ghost tax account that silently collects every future tax payment
+      final String taxAccountName = parser.getArgs().getFirst();
+      if(org.bukkit.Bukkit.getPlayerExact(taxAccountName) == null && org.bukkit.Bukkit.getOfflinePlayerIfCached(taxAccountName) == null) {
+        plugin.text().of(sender, "unknown-player").send();
+        return;
+      }
+      QUserImpl.createAsync(plugin.getPlayerFinder(), taxAccountName)
               .thenAccept(qUser->{
                 shop.setTaxAccount(qUser);
                 plugin.text().of(sender, "taxaccount-set", parser.getArgs().getFirst()).send();
