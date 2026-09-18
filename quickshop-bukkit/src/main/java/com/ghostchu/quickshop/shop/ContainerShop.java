@@ -89,6 +89,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -112,8 +113,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   private final UUID runtimeRandomUniqueId = UUID.randomUUID();
   @NotNull
   private final Map<UUID, String> playerGroup;
+  // real deleted state: async persistence chains read it on completion so a shop
+  // deleted during its INSERT round-trip cannot resurrect rows in the database;
+  // volatile because the DB-executor thread writes it via markDeleted while region
+  // threads read it through isValid()/save paths
   @EqualsAndHashCode.Exclude
-  private final boolean isDeleted = false;
+  private volatile boolean deleted = false;
   private YamlConfiguration extra;
   // volatile on state mutated main-thread but read from async watcher threads
   // (OngoingFeeWatcher reads owner/unlimited/taxAccount, SignUpdateWatcher renders price,
@@ -247,7 +252,18 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     this.item = item.clone();
     this.originalItem = item.clone();
     this.plugin = plugin;
-    this.playerGroup = new HashMap<>(playerGroup);
+    // concurrent: staff/permission commands mutate this map from async profile-IO
+    // callbacks while region threads copy/serialize it for trades, notifications and
+    // save flushes — a plain HashMap loses updates or corrupts mid-copy there
+    final ConcurrentHashMap<UUID, String> groups = new ConcurrentHashMap<>(Math.max(1, playerGroup.size()));
+    // ConcurrentHashMap rejects null keys/values; a corrupted DB row must not make the
+    // whole shop un-loadable, so null entries are dropped instead of thrown
+    playerGroup.forEach((uuid, group)->{
+      if(uuid != null && group != null) {
+        groups.put(uuid, group);
+      }
+    });
+    this.playerGroup = groups;
     if(!plugin.isAllowStack()) {
       this.item.setAmount(1);
     }
@@ -303,8 +319,14 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     while(remains > 0) {
       final int stackSize = Math.min(remains, itemMaxStackSize);
       item.setAmount(stackSize);
-      Objects.requireNonNull(inv).addItem(item);
-      remains -= stackSize;
+      // single stack per pass: at most one leftover entry (slot -> what did not fit)
+      final int leftover = inv.addItem(item).values().stream().findFirst().map(ItemStack::getAmount).orElse(0);
+      remains -= stackSize - leftover;
+      if(leftover >= stackSize) {
+        // container is full: continuing would spin once per remaining stack while
+        // nothing more fits (a huge /qs refill would freeze the region thread)
+        break;
+      }
     }
     this.setSignText();
   }
@@ -1277,9 +1299,16 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     return this.shopType.isTradingBlocked() || !this.shopState.isTradingAllowed();
   }
 
-  private boolean isDeleted() {
+  @Override
+  public boolean isDeleted() {
 
-    return this.isDeleted;
+    return this.deleted;
+  }
+
+  @Override
+  public void markDeleted() {
+
+    this.deleted = true;
   }
 
   @Override
@@ -1470,7 +1499,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   public boolean isValid() {
 
     Util.ensureThread(false);
-    if(this.isDeleted) {
+    if(this.deleted) {
       return false;
     }
     return Util.canBeShop(this.bukkitLocation().getBlock());
@@ -2319,7 +2348,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
            ", plugin=" + plugin +
            ", runtimeRandomUniqueId=" + runtimeRandomUniqueId +
            ", playerGroup=" + playerGroup +
-           ", isDeleted=" + isDeleted +
+           ", isDeleted=" + deleted +
            ", extra=" + extra +
            ", shopId=" + shopId +
            ", owner=" + owner +

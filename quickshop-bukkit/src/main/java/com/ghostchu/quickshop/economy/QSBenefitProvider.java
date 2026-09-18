@@ -31,8 +31,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.math.BigDecimal;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * QSBenefitManager
@@ -44,7 +44,10 @@ public class QSBenefitProvider implements BenefitProvider {
 
   public static final QSBenefitProvider EMPTY = new QSBenefitProvider();
 
-  private final Map<QUser, BigDecimal> benefits = new HashMap<>();
+  // concurrent: benefit commands mutate this map on the main/global thread while
+  // region threads iterate it inside economy transaction commits — a plain HashMap
+  // would corrupt or throw ConcurrentModificationException there
+  private final Map<QUser, BigDecimal> benefits = new ConcurrentHashMap<>();
 
   public QSBenefitProvider() {
 
@@ -71,11 +74,19 @@ public class QSBenefitProvider implements BenefitProvider {
     final Map<String, BigDecimal> map = JsonUtil.regular().fromJson(json, new TypeToken<Map<String, BigDecimal>>() {
     }.getType());
 
-    final Map<QUser, BigDecimal> parsed = new HashMap<>();
+    final Map<QUser, BigDecimal> parsed = new ConcurrentHashMap<>();
     for(final Map.Entry<String, BigDecimal> event : map.entrySet()) {
 
       final QUser qUser = QUserImpl.deserialize(QuickShop.getInstance().getPlayerFinder(), event.getKey(), QuickExecutor.getSecondaryProfileIoExecutor());
       parsed.put(qUser, event.getValue());
+    }
+    // the runtime add() path enforces shares summing to at most 1 (over-paying would
+    // mint money on every trade); database rows predating that guard or edited by hand
+    // must not bypass it — drop the whole invalid set so the owner receives everything
+    final BigDecimal sum = parsed.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+    if(sum.compareTo(BigDecimal.ONE) > 0) {
+      QuickShop.getInstance().logger().warn("Shop benefit shares sum to {} (> 100%) — ignoring the invalid benefit set so trades pay the owner in full.", sum.toPlainString());
+      return new QSBenefitProvider();
     }
     return new QSBenefitProvider(parsed);
   }

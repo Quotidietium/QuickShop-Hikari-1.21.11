@@ -121,6 +121,9 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
   // atomic re-entry guard: add()'s return value decides ownership, so two concurrent
   // deleteShop() calls can never both pass the old check-then-act (double refund hazard)
   protected final Set<Long> inDeletion = ConcurrentHashMap.newKeySet();
+  // identity-keyed reentrancy guard for shops whose persistence is still in flight
+  // (shopId placeholder -1); see deleteShop
+  protected final Set<Shop> inDeletionTransient = ConcurrentHashMap.newKeySet();
 
   protected final InteractiveManager interactiveManager;
   protected final TaxManager taxManager;
@@ -1510,7 +1513,11 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
   @Override
   public void deleteShop(@NotNull final Shop shop) {
 
-    if(!inDeletion.add(shop.getShopId())) {
+    // shops not yet persisted share the placeholder id -1; keying them by id would make
+    // a concurrent deletion of a second in-flight shop silently skip (no refund, no
+    // unregister), so they get an identity-keyed guard instead
+    final boolean transientGuard = shop.getShopId() <= 0;
+    if(transientGuard? !inDeletionTransient.add(shop) : !inDeletion.add(shop.getShopId())) {
 
       //if we're already in deletion, don't do anything
       return;
@@ -1522,6 +1529,10 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
         Log.debug("Shop delete was cancelled by 3rd-party plugin");
         return;
       }
+      // visible to the async persistence chain: a shop deleted while its INSERT
+      // round-trip is still in flight must not resurrect itself when that chain
+      // completes (rows get cleaned up instead of the shop being registered)
+      shop.markDeleted();
       for(final Sign s : shop.getSigns()) {
         s.getBlock().setType(Material.AIR);
       }
@@ -1547,7 +1558,11 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     } finally {
       // always release the guard: a stranded id would block re-deletion of this shop
       // until restart (refund/unregister paths can throw through third-party listeners)
-      inDeletion.remove(shop.getShopId());
+      if(transientGuard) {
+        inDeletionTransient.remove(shop);
+      } else {
+        inDeletion.remove(shop.getShopId());
+      }
     }
   }
 

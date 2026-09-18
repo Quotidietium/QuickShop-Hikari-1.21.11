@@ -554,6 +554,14 @@ public class ShopUtil {
 
       for(final Shop shop : shops) {
 
+        // re-validate ownership at accept time: the requester may have transferred this
+        // shop away (or an admin reassigned it) during the 60s accept window, and the
+        // receiver must never gain shops the requester no longer owns
+        if(!Objects.equals(shop.getOwner(), from)) {
+          QuickShop.getInstance().text().of(to, "transfer-skipped-not-owner", shop.getShopId()).send();
+          continue;
+        }
+
         ShopOwnerEvent event = new ShopOwnerEvent(Phase.PRE, shop, shop.getOwner(), to);
         event.callEvent();
 

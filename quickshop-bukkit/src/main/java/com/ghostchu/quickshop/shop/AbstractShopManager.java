@@ -131,7 +131,13 @@ public abstract class AbstractShopManager implements ShopManager {
     // That chunk data hasn't been created yet - Create it!
     // Put it in the world
     // Put the shop in its location in the chunk list.
-    inChunk.put(shop.bukkitLocation(), shop);
+    final Shop previous = inChunk.put(shop.bukkitLocation(), shop);
+    if(previous != null && previous != shop) {
+      // the same location is being re-registered with a fresh object (world reload
+      // re-reads the database): drop the stale object from the secondary indexes so
+      // owner/runtime-id lookups don't accumulate duplicates of one logical shop
+      unindexShop(previous);
+    }
     indexShop(shop);
     shopCache.invalidate(null, shop.bukkitLocation());
   }
@@ -342,6 +348,12 @@ public abstract class AbstractShopManager implements ShopManager {
 
     removeShopFromLookupTable(shop);
     if(!persist) return CompletableFuture.completedFuture(null);
+    if(shop.getShopId() <= 0) {
+      // persistence still in flight (placeholder id): removeShop would throw here, and
+      // the register chain cleans up its own rows on completion once it sees the shop's
+      // deleted flag — nothing exists to delete synchronously
+      return CompletableFuture.completedFuture(null);
+    }
     final Location loc = shop.bukkitLocation();
     return plugin.getDatabaseHelper().removeShopMap(loc.getWorld().getName(), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ())
             .thenCombine(plugin.getDatabaseHelper().removeShop(shop.getShopId()), (a, b)->null)
@@ -575,17 +587,51 @@ public abstract class AbstractShopManager implements ShopManager {
     // save to database
     addShopToLookupTable(shop);
     if(!persist) return CompletableFuture.completedFuture(null);
-    return plugin.getDatabaseHelper().createData(shop).thenCompose(plugin.getDatabaseHelper()::createShop)
-            .thenCompose(id->{
+    return plugin.getDatabaseHelper().createData(shop)
+            .thenCompose(dataId->plugin.getDatabaseHelper().createShop(dataId).thenCompose(id->{
+              if(shop.isDeleted()) {
+                // the shop was deleted while this INSERT chain was in flight: undo the
+                // rows this chain just created instead of resurrecting a shop the
+                // player was already refunded for; cleanup failures are contained so
+                // they can't fall through to processCreationFail (which would refund
+                // a second time)
+                final long shopId = id;
+                plugin.logger().warn("Shop {} was deleted while its persistence was in flight; cleaning up the just-created database rows.", shopId);
+                plugin.getDatabaseHelper().removeShop(shopId)
+                        .thenCompose(v->plugin.getDatabaseHelper().removeData(dataId))
+                        .exceptionally(t->{
+                          plugin.logger().warn("Failed to clean up rows of a shop deleted during registration", t);
+                          return null;
+                        });
+                return CompletableFuture.completedFuture(null);
+              }
               Log.debug("DEBUG: Setting shop id");
               shop.setShopId(id);
               if(id > 0) {
                 shopIdLookup.put(id, shop);
               }
               Log.debug("DEBUG: Creating shop map");
-              return plugin.getDatabaseHelper().createShopMap(id, shop.bukkitLocation());
-            })
+              return plugin.getDatabaseHelper().createShopMap(id, shop.bukkitLocation()).thenApply(v->null);
+            }))
             .thenAccept(v->{
+              if(shop.isDeleted()) {
+                // deleted between the check above and the map INSERT landing: the rows
+                // exist now, so issue the cleanup against the persisted id; contained
+                // for the same double-refund reason as the in-flight cleanup above
+                if(shop.getShopId() > 0) {
+                  final Location cleanupLoc = shop.bukkitLocation();
+                  plugin.getDatabaseHelper().removeShopMap(cleanupLoc.getWorld().getName(),
+                          cleanupLoc.getBlockX(), cleanupLoc.getBlockY(), cleanupLoc.getBlockZ()).exceptionally(t->{
+                    plugin.logger().warn("Failed to clean up map row of a shop deleted during registration", t);
+                    return null;
+                  });
+                  plugin.getDatabaseHelper().removeShop(shop.getShopId()).exceptionally(t->{
+                    plugin.logger().warn("Failed to clean up rows of a shop deleted during registration", t);
+                    return null;
+                  });
+                }
+                return;
+              }
               Log.debug("DEBUG: Creating shop successfully");
               shop.setDirty();
 

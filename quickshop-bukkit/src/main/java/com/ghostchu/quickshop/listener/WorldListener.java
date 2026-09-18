@@ -2,7 +2,6 @@ package com.ghostchu.quickshop.listener;
 
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.shop.Shop;
-import com.ghostchu.quickshop.api.shop.ShopChunk;
 import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.simplereloadlib.ReloadResult;
 import com.ghostchu.simplereloadlib.ReloadStatus;
@@ -15,8 +14,6 @@ import org.bukkit.event.world.WorldLoadEvent;
 import org.bukkit.event.world.WorldUnloadEvent;
 
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class WorldListener extends AbstractQSListener {
 
@@ -41,32 +38,15 @@ public class WorldListener extends AbstractQSListener {
 
     Util.asyncThreadRun(()->{
       plugin.getShopLoader().loadShops(world.getName());
-      // New world data
-      final Map<ShopChunk, Map<Location, Shop>> inWorld = new ConcurrentHashMap<>(1);
-      // Old world data
-      final Map<ShopChunk, Map<Location, Shop>> oldInWorld =
-              plugin.getShopManager().getShops(world.getName());
-      // Nothing in the old world, therefore we don't care. No locations to
-      // update.
-      if(oldInWorld == null) {
-        return;
-      }
-
-      for(final Entry<ShopChunk, Map<Location, Shop>> oldInChunk : oldInWorld.entrySet()) {
-        final Map<Location, Shop> inChunk = new ConcurrentHashMap<>(1);
-        // Put the new chunk were the old chunk was
-        inWorld.put(oldInChunk.getKey(), inChunk);
-
-        for(final Entry<Location, Shop> entry : oldInChunk.getValue().entrySet()) {
-          final Shop shop = entry.getValue();
-
+      // Fix any stale World references held by surviving shop Location objects.
+      // Done in place on the live per-world map: rebuilding a fresh map and putting it
+      // would drop shops that get registered concurrently while we rebuild (and
+      // Location hash/equals is world-name based, so mutating the reference is safe).
+      for(final Map<Location, Shop> inChunk : plugin.getShopManager().getShops(world.getName()).values()) {
+        for(final Shop shop : inChunk.values()) {
           shop.bukkitLocation().setWorld(world);
-          inChunk.put(shop.bukkitLocation(), shop);
         }
       }
-      // Done - Now we can store the new world dataz!
-
-      plugin.getShopManager().getShops().put(world.getName(), inWorld);
       // This is a workaround, because I don't get parsed chunk events when a
       // world first loads....
       // So manually tell all of these shops they're loaded. (index/map writes are

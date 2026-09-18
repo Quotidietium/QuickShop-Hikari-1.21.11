@@ -95,6 +95,27 @@ public interface Shop<U, L> extends Locatable<L>, ShopInventory, ShopMeta<U>, Sh
   boolean isValid();
 
   /**
+   * Whether this shop has been deleted. Held references to a deleted shop must treat it
+   * as unusable: trades, saves and re-persistence against it are skipped. Async
+   * persistence chains consult this flag on completion so a shop deleted while its
+   * INSERT round-trip was in flight cannot resurrect itself in the database.
+   *
+   * @return true if the shop was deleted
+   */
+  default boolean isDeleted() {
+
+    return false;
+  }
+
+  /**
+   * Marks this shop as deleted. Called by the shop manager's delete path before
+   * unregistering; idempotent.
+   */
+  default void markDeleted() {
+
+  }
+
+  /**
    * Execute codes when player click the shop will did things
    */
   void onClick(@NotNull Player clicker);
