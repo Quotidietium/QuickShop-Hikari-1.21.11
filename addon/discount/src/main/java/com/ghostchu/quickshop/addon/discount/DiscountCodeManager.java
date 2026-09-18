@@ -38,8 +38,13 @@ public class DiscountCodeManager {
 
   public DiscountCodeManager(final Main main) throws IOException {
 
+    this(main, new File(main.getDataFolder(), "data.yml"));
+  }
+
+  DiscountCodeManager(@Nullable final Main main, @NotNull final File file) throws IOException {
+
     this.main = main;
-    this.file = new File(main.getDataFolder(), "data.yml");
+    this.file = file;
     initDatabase();
     cleanExpiredCodes();
   }

@@ -227,6 +227,46 @@ class QSEconomyTransactionTest {
     assertEquals(0, new BigDecimal("640").compareTo(reDeposited.getValue()));
   }
 
+  @Test
+  void repeatedCommitAfterSuccessIsRejectedWithoutMovingFunds() {
+
+    // the derived fields used to be recomputed per commit and every operation rebuilt
+    // from them — a second commit() call re-ran the whole pipeline and moved money twice
+    final QSEconomyTransaction tx = baseBuilder("640", "0.05", "0").build();
+    assertTrue(tx.commit());
+
+    final boolean[] failed = {false};
+    assertFalse(tx.commit(new TransactionCallback() {
+      @Override
+      public boolean onCommit(final EconomyTransaction transaction) {
+
+        return true;
+      }
+
+      @Override
+      public void onFailed(final EconomyTransaction transaction) {
+
+        failed[0] = true;
+      }
+    }), "a spent transaction must refuse a second commit");
+    assertTrue(failed[0], "the refused commit must invoke onFailed");
+    verify(provider, times(1)).withdraw(any(), anyString(), any());
+    verify(provider, times(2)).deposit(any(), anyString(), any());
+  }
+
+  @Test
+  void derivedFieldsRecalculateWhenAmountChanges() {
+
+    // amount setters used to leave the constructor-computed derived fields stale
+    final QSEconomyTransaction tx = baseBuilder("100", "0", "0").build();
+    tx.amount(new BigDecimal("640"));
+
+    assertTrue(tx.commit());
+    // a stale fromAmount would still withdraw the old 100
+    verify(provider).withdraw(eq(from), eq("world"), amountEq("640"));
+    verify(provider).deposit(eq(to), eq("world"), amountEq("640"));
+  }
+
   private static BigDecimal amountEq(final String expected) {
 
     return org.mockito.ArgumentMatchers.argThat(value->value != null && value.compareTo(new BigDecimal(expected)) == 0);
