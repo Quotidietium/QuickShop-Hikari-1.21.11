@@ -475,8 +475,9 @@ public final class ListenerBench {
 
     final var player = Env.pin(Env.hotMock(org.bukkit.entity.Player.class));
     lenient().when(player.getUniqueId()).thenReturn(UUID.nameUUIDFromBytes(new byte[]{9}));
-    final var event = Env.pin(Env.hotMock(org.bukkit.event.player.AsyncPlayerChatEvent.class));
+    final var event = Env.pin(Env.hotMock(io.papermc.paper.event.player.AsyncChatEvent.class));
     when(event.isCancelled()).thenReturn(true);
+    lenient().when(event.message()).thenReturn(net.kyori.adventure.text.Component.text("bench"));
     // PlayerEvent.getPlayer() is final: the subclass mock maker cannot intercept it,
     // so inject the real protected field instead of stubbing
     try {

@@ -19,6 +19,8 @@ package com.ghostchu.quickshop.menu.shared;
 
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.util.logger.Log;
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.tnemc.menu.core.compatibility.MenuPlayer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -26,7 +28,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -45,15 +46,22 @@ import java.util.function.Function;
  */
 public class GuiChatInputManager implements Listener {
 
-  private static GuiChatInputManager instance;
+  // volatile: onChat runs on the async chat thread while the field is written from the
+  // main/region thread on first menu use — without it the chat thread may observe null
+  // and build a second manager whose pendingInputs is forever empty
+  private static volatile GuiChatInputManager instance;
 
   private final Map<UUID, ChatInputContext> pendingInputs = new ConcurrentHashMap<>();
   private final QuickShop plugin;
+  // same snapshot contract as ChatListener: the gate is read once per instance, not per
+  // message (every chat line on the server passes onChat)
+  private final boolean ignoreCancelChatEvent;
   private boolean registered = false;
 
   private GuiChatInputManager(@NotNull final QuickShop plugin) {
 
     this.plugin = plugin;
+    this.ignoreCancelChatEvent = plugin.getConfig().getBoolean("shop.ignore-cancel-chat-event");
   }
 
   /**
@@ -146,11 +154,25 @@ public class GuiChatInputManager implements Listener {
     return pendingInputs.containsKey(playerId);
   }
 
-  @EventHandler(priority = EventPriority.LOWEST)
-  public void onChat(final AsyncPlayerChatEvent event) {
+  /*
+   * HIGHEST with the same config gate as ChatListener: mute/filter plugins cancel at
+   * NORMAL or above, so a LOWEST handler never saw a cancellation and menu inputs
+   * (price/amount/search/delete-confirm) worked for muted players regardless of
+   * shop.ignore-cancel-chat-event. Default false keeps that behavior (prompts are not
+   * public chat); setting it true makes the gate effective for menu input too.
+   */
+  @EventHandler(priority = EventPriority.HIGHEST)
+  public void onChat(final AsyncChatEvent event) {
+
+    if(event.isCancelled() && ignoreCancelChatEvent) {
+      return;
+    }
 
     final UUID playerId = event.getPlayer().getUniqueId();
-    final ChatInputContext context = pendingInputs.get(playerId);
+    // atomically claim the pending input: get() plus a remove deferred to the next tick
+    // let two same-tick messages both observe the context and run the handler twice
+    // (double price set, double delete attempt). The loser sees null and falls through.
+    final ChatInputContext context = pendingInputs.remove(playerId);
 
     if(context == null) {
       return;
@@ -159,7 +181,7 @@ public class GuiChatInputManager implements Listener {
     // Cancel the event so it doesn't show in chat
     event.setCancelled(true);
 
-    final String message = event.getMessage().trim();
+    final String message = PlainTextComponentSerializer.plainText().serialize(event.message()).trim();
     final Player eventPlayer = event.getPlayer();
     Log.debug("GuiChatInputManager: Received input from " + eventPlayer.getName() + ": " + message);
 
@@ -168,19 +190,22 @@ public class GuiChatInputManager implements Listener {
       try {
         final boolean accepted = context.handler().apply(message);
         if(accepted) {
-          pendingInputs.remove(playerId);
           Log.debug("GuiChatInputManager: Input accepted, removed handler for " + playerId);
 
           // Re-open the menu if configured
           if(context.menuName() != null) {
             reopenMenu(playerId, context);
           }
+        } else {
+          // the handler wants more input — re-arm only if no new request took the slot
+          // while this task was pending (a newer prompt must win over the stale one)
+          pendingInputs.putIfAbsent(playerId, context);
         }
       } catch(final Exception e) {
         plugin.logger().warn("Error processing GUI chat input for player " + playerId, e);
-        pendingInputs.remove(playerId);
 
-        // Re-open menu even on error
+        // Re-open menu even on error; the input stays consumed (a throwing handler
+        // must not be re-armed against the next unrelated message)
         if(context.menuName() != null) {
           reopenMenu(playerId, context);
         }

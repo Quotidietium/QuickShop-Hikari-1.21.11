@@ -3,7 +3,8 @@ package com.ghostchu.quickshop.listener;
 import com.ghostchu.quickshop.QuickShop;
 import dev.dejvokep.boostedyaml.YamlDocument;
 import org.bukkit.Bukkit;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.Component;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,13 +82,14 @@ class ChatListenerTest {
     bukkitStatic.close();
   }
 
-  private AsyncPlayerChatEvent cancelledChat() {
+  private AsyncChatEvent cancelledChat() {
 
     final var player = mock(org.bukkit.entity.Player.class);
     lenient().when(player.getUniqueId()).thenReturn(UUID.nameUUIDFromBytes(new byte[]{1}));
-    final var event = mock(AsyncPlayerChatEvent.class);
+    final var event = mock(AsyncChatEvent.class);
     when(event.isCancelled()).thenReturn(true);
     when(event.getPlayer()).thenReturn(player);
+    lenient().when(event.message()).thenReturn(Component.text("hello"));
     return event;
   }
 
@@ -132,6 +134,14 @@ class ChatListenerTest {
     // absent key == false (original getBoolean(path) semantics): the same cancelled
     // event now falls through to the interactive lookup
     verify(interactiveManager, times(1)).containsKey(any(UUID.class));
-    verify(config, times(2)).getBoolean("shop.ignore-cancel-chat-event");
+    // 2 listener reads (construction + reload) + 1 one-time read from the
+    // GuiChatInputManager singleton the fall-through path constructs
+    verify(config, times(3)).getBoolean("shop.ignore-cancel-chat-event");
+
+    // a third event must not add any config read: per-event walks are what this
+    // regression pins down
+    listener.onChat(cancelledChat());
+    verify(interactiveManager, times(2)).containsKey(any(UUID.class));
+    verify(config, times(3)).getBoolean("shop.ignore-cancel-chat-event");
   }
 }

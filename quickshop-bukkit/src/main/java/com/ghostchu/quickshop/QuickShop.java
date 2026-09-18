@@ -55,6 +55,7 @@ import com.ghostchu.quickshop.listener.PlayerListener;
 import com.ghostchu.quickshop.listener.PlayerLockClickListener;
 import com.ghostchu.quickshop.listener.ShopProtectionListener;
 import com.ghostchu.quickshop.listener.WorldListener;
+import com.ghostchu.quickshop.menu.shared.GuiChatInputManager;
 import com.ghostchu.quickshop.localization.text.SimpleTextManager;
 import com.ghostchu.quickshop.menu.ShopBrowseMenu;
 import com.ghostchu.quickshop.menu.ShopHistoryMenu;
@@ -1374,6 +1375,9 @@ public class QuickShop implements QuickShopAPI, Reloadable {
       // after cancelAllTasks: no timer can fire run() against a closed writer anymore
       logWatcher.close();
     }
+    // explicit rather than relying on Bukkit's per-plugin unregisterAll: also clears
+    // pendingInputs so a queued prompt can never fire against a disabled plugin
+    GuiChatInputManager.getInstance().shutdown();
     logger.info("Shutting down 3rd-party integrations...");
     unload3rdParty();
     if(this.playerFinder instanceof final FastPlayerFinder finder) {

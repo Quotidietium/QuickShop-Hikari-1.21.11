@@ -6,9 +6,10 @@ import com.ghostchu.quickshop.util.logger.Log;
 import com.ghostchu.quickshop.util.performance.PerfMonitor;
 import com.ghostchu.simplereloadlib.ReloadResult;
 import com.ghostchu.simplereloadlib.ReloadStatus;
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
@@ -37,8 +38,16 @@ public class ChatListener extends AbstractQSListener {
     this.ignoreCancelChatEvent = plugin.getConfig().getBoolean("shop.ignore-cancel-chat-event");
   }
 
-  @EventHandler(priority = EventPriority.LOWEST)
-  public void onChat(final AsyncPlayerChatEvent e) {
+  /*
+   * HIGHEST (not LOWEST): shop prompts consume the message and cancel it, but they must
+   * first be able to SEE cancellations from mute/filter plugins, which almost all run at
+   * NORMAL or above. At LOWEST the isCancelled() gate below was permanently false and
+   * shop.ignore-cancel-chat-event was dead config; muted players traded through prompts.
+   * With ignore-cancel-chat-event=false (default) the legacy LiteBans mute behavior is
+   * preserved — cancelled messages are still processed, prompts are not public chat.
+   */
+  @EventHandler(priority = EventPriority.HIGHEST)
+  public void onChat(final AsyncChatEvent e) {
 
     if(e.isCancelled() && ignoreCancelChatEvent) {
       Log.debug("Ignored a chat event (cancelled by another plugin; turn off ignore-cancel-chat-event to keep processing cancelled messages)");
@@ -57,7 +66,7 @@ public class ChatListener extends AbstractQSListener {
       return;
     }
 
-    String message = e.getMessage();
+    String message = PlainTextComponentSerializer.plainText().serialize(e.message());
     // Support for LiteBans muted players
     if (message.startsWith(LITEBANS_CANCELLED)) {
       message = message.substring(LITEBANS_CANCELLED.length());
