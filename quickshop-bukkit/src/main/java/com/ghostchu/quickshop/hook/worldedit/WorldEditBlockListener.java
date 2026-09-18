@@ -48,7 +48,10 @@ public class WorldEditBlockListener extends AbstractDelegateExtent {
 
     final Location location = new Location(bukkitWorld, position.x(), position.y(), position.z());
 
-    if(extent.setBlock(position, block)) {
+    // the delegate extent and `super` share one underlying extent — writing through both
+    // applied every edit twice; single write, then branch on its real result
+    final boolean changed = super.setBlock(position, block);
+    if(changed) {
       // Block Changed
       if(oldBlock.getBlockType().getMaterial().hasContainer() && !newBlock.getBlockType().getMaterial().hasContainer()) {
 
@@ -61,6 +64,6 @@ public class WorldEditBlockListener extends AbstractDelegateExtent {
         }
       }
     }
-    return super.setBlock(position, block);
+    return changed;
   }
 }

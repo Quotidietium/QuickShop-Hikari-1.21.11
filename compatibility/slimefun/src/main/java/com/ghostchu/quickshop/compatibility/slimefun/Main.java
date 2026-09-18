@@ -58,7 +58,7 @@ public final class Main extends CompatibilityModule implements SlimefunAddon, It
     return "slimefun";
   }
 
-  @EventHandler
+  @EventHandler(ignoreCancelled = true)
   public void onExplosionPickaxeEvent(final ExplosiveToolBreakBlocksEvent event) {
     // get the primary block that player tries to break
     Block primaryBlock = event.getPrimaryBlock();

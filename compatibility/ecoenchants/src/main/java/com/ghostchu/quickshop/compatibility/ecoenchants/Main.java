@@ -1,7 +1,6 @@
 package com.ghostchu.quickshop.compatibility.ecoenchants;
 
 import com.ghostchu.quickshop.QuickShop;
-import com.ghostchu.quickshop.api.event.QSConfigurationReloadEvent;
 import com.ghostchu.quickshop.api.event.display.ItemPreviewComponentPrePopulateEvent;
 import com.ghostchu.quickshop.compatibility.CompatibilityModule;
 import com.ghostchu.quickshop.util.logger.Log;
@@ -38,11 +37,9 @@ public final class Main extends CompatibilityModule implements Listener {
     }
   }
 
-  @Override
-  public void onQuickShopReload(final QSConfigurationReloadEvent event) {
-
-    initEcoEnchantEnchantmentTranslationKeys();
-  }
+  // reload handling: the base CompatibilityModule#onQuickShopReload is the annotated
+  // handler; an unannotated override here would shadow it and /qs reload would silently
+  // stop re-initializing EcoEnchants translation keys (recreate display + remap keys)
 
   private void initEcoEnchantEnchantmentTranslationKeys() {
 

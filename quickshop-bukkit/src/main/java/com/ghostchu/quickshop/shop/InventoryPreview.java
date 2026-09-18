@@ -23,6 +23,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Collections;
 import java.util.UUID;
 
@@ -61,11 +62,11 @@ public class InventoryPreview implements Listener {
       previewStr = ChatColor.RED + "FIXME: Do not set quickshop-gui-preview to null or empty string.";
     }
     if(itemMeta != null) {
-      if(itemMeta.hasLore()) {
-        itemMeta.getLore().add(previewStr);
-      } else {
-        itemMeta.setLore(Collections.singletonList(previewStr));
-      }
+      // getLore() hands back a copy — appending to it as-is silently dropped the preview
+      // line for every item that already carried lore
+      final List<String> lore = new ArrayList<>(itemMeta.hasLore() && itemMeta.getLore() != null ? itemMeta.getLore() : Collections.emptyList());
+      lore.add(previewStr);
+      itemMeta.setLore(lore);
 
       itemMeta.getPersistentDataContainer().set(NAMESPACED_KEY, PreviewGuiPersistentDataType.INSTANCE, UUID.randomUUID());
       this.itemStack.setItemMeta(itemMeta);
