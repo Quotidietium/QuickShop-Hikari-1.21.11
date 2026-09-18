@@ -55,7 +55,7 @@ class ContainerShopDirtyGenerationTest {
     com.ghostchu.quickshop.MockBukkit.install(bukkitStatic, plugin);
     lenient().when(plugin.logger()).thenReturn(mock(org.slf4j.Logger.class));
     lenient().when(plugin.getDataFolder())
-            .thenReturn(java.nio.file.Files.createTempDirectory("qs-dirty-test").toFile());
+            .thenReturn(com.ghostchu.quickshop.TestTempDirs.newFolder("qs-dirty-test"));
     lenient().when(plugin.getReloadManager()).thenReturn(mock(com.ghostchu.simplereloadlib.ReloadManager.class));
     final var config = mock(dev.dejvokep.boostedyaml.YamlDocument.class);
     lenient().when(config.getBoolean(anyString())).thenReturn(false);

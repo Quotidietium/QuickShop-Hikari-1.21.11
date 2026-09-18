@@ -54,7 +54,7 @@ class ShopLookupIndexTest {
     lenient().when(bukkitPlugin.getResource(org.mockito.ArgumentMatchers.anyString()))
             .thenReturn(new java.io.ByteArrayInputStream(new byte[0]));
     lenient().when(plugin.getDataFolder())
-            .thenReturn(java.nio.file.Files.createTempDirectory("qs-lookup-test").toFile());
+            .thenReturn(com.ghostchu.quickshop.TestTempDirs.newFolder("qs-lookup-test"));
     lenient().when(plugin.getReloadManager()).thenReturn(mock(com.ghostchu.simplereloadlib.ReloadManager.class));
     lenient().when(plugin.logger()).thenReturn(mock(org.slf4j.Logger.class));
     final dev.dejvokep.boostedyaml.YamlDocument config = mock(dev.dejvokep.boostedyaml.YamlDocument.class);

@@ -80,7 +80,7 @@ class UtilCreateShopGateTest {
             .thenAnswer(inv -> new ArrayList<>(listValues.getOrDefault(inv.getArgument(0, String.class), List.of())));
     lenient().when(plugin.getConfig()).thenReturn(config);
     lenient().when(plugin.getDataFolder())
-            .thenReturn(java.nio.file.Files.createTempDirectory("qs-create-gate").toFile());
+            .thenReturn(com.ghostchu.quickshop.TestTempDirs.newFolder("qs-create-gate"));
 
     // Util.initialize touches AbstractDisplayItem.refreshConfigSnapshots(), whose class
     // init builds a NamespacedKey from the java-plugin (must be non-null and lowercase)

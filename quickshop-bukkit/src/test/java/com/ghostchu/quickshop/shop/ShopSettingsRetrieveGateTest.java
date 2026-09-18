@@ -73,7 +73,7 @@ class ShopSettingsRetrieveGateTest {
     lenient().when(bukkitPlugin.getName()).thenReturn("quickshophikari");
     lenient().when(plugin.logger()).thenReturn(mock(org.slf4j.Logger.class));
     lenient().when(plugin.getDataFolder())
-            .thenReturn(java.nio.file.Files.createTempDirectory("qs-gate-test").toFile());
+            .thenReturn(com.ghostchu.quickshop.TestTempDirs.newFolder("qs-gate-test"));
     lenient().when(plugin.getReloadManager()).thenReturn(mock(com.ghostchu.simplereloadlib.ReloadManager.class));
     final dev.dejvokep.boostedyaml.YamlDocument config = mock(dev.dejvokep.boostedyaml.YamlDocument.class);
     lenient().when(config.getBoolean(any(String.class))).thenReturn(false);

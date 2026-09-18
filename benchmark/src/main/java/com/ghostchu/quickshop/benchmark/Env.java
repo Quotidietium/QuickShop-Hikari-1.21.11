@@ -85,11 +85,23 @@ public final class Env {
 
       try {
         final File dir = Files.createTempDirectory("qs-benchmark").toFile();
-        dir.deleteOnExit();
+        // deleteOnExit() cannot remove non-empty dirs; the data folder accumulates files during the run
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> deleteRecursively(dir), "quickshop-benchmark-tempdir-cleanup"));
         return dir;
       } catch(final IOException e) {
         throw new IllegalStateException("Failed to create benchmark temp folder", e);
       }
+    }
+
+    private static void deleteRecursively(final File dir) {
+
+      final File[] children = dir.listFiles();
+      if(children != null) {
+        for(final File child : children) {
+          deleteRecursively(child);
+        }
+      }
+      dir.delete();
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

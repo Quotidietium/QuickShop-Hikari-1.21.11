@@ -58,7 +58,7 @@ class PlayerListenerSearchShopTest {
     lenient().when(plugin.getReloadManager()).thenReturn(mock(com.ghostchu.simplereloadlib.ReloadManager.class));
     lenient().when(plugin.logger()).thenReturn(mock(org.slf4j.Logger.class));
     lenient().when(plugin.getDataFolder())
-            .thenReturn(java.nio.file.Files.createTempDirectory("qs-search-test").toFile());
+            .thenReturn(com.ghostchu.quickshop.TestTempDirs.newFolder("qs-search-test"));
     final YamlDocument config = mock(YamlDocument.class);
     lenient().when(config.getBoolean("shop.ignore-cancelled-interact-event", true)).thenReturn(true);
     lenient().when(config.getBoolean(any(String.class))).thenReturn(false);

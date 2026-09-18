@@ -58,7 +58,7 @@ class PlayerListenerMoveTeleportTest {
     com.ghostchu.quickshop.MockBukkit.install(bukkitStatic, plugin);
     lenient().when(plugin.getReloadManager()).thenReturn(mock(com.ghostchu.simplereloadlib.ReloadManager.class));
     lenient().when(plugin.getDataFolder())
-            .thenReturn(java.nio.file.Files.createTempDirectory("qs-move-test").toFile());
+            .thenReturn(com.ghostchu.quickshop.TestTempDirs.newFolder("qs-move-test"));
     final YamlDocument config = mock(YamlDocument.class);
     lenient().when(config.getBoolean(any(String.class))).thenReturn(false);
     lenient().when(plugin.getConfig()).thenReturn(config);

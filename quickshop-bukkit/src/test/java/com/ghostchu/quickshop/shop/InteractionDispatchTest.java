@@ -78,7 +78,7 @@ class InteractionDispatchTest {
     // carrying a real temp folder with a real interaction.yml (the production load path)
     final var bukkitPlugin = mock(com.ghostchu.quickshop.QuickShopBukkit.class);
     lenient().when(plugin.getJavaPlugin()).thenReturn(bukkitPlugin);
-    final Path dataFolder = Files.createTempDirectory("qs-interaction-dispatch");
+    final Path dataFolder = com.ghostchu.quickshop.TestTempDirs.newFolder("qs-interaction-dispatch").toPath();
     Files.write(dataFolder.resolve("interaction.yml"), INTERACTION_YAML.getBytes(StandardCharsets.UTF_8));
     lenient().when(bukkitPlugin.getDataFolder()).thenReturn(dataFolder.toFile());
     lenient().when(bukkitPlugin.getResource(anyString()))
